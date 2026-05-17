@@ -54,3 +54,6 @@ $RECYCLE.BIN/
 go.work.sum
 
 *.exe
+
+coverage
+coverage.out
