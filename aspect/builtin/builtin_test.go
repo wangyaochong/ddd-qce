@@ -179,3 +179,138 @@ func TestLoggingAspect_NameAndOrder(t *testing.T) {
 		t.Errorf("expected order 50, got %d", aspect.Order())
 	}
 }
+
+type mockTransactionManager struct {
+	beginCalled    bool
+	commitCalled   bool
+	rollbackCalled bool
+	beginErr       error
+	commitErr      error
+	rollbackErr    error
+}
+
+func (m *mockTransactionManager) Begin(ctx context.Context) (context.Context, error) {
+	m.beginCalled = true
+	return ctx, m.beginErr
+}
+
+func (m *mockTransactionManager) Commit(ctx context.Context) error {
+	m.commitCalled = true
+	return m.commitErr
+}
+
+func (m *mockTransactionManager) Rollback(ctx context.Context) error {
+	m.rollbackCalled = true
+	return m.rollbackErr
+}
+
+func TestTransactionAspect_NameAndOrder(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect := &TransactionAspect{TxManager: txMgr}
+
+	if aspect.Name() != "transaction" {
+		t.Errorf("expected name 'transaction', got '%s'", aspect.Name())
+	}
+	if aspect.Order() != 10 {
+		t.Errorf("expected order 10, got %d", aspect.Order())
+	}
+}
+
+func TestTransactionAspect_Command_Success(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect := &TransactionAspect{TxManager: txMgr}
+
+	ctx := context.Background()
+	err := aspect.AfterCommand(ctx, &testCommand{}, "result", nil, 100*time.Millisecond)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !txMgr.commitCalled {
+		t.Error("expected Commit to be called on success")
+	}
+}
+
+func TestTransactionAspect_Command_ErrorWithRollback(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect := &TransactionAspect{TxManager: txMgr}
+
+	ctx := context.Background()
+	cmdErr := errors.New("command failed")
+	err := aspect.AfterCommand(ctx, &testCommand{}, nil, cmdErr, 100*time.Millisecond)
+
+	if err != cmdErr {
+		t.Errorf("expected command error, got %v", err)
+	}
+	if !txMgr.rollbackCalled {
+		t.Error("expected Rollback to be called on error")
+	}
+}
+
+func TestTransactionAspect_Command_ErrorWithRollbackFailure(t *testing.T) {
+	txMgr := &mockTransactionManager{
+		rollbackErr: errors.New("rollback failed"),
+	}
+	aspect := &TransactionAspect{TxManager: txMgr}
+
+	ctx := context.Background()
+	cmdErr := errors.New("command failed")
+	err := aspect.AfterCommand(ctx, &testCommand{}, nil, cmdErr, 100*time.Millisecond)
+
+	if err == nil {
+		t.Fatal("expected error when rollback fails")
+	}
+	if !txMgr.rollbackCalled {
+		t.Error("expected Rollback to be attempted")
+	}
+}
+
+func TestLoggingAspect_AfterCommand_Error(t *testing.T) {
+	logger := &mockLogger{}
+	aspect := &LoggingAspect{Logger: logger}
+
+	ctx := context.Background()
+	_ = aspect.AfterCommand(ctx, &testCommand{}, nil, errors.New("error"), 100*time.Millisecond)
+
+	if len(logger.errorCalls) == 0 {
+		t.Error("expected error log for failed command")
+	}
+}
+
+func TestLoggingAspect_AfterPublish_Error(t *testing.T) {
+	logger := &mockLogger{}
+	aspect := &LoggingAspect{Logger: logger}
+
+	ctx := context.Background()
+	_ = aspect.AfterPublish(ctx, &testEvent{}, errors.New("error"), 100*time.Millisecond)
+
+	if len(logger.errorCalls) == 0 {
+		t.Error("expected error log for failed event")
+	}
+}
+
+func TestMetricsAspect_AfterCommand_Error(t *testing.T) {
+	recorder := newMockMetricsRecorder()
+	aspect := &MetricsAspect{Recorder: recorder}
+
+	ctx := context.Background()
+	_ = aspect.AfterCommand(ctx, &testCommand{}, nil, errors.New("error"), 100*time.Millisecond)
+
+	name := "Command/*builtin.testCommand"
+	if _, ok := recorder.errors[name]; !ok {
+		t.Errorf("expected error recorded for %s", name)
+	}
+}
+
+func TestMetricsAspect_AfterPublish_Error(t *testing.T) {
+	recorder := newMockMetricsRecorder()
+	aspect := &MetricsAspect{Recorder: recorder}
+
+	ctx := context.Background()
+	_ = aspect.AfterPublish(ctx, &testEvent{}, errors.New("error"), 100*time.Millisecond)
+
+	name := "Event/*builtin.testEvent"
+	if _, ok := recorder.errors[name]; !ok {
+		t.Errorf("expected error recorded for %s", name)
+	}
+}

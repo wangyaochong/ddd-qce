@@ -305,6 +305,23 @@ func TestEventBus_DuplicateSubscription_Panics(t *testing.T) {
 	bus.Subscribe(handler)
 }
 
+func TestEventBusGroup_NilChain(t *testing.T) {
+	group := NewEventBusGroup(nil)
+
+	handler := &testUserEventHandler{}
+	EventGroupBus[*testUserEvent](group).Subscribe(handler)
+
+	ctx := context.Background()
+	err := EventGroupPublish[*testUserEvent](group, ctx, &testUserEvent{aggregateID: "1"})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !handler.called {
+		t.Error("handler was not called")
+	}
+}
+
 type testEventAspect struct {
 	beforeFn func()
 	afterFn  func()

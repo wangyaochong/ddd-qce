@@ -353,3 +353,174 @@ func (a *contextSettingAspect) BeforeQuery(ctx context.Context, q any) (context.
 func (a *contextSettingAspect) AfterQuery(ctx context.Context, q any, r any, err error, d time.Duration) error {
 	return nil
 }
+
+func TestAspectChain_QueryAspectAfterError(t *testing.T) {
+	chain := NewAspectChain()
+	chain.RegisterQueryAspect(&queryAspectAfterError{})
+
+	ctx := context.Background()
+	q := &testQuery{ID: "1"}
+	_, err := chain.ExecuteWithQueryAspects(ctx, q, func(ctx context.Context) (any, error) {
+		return &testQueryResult{Value: "ok"}, nil
+	})
+
+	if err == nil {
+		t.Fatal("expected error from AfterQuery")
+	}
+	if err.Error() != "after query error" {
+		t.Errorf("expected 'after query error', got '%v'", err)
+	}
+}
+
+type queryAspectAfterError struct{}
+
+func (a *queryAspectAfterError) Name() string { return "error-after" }
+func (a *queryAspectAfterError) Order() int   { return 1 }
+func (a *queryAspectAfterError) BeforeQuery(ctx context.Context, q any) (context.Context, error) {
+	return ctx, nil
+}
+func (a *queryAspectAfterError) AfterQuery(ctx context.Context, q any, r any, err error, d time.Duration) error {
+	return errors.New("after query error")
+}
+
+func TestAspectChain_CommandAspectBeforeError(t *testing.T) {
+	chain := NewAspectChain()
+	chain.RegisterCommandAspect(&commandAspectErrorBefore{})
+
+	ctx := context.Background()
+	cmd := &testCommand{ID: "1"}
+	_, err := chain.ExecuteWithCommandAspects(ctx, cmd, func(ctx context.Context) (any, error) {
+		return &testCommandResult{Success: true}, nil
+	})
+
+	if err == nil {
+		t.Fatal("expected error from BeforeCommand")
+	}
+	if err.Error() != "before command error" {
+		t.Errorf("expected 'before command error', got '%v'", err)
+	}
+}
+
+type commandAspectErrorBefore struct{}
+
+func (a *commandAspectErrorBefore) Name() string { return "error-before" }
+func (a *commandAspectErrorBefore) Order() int   { return 1 }
+func (a *commandAspectErrorBefore) BeforeCommand(ctx context.Context, cmd any) (context.Context, error) {
+	return ctx, errors.New("before command error")
+}
+func (a *commandAspectErrorBefore) AfterCommand(ctx context.Context, cmd any, r any, err error, d time.Duration) error {
+	return nil
+}
+
+func TestAspectChain_RegisterEventAspect(t *testing.T) {
+	chain := NewAspectChain()
+
+	aspect1 := &eventTestAspect{}
+	aspect2 := &eventOrderedTestAspect{name: "first", order: 1}
+	aspect3 := &eventOrderedTestAspect{name: "second", order: 2}
+
+	chain.RegisterEventAspect(aspect3)
+	chain.RegisterEventAspect(aspect2)
+	chain.RegisterEventAspect(aspect1)
+
+	ctx := context.Background()
+	err := chain.ExecuteWithEventAspects(ctx, &testEvent{id: "1"}, func(ctx context.Context) error {
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !aspect1.beforeCalled {
+		t.Error("BeforePublish not called")
+	}
+	if !aspect1.afterCalled {
+		t.Error("AfterPublish not called")
+	}
+}
+
+type eventOrderedTestAspect struct {
+	name  string
+	order int
+}
+
+func (a *eventOrderedTestAspect) Name() string { return a.name }
+func (a *eventOrderedTestAspect) Order() int   { return a.order }
+func (a *eventOrderedTestAspect) BeforePublish(ctx context.Context, e any) (context.Context, error) {
+	return ctx, nil
+}
+func (a *eventOrderedTestAspect) AfterPublish(ctx context.Context, e any, err error, d time.Duration) error {
+	return nil
+}
+
+type eventTestAspect struct {
+	beforeCalled bool
+	afterCalled  bool
+}
+
+func (a *eventTestAspect) Name() string { return "test-event" }
+func (a *eventTestAspect) Order() int   { return 1 }
+func (a *eventTestAspect) BeforePublish(ctx context.Context, e any) (context.Context, error) {
+	a.beforeCalled = true
+	return ctx, nil
+}
+func (a *eventTestAspect) AfterPublish(ctx context.Context, e any, err error, d time.Duration) error {
+	a.afterCalled = true
+	return nil
+}
+
+func TestAspectChain_EventAspectBeforeError(t *testing.T) {
+	chain := NewAspectChain()
+	chain.RegisterEventAspect(&eventAspectErrorBefore{})
+
+	ctx := context.Background()
+	err := chain.ExecuteWithEventAspects(ctx, &testEvent{id: "1"}, func(ctx context.Context) error {
+		return nil
+	})
+
+	if err == nil {
+		t.Fatal("expected error from BeforePublish")
+	}
+	if err.Error() != "before publish error" {
+		t.Errorf("expected 'before publish error', got '%v'", err)
+	}
+}
+
+type eventAspectErrorBefore struct{}
+
+func (a *eventAspectErrorBefore) Name() string { return "error-before" }
+func (a *eventAspectErrorBefore) Order() int   { return 1 }
+func (a *eventAspectErrorBefore) BeforePublish(ctx context.Context, e any) (context.Context, error) {
+	return ctx, errors.New("before publish error")
+}
+func (a *eventAspectErrorBefore) AfterPublish(ctx context.Context, e any, err error, d time.Duration) error {
+	return nil
+}
+
+func TestAspectChain_EventAspectAfterError(t *testing.T) {
+	chain := NewAspectChain()
+	chain.RegisterEventAspect(&eventAspectAfterError{})
+
+	ctx := context.Background()
+	err := chain.ExecuteWithEventAspects(ctx, &testEvent{id: "1"}, func(ctx context.Context) error {
+		return nil
+	})
+
+	if err == nil {
+		t.Fatal("expected error from AfterPublish")
+	}
+	if err.Error() != "after publish error" {
+		t.Errorf("expected 'after publish error', got '%v'", err)
+	}
+}
+
+type eventAspectAfterError struct{}
+
+func (a *eventAspectAfterError) Name() string { return "error-after" }
+func (a *eventAspectAfterError) Order() int   { return 1 }
+func (a *eventAspectAfterError) BeforePublish(ctx context.Context, e any) (context.Context, error) {
+	return ctx, nil
+}
+func (a *eventAspectAfterError) AfterPublish(ctx context.Context, e any, err error, d time.Duration) error {
+	return errors.New("after publish error")
+}
