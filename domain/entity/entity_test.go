@@ -4,8 +4,8 @@ import "testing"
 
 func TestNewEntity(t *testing.T) {
 	e := NewEntity("user-1")
-	if e.ID != "user-1" {
-		t.Errorf("expected ID 'user-1', got '%s'", e.ID)
+	if e.GetID() != "user-1" {
+		t.Errorf("expected ID 'user-1', got '%s'", e.GetID())
 	}
 }
 
@@ -13,6 +13,13 @@ func TestNewEntity_EmptyID(t *testing.T) {
 	e := NewEntity("")
 	if !e.IsEmpty() {
 		t.Error("expected entity with empty ID to be empty")
+	}
+}
+
+func TestGetID(t *testing.T) {
+	e := NewEntity("user-1")
+	if e.GetID() != "user-1" {
+		t.Errorf("expected GetID 'user-1', got '%s'", e.GetID())
 	}
 }
 
@@ -67,5 +74,19 @@ func TestIsEmpty_False(t *testing.T) {
 	e := NewEntity("user-1")
 	if e.IsEmpty() {
 		t.Error("expected entity with non-empty ID to not be empty")
+	}
+}
+
+func TestValidate_Valid(t *testing.T) {
+	e := NewEntity("user-1")
+	if err := e.Validate(); err != nil {
+		t.Errorf("expected no error for valid entity, got: %v", err)
+	}
+}
+
+func TestValidate_EmptyID(t *testing.T) {
+	e := NewEntity("")
+	if err := e.Validate(); err == nil {
+		t.Fatal("expected error for empty ID")
 	}
 }
