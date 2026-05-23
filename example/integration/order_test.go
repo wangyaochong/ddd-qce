@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
+	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
 	"github.com/ddd-qce/core/domain/event"
 )
@@ -92,6 +94,7 @@ func (r *OrderRepository) FindByID(id string) (*Order, error) {
 }
 
 type testPlaceOrderCommand struct {
+	command.BaseCommand
 	OrderID string
 	UserID  string
 	Items   []OrderItem
@@ -115,6 +118,7 @@ func (h *testPlaceOrderHandler) Handle(ctx context.Context, cmd *testPlaceOrderC
 }
 
 type testConfirmOrderCommand struct {
+	command.BaseCommand
 	OrderID string
 }
 
@@ -159,6 +163,7 @@ func (h *testOrderConfirmedEventHandler) Handle(ctx context.Context, event *test
 }
 
 type testGetOrderStatusQuery struct {
+	query.BaseQuery
 	OrderID string
 }
 

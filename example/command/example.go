@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	corecommand "github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 )
 
 type CreateUserCommand struct {
+	corecommand.BaseCommand
 	Name  string
 	Email string
 }
@@ -24,6 +26,7 @@ func (h *CreateUserHandler) Handle(ctx context.Context, cmd *CreateUserCommand) 
 }
 
 type UpdateUserCommand struct {
+	corecommand.BaseCommand
 	UserID string
 	Name   string
 	Email  string
@@ -40,6 +43,7 @@ func (h *UpdateUserHandler) Handle(ctx context.Context, cmd *UpdateUserCommand) 
 }
 
 type CancelOrderCommand struct {
+	corecommand.BaseCommand
 	OrderID string
 	Reason  string
 }

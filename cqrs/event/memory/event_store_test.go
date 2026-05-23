@@ -228,3 +228,23 @@ func TestEventStore_LoadAfterVersionBeyondRange(t *testing.T) {
 		t.Errorf("expected 0 events, got %d", len(loaded))
 	}
 }
+
+type testValueEvent struct {
+	AggID string
+}
+
+func (e testValueEvent) AggregateID() string   { return e.AggID }
+func (e testValueEvent) EventType() string     { return event.EventTypeOf(e) }
+func (e testValueEvent) OccurredAt() time.Time { return time.Now() }
+
+func TestEventStore_NonPointerTypePanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic for non-pointer type T")
+		}
+	}()
+
+	store := NewEventStore[testValueEvent]()
+	store.Append(context.Background(), []testValueEvent{})
+}

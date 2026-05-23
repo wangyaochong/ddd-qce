@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
+	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
 )
 
 type testCancellableCommand struct {
+	command.BaseCommand
 	Duration    time.Duration
 	ShouldFail  bool
 	BlockChan   chan struct{}
@@ -67,6 +69,7 @@ func newTestCancellableCommandBus(duration time.Duration, shouldFail bool, block
 }
 
 type testHookCommand struct {
+	command.BaseCommand
 	Duration time.Duration
 }
 

@@ -12,6 +12,7 @@ import (
 type EventStore[T event.DomainEvent] struct {
 	mu     sync.RWMutex
 	events map[string][]T
+	once   sync.Once
 }
 
 func NewEventStore[T event.DomainEvent]() *EventStore[T] {
@@ -20,7 +21,17 @@ func NewEventStore[T event.DomainEvent]() *EventStore[T] {
 	}
 }
 
+func (s *EventStore[T]) assertPointerType() {
+	s.once.Do(func() {
+		var zero T
+		if reflect.TypeOf(zero).Kind() != reflect.Ptr {
+			panic(fmt.Sprintf("EventStore[T]: T must be a pointer type, got %v", reflect.TypeOf(zero)))
+		}
+	})
+}
+
 func (s *EventStore[T]) Append(ctx context.Context, events []T) error {
+	s.assertPointerType()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -32,6 +43,7 @@ func (s *EventStore[T]) Append(ctx context.Context, events []T) error {
 }
 
 func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error) {
+	s.assertPointerType()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

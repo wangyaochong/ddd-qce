@@ -26,7 +26,7 @@ func NewQueryBus(chain *aspect.AspectChain) *QueryBus {
 	}
 }
 
-func RegisterQuery[T any, R any](bus *QueryBus, handler query.QueryHandler[T, R]) {
+func RegisterQuery[T query.Query, R any](bus *QueryBus, handler query.QueryHandler[T, R]) {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
 	var zero T
@@ -37,7 +37,7 @@ func RegisterQuery[T any, R any](bus *QueryBus, handler query.QueryHandler[T, R]
 	bus.handlers[queryType] = handler
 }
 
-func Ask[T any, R any](bus *QueryBus, ctx context.Context, q T) (R, error) {
+func Ask[T query.Query, R any](bus *QueryBus, ctx context.Context, q T) (R, error) {
 	queryType := reflect.TypeOf(q)
 
 	bus.mu.RLock()

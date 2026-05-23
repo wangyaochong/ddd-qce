@@ -16,6 +16,8 @@ type CommandBus struct {
 	mu       sync.RWMutex
 }
 
+var _ command.CommandExecutor = (*CommandBus)(nil)
+
 func NewCommandBus(chain *aspect.AspectChain) *CommandBus {
 	if chain == nil {
 		chain = aspect.NewAspectChain()
@@ -26,7 +28,7 @@ func NewCommandBus(chain *aspect.AspectChain) *CommandBus {
 	}
 }
 
-func RegisterCommand[T any, R any](bus *CommandBus, handler command.CommandHandler[T, R]) {
+func RegisterCommand[T command.Command, R any](bus *CommandBus, handler command.CommandHandler[T, R]) {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
 	var zero T
@@ -37,7 +39,7 @@ func RegisterCommand[T any, R any](bus *CommandBus, handler command.CommandHandl
 	bus.handlers[cmdType] = handler
 }
 
-func Dispatch[T any, R any](bus *CommandBus, ctx context.Context, cmd T) (R, error) {
+func Dispatch[T command.Command, R any](bus *CommandBus, ctx context.Context, cmd T) (R, error) {
 	cmdType := reflect.TypeOf(cmd)
 
 	bus.mu.RLock()

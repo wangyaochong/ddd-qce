@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
+	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
 )
 
 type GenerateReportCommand struct {
+	command.BaseCommand
 	Duration time.Duration
 }
 

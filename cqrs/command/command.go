@@ -1,11 +1,30 @@
 package command
 
-import "context"
+import (
+	"context"
+	"reflect"
+)
 
-type CommandHandler[T any, R any] interface {
+type Command interface {
+	isCommand()
+}
+
+type BaseCommand struct{}
+
+func (BaseCommand) isCommand() {}
+
+func CommandNameOf(cmd any) string {
+	t := reflect.TypeOf(cmd)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t.Name()
+}
+
+type CommandHandler[T Command, R any] interface {
 	Handle(ctx context.Context, cmd T) (R, error)
 }
 
-type CommandBus interface {
+type CommandExecutor interface {
 	Execute(ctx context.Context, cmd any) (any, error)
 }

@@ -7,12 +7,15 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
+	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 	"github.com/ddd-qce/core/trace"
 )
 
-type level1Command struct{}
+type level1Command struct {
+	command.BaseCommand
+}
 
 type level1Result struct {
 	Message string
@@ -41,7 +44,9 @@ func (h *level2Handler) Handle(ctx context.Context, event *level2Event) error {
 var testCmdBus *commandmemory.CommandBus
 var testEventGroup *eventmemory.EventBusGroup
 
-type level3Command struct{}
+type level3Command struct {
+	command.BaseCommand
+}
 
 type level3Result struct {
 	Message string
@@ -67,7 +72,9 @@ func (h *level4Handler) Handle(ctx context.Context, event *level4Event) error {
 	return nil
 }
 
-type level5Command struct{}
+type level5Command struct {
+	command.BaseCommand
+}
 
 type level5Result struct {
 	Message string

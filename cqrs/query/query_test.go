@@ -6,6 +6,7 @@ import (
 )
 
 type GetOrderQuery struct {
+	BaseQuery
 	OrderID string
 }
 

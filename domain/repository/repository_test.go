@@ -19,12 +19,13 @@ type TestAggregate struct {
 }
 
 func NewTestAggregate(id, name string) *TestAggregate {
-	return &TestAggregate{
-		AggregateRoot: aggregate.NewAggregateRoot(id),
-		ID:            id,
-		Name:          name,
-		Version:       0,
+	ta := &TestAggregate{
+		ID:      id,
+		Name:    name,
+		Version: 0,
 	}
+	ta.AggregateRoot = aggregate.NewEventCollector(id)
+	return ta
 }
 
 type TestEvent struct {

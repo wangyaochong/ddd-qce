@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	corequery "github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
 )
 
 type GetUserQuery struct {
+	corequery.BaseQuery
 	UserID string
 }
 
@@ -24,6 +26,7 @@ func (h *GetUserHandler) Handle(ctx context.Context, query *GetUserQuery) (*GetU
 }
 
 type ListUsersQuery struct {
+	corequery.BaseQuery
 	Page     int
 	PageSize int
 }
@@ -46,6 +49,7 @@ func (h *ListUsersHandler) Handle(ctx context.Context, query *ListUsersQuery) (*
 }
 
 type GetOrderQuery struct {
+	corequery.BaseQuery
 	OrderID string
 }
 

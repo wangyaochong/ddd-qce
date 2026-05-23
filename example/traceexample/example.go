@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/query"
 	"github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/trace"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
@@ -13,6 +15,7 @@ import (
 )
 
 type PlaceOrderCommand struct {
+	command.BaseCommand
 	UserID  string
 	Product string
 	Amount  float64
@@ -73,6 +76,7 @@ func (h *OrderPlacedEventHandler) Handle(ctx context.Context, event *OrderPlaced
 }
 
 type SendNotificationCommand struct {
+	command.BaseCommand
 	UserID  string
 	Message string
 }
@@ -89,6 +93,7 @@ func (h *SendNotificationHandler) Handle(ctx context.Context, cmd *SendNotificat
 }
 
 type UpdateInventoryCommand struct {
+	command.BaseCommand
 	Product  string
 	Quantity int
 }
@@ -105,6 +110,7 @@ func (h *UpdateInventoryHandler) Handle(ctx context.Context, cmd *UpdateInventor
 }
 
 type GetOrderStatusQuery struct {
+	query.BaseQuery
 	OrderID string
 }
 

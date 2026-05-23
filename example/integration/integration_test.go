@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
+	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
 	"github.com/ddd-qce/core/domain/event"
 )
@@ -20,6 +22,7 @@ type testOrder struct {
 }
 
 type testCreateOrderCommand struct {
+	command.BaseCommand
 	UserID string
 	Amount float64
 }
@@ -54,6 +57,7 @@ func (h *testOrderCreatedEventHandler) Handle(ctx context.Context, event *testOr
 }
 
 type testGetOrderQuery struct {
+	query.BaseQuery
 	OrderID string
 }
 

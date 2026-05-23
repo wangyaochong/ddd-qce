@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
+	"github.com/ddd-qce/core/cqrs/command"
 )
 
 type testCreateUserCommand struct {
+	command.BaseCommand
 	Name string
 }
 
@@ -25,6 +27,7 @@ func (h *testCreateUserHandler) Handle(ctx context.Context, cmd *testCreateUserC
 }
 
 type testDeleteUserCommand struct {
+	command.BaseCommand
 	UserID string
 }
 
@@ -38,7 +41,9 @@ func (h *testDeleteUserHandler) Handle(ctx context.Context, cmd *testDeleteUserC
 	return &testDeleteUserResult{Deleted: cmd.UserID != ""}, nil
 }
 
-type testErrorCommand struct{}
+type testErrorCommand struct {
+	command.BaseCommand
+}
 
 type testErrorCommandResult struct{}
 
@@ -49,6 +54,7 @@ func (h *testErrorCommandHandler) Handle(ctx context.Context, cmd *testErrorComm
 }
 
 type testSlowCommand struct {
+	command.BaseCommand
 	Duration time.Duration
 }
 

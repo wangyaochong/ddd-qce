@@ -13,12 +13,12 @@ import (
 
 type JobManager struct {
 	store     jobcore.JobStore
-	executor  command.CommandBus
+	executor  command.CommandExecutor
 	mu        sync.Mutex
 	cancelers map[string]context.CancelFunc
 }
 
-func NewJobManager(store jobcore.JobStore, executor command.CommandBus) *JobManager {
+func NewJobManager(store jobcore.JobStore, executor command.CommandExecutor) *JobManager {
 	return &JobManager{
 		store:     store,
 		executor:  executor,
@@ -43,26 +43,28 @@ func (m *JobManager) Submit(ctx context.Context, cmd any, opts ...jobcore.JobOpt
 		return nil, err
 	}
 
-	go m.executeJob(ctx, job)
+	go m.executeJob(job)
 	return job, nil
 }
 
-func (m *JobManager) executeJob(ctx context.Context, job *jobcore.Job) {
+func (m *JobManager) executeJob(job *jobcore.Job) {
+	bgCtx := context.Background()
+
 	for {
 		job.Lock()
 		job.Status = jobcore.JobStatusRunning
 		job.StartedAt = time.Now()
 		job.Unlock()
 
-		m.store.Update(ctx, job)
+		m.store.Update(bgCtx, job)
 
 		var execCtx context.Context
 		var cancel context.CancelFunc
 
 		if job.Timeout > 0 {
-			execCtx, cancel = context.WithTimeout(ctx, job.Timeout)
+			execCtx, cancel = context.WithTimeout(bgCtx, job.Timeout)
 		} else {
-			execCtx, cancel = context.WithCancel(ctx)
+			execCtx, cancel = context.WithCancel(bgCtx)
 		}
 
 		m.mu.Lock()
@@ -87,7 +89,7 @@ func (m *JobManager) executeJob(ctx context.Context, job *jobcore.Job) {
 			if job.RetryCount < job.MaxRetries {
 				job.RetryCount++
 				job.Unlock()
-				m.store.Update(ctx, job)
+				m.store.Update(bgCtx, job)
 				continue
 			}
 		} else {
@@ -100,7 +102,7 @@ func (m *JobManager) executeJob(ctx context.Context, job *jobcore.Job) {
 		}
 		job.Unlock()
 
-		m.store.Update(ctx, job)
+		m.store.Update(bgCtx, job)
 		break
 	}
 }
@@ -165,7 +167,7 @@ func (m *JobManager) Retry(ctx context.Context, jobID string) error {
 
 	m.store.Update(ctx, job)
 
-	go m.executeJob(ctx, job)
+	go m.executeJob(job)
 	return nil
 }
 

@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
+	"github.com/ddd-qce/core/cqrs/query"
 )
 
 type testGetUserQuery struct {
+	query.BaseQuery
 	UserID string
 }
 
@@ -26,6 +28,7 @@ func (h *testGetUserHandler) Handle(ctx context.Context, query *testGetUserQuery
 }
 
 type testListUsersQuery struct {
+	query.BaseQuery
 	Page int
 }
 
@@ -39,7 +42,9 @@ func (h *testListUsersHandler) Handle(ctx context.Context, query *testListUsersQ
 	return &testListUsersResult{Count: 10}, nil
 }
 
-type testErrorQuery struct{}
+type testErrorQuery struct {
+	query.BaseQuery
+}
 
 type testErrorQueryResult struct{}
 
@@ -50,6 +55,7 @@ func (h *testErrorQueryHandler) Handle(ctx context.Context, query *testErrorQuer
 }
 
 type testSlowQuery struct {
+	query.BaseQuery
 	Duration time.Duration
 }
 

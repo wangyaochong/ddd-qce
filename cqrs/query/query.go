@@ -1,11 +1,26 @@
 package query
 
-import "context"
+import (
+	"context"
+	"reflect"
+)
 
-type QueryHandler[T any, R any] interface {
-	Handle(ctx context.Context, query T) (R, error)
+type Query interface {
+	isQuery()
 }
 
-type QueryBus interface {
-	Ask(ctx context.Context, query any) (any, error)
+type BaseQuery struct{}
+
+func (BaseQuery) isQuery() {}
+
+func QueryNameOf(q any) string {
+	t := reflect.TypeOf(q)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t.Name()
+}
+
+type QueryHandler[T Query, R any] interface {
+	Handle(ctx context.Context, query T) (R, error)
 }

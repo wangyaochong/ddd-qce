@@ -9,6 +9,7 @@ import (
 )
 
 type executeTestCommand struct {
+	command.BaseCommand
 	Value int
 }
 
@@ -22,7 +23,9 @@ func (h *executeTestHandler) Handle(ctx context.Context, cmd *executeTestCommand
 	return &executeTestResult{Doubled: cmd.Value * 2}, nil
 }
 
-type executeErrorCommand struct{}
+type executeErrorCommand struct {
+	command.BaseCommand
+}
 
 type executeErrorResult struct{}
 
