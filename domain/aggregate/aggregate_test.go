@@ -18,11 +18,11 @@ func (e *testDomainEvent) OccurredAt() time.Time { return e.occurredAt }
 
 func TestNewAggregateRoot(t *testing.T) {
 	agg := NewAggregateRoot("order-1")
-	if agg.ID != "order-1" {
-		t.Errorf("expected ID 'order-1', got '%s'", agg.ID)
+	if agg.GetID() != "order-1" {
+		t.Errorf("expected ID 'order-1', got '%s'", agg.GetID())
 	}
-	if agg.Version != 0 {
-		t.Errorf("expected version 0, got %d", agg.Version)
+	if agg.GetVersion() != 0 {
+		t.Errorf("expected version 0, got %d", agg.GetVersion())
 	}
 }
 
@@ -32,8 +32,8 @@ func TestApply_SingleEvent(t *testing.T) {
 
 	agg.Apply(evt)
 
-	if agg.Version != 1 {
-		t.Errorf("expected version 1 after apply, got %d", agg.Version)
+	if agg.GetVersion() != 1 {
+		t.Errorf("expected version 1 after apply, got %d", agg.GetVersion())
 	}
 
 	events := agg.UncommittedEvents()
@@ -56,8 +56,8 @@ func TestApply_MultipleEvents(t *testing.T) {
 	agg.Apply(evt2)
 	agg.Apply(evt3)
 
-	if agg.Version != 3 {
-		t.Errorf("expected version 3 after 3 applies, got %d", agg.Version)
+	if agg.GetVersion() != 3 {
+		t.Errorf("expected version 3 after 3 applies, got %d", agg.GetVersion())
 	}
 
 	events := agg.UncommittedEvents()
@@ -120,8 +120,8 @@ func TestLoadFromHistory_Empty(t *testing.T) {
 	agg := NewAggregateRoot("order-1")
 	agg.LoadFromHistory([]event.DomainEvent{})
 
-	if agg.Version != 0 {
-		t.Errorf("expected version 0 after loading empty history, got %d", agg.Version)
+	if agg.GetVersion() != 0 {
+		t.Errorf("expected version 0 after loading empty history, got %d", agg.GetVersion())
 	}
 }
 
@@ -136,8 +136,8 @@ func TestLoadFromHistory_MultipleEvents(t *testing.T) {
 
 	agg.LoadFromHistory(events)
 
-	if agg.Version != 3 {
-		t.Errorf("expected version 3 after loading 3 events, got %d", agg.Version)
+	if agg.GetVersion() != 3 {
+		t.Errorf("expected version 3 after loading 3 events, got %d", agg.GetVersion())
 	}
 
 	eventsAfter := agg.UncommittedEvents()
@@ -162,14 +162,14 @@ func TestValidate_EmptyID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty ID")
 	}
-	if err.Error() != "aggregate ID cannot be empty" {
-		t.Errorf("expected 'aggregate ID cannot be empty', got '%v'", err)
+	if err.Error() != "aggregate: entity ID cannot be empty" {
+		t.Errorf("expected 'aggregate: entity ID cannot be empty', got '%v'", err)
 	}
 }
 
 func TestValidate_NegativeVersion(t *testing.T) {
 	agg := NewAggregateRoot("order-1")
-	agg.Version = -1
+	agg.forceSetVersion(-1)
 	err := agg.Validate()
 	if err == nil {
 		t.Fatal("expected error for negative version")
@@ -245,8 +245,8 @@ func TestApply_NewEventMutatesState(t *testing.T) {
 	if order.Amount != 99.99 {
 		t.Errorf("expected amount 99.99, got %.2f", order.Amount)
 	}
-	if order.Version != 1 {
-		t.Errorf("expected version 1, got %d", order.Version)
+	if order.GetVersion() != 1 {
+		t.Errorf("expected version 1, got %d", order.GetVersion())
 	}
 
 	order.Apply(&orderConfirmedEvent{aggregateID: "ORD-001", occurredAt: time.Now()})
@@ -254,8 +254,8 @@ func TestApply_NewEventMutatesState(t *testing.T) {
 	if order.Status != "confirmed" {
 		t.Errorf("expected status 'confirmed', got '%s'", order.Status)
 	}
-	if order.Version != 2 {
-		t.Errorf("expected version 2, got %d", order.Version)
+	if order.GetVersion() != 2 {
+		t.Errorf("expected version 2, got %d", order.GetVersion())
 	}
 }
 
@@ -279,8 +279,8 @@ func TestLoadFromHistory_StateRebuild(t *testing.T) {
 	if order.Reason != "customer request" {
 		t.Errorf("expected reason 'customer request', got '%s'", order.Reason)
 	}
-	if order.Version != 3 {
-		t.Errorf("expected version 3, got %d", order.Version)
+	if order.GetVersion() != 3 {
+		t.Errorf("expected version 3, got %d", order.GetVersion())
 	}
 	if len(order.UncommittedEvents()) != 0 {
 		t.Errorf("expected 0 uncommitted events after LoadFromHistory, got %d", len(order.UncommittedEvents()))
@@ -316,8 +316,8 @@ func TestNewEventCollector(t *testing.T) {
 
 	agg.Apply(evt)
 
-	if agg.Version != 1 {
-		t.Errorf("expected version 1, got %d", agg.Version)
+	if agg.GetVersion() != 1 {
+		t.Errorf("expected version 1, got %d", agg.GetVersion())
 	}
 
 	history := []event.DomainEvent{
@@ -326,8 +326,8 @@ func TestNewEventCollector(t *testing.T) {
 	}
 	agg.LoadFromHistory(history)
 
-	if agg.Version != 3 {
-		t.Errorf("expected version 3, got %d", agg.Version)
+	if agg.GetVersion() != 3 {
+		t.Errorf("expected version 3, got %d", agg.GetVersion())
 	}
 }
 
@@ -339,8 +339,8 @@ func TestAggregateRoot_OrderLifecycle(t *testing.T) {
 	order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
 	order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
 
-	if order.Version != 4 {
-		t.Errorf("expected version 4, got %d", order.Version)
+	if order.GetVersion() != 4 {
+		t.Errorf("expected version 4, got %d", order.GetVersion())
 	}
 
 	uncommitted := order.UncommittedEvents()
@@ -355,8 +355,8 @@ func TestAggregateRoot_OrderLifecycle(t *testing.T) {
 
 	rebuilt := NewEventCollector("order-123")
 	rebuilt.LoadFromHistory(uncommitted)
-	if rebuilt.Version != 4 {
-		t.Errorf("expected rebuilt version 4, got %d", rebuilt.Version)
+	if rebuilt.GetVersion() != 4 {
+		t.Errorf("expected rebuilt version 4, got %d", rebuilt.GetVersion())
 	}
 
 	err := rebuilt.Validate()
@@ -410,8 +410,8 @@ func TestNewAggregateRootWithApplier(t *testing.T) {
 	if o.Status != "created" {
 		t.Errorf("expected status 'created', got '%s'", o.Status)
 	}
-	if o.Version != 1 {
-		t.Errorf("expected version 1, got %d", o.Version)
+	if o.GetVersion() != 1 {
+		t.Errorf("expected version 1, got %d", o.GetVersion())
 	}
 }
 

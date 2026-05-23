@@ -3,6 +3,7 @@ package aggregate
 import (
 	"fmt"
 
+	"github.com/ddd-qce/core/domain/entity"
 	"github.com/ddd-qce/core/domain/event"
 )
 
@@ -10,9 +11,13 @@ type EventApplier interface {
 	When(evt event.DomainEvent)
 }
 
+type AggregateRef interface {
+	GetAggregateRoot() *AggregateRoot
+}
+
 type AggregateRoot struct {
-	ID                string
-	Version           int
+	entity.Entity
+	version           int
 	uncommittedEvents []event.DomainEvent
 	applier           EventApplier
 	skipApplierCheck  bool
@@ -23,8 +28,7 @@ type AggregateRoot struct {
 // or NewEventCollector(id) for pure event collection without state mutation.
 func NewAggregateRoot(id string) *AggregateRoot {
 	return &AggregateRoot{
-		ID:      id,
-		Version: 0,
+		Entity: *entity.NewEntity(id),
 	}
 }
 
@@ -40,8 +44,7 @@ func NewAggregateRoot(id string) *AggregateRoot {
 //	}
 func NewAggregateRootWithApplier(id string, applier EventApplier) *AggregateRoot {
 	return &AggregateRoot{
-		ID:      id,
-		Version: 0,
+		Entity:  *entity.NewEntity(id),
 		applier: applier,
 	}
 }
@@ -51,10 +54,25 @@ func NewAggregateRootWithApplier(id string, applier EventApplier) *AggregateRoot
 // (ID, Version, uncommitted events) but no When callback.
 func NewEventCollector(id string) *AggregateRoot {
 	return &AggregateRoot{
-		ID:               id,
-		Version:          0,
+		Entity:           *entity.NewEntity(id),
 		skipApplierCheck: true,
 	}
+}
+
+func (a *AggregateRoot) GetAggregateRoot() *AggregateRoot {
+	return a
+}
+
+func (a *AggregateRoot) GetVersion() int {
+	return a.version
+}
+
+func (a *AggregateRoot) SetSnapshotVersion(v int) {
+	a.version = v
+}
+
+func (a *AggregateRoot) forceSetVersion(v int) {
+	a.version = v
 }
 
 func (a *AggregateRoot) SetApplier(applier EventApplier) {
@@ -83,7 +101,7 @@ func (a *AggregateRoot) LoadFromHistory(events []event.DomainEvent) {
 }
 
 func (a *AggregateRoot) applyEvent(evt event.DomainEvent) {
-	a.Version++
+	a.version++
 	if a.applier != nil {
 		a.applier.When(evt)
 	} else if !a.skipApplierCheck {
@@ -96,10 +114,10 @@ type AggregateRootValidator interface {
 }
 
 func (a *AggregateRoot) Validate() error {
-	if a.ID == "" {
-		return fmt.Errorf("aggregate ID cannot be empty")
+	if err := a.Entity.Validate(); err != nil {
+		return fmt.Errorf("aggregate: %w", err)
 	}
-	if a.Version < 0 {
+	if a.version < 0 {
 		return fmt.Errorf("aggregate version cannot be negative")
 	}
 	return nil
