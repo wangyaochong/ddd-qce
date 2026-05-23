@@ -67,6 +67,8 @@ func (a *AggregateRoot) GetVersion() int {
 	return a.version
 }
 
+// SetSnapshotVersion sets the aggregate version from a loaded snapshot.
+// This should only be called by infrastructure (repository) when restoring from persistence.
 func (a *AggregateRoot) SetSnapshotVersion(v int) {
 	a.version = v
 }
