@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -55,6 +56,22 @@ func WithMaxRetries(maxRetries int) JobOption {
 		j.MaxRetries = maxRetries
 	}
 }
+
+type StoreError struct {
+	JobID     string
+	Operation string
+	Err       error
+}
+
+func (e *StoreError) Error() string {
+	return fmt.Sprintf("store %s failed for job %s: %v", e.Operation, e.JobID, e.Err)
+}
+
+func (e *StoreError) Unwrap() error {
+	return e.Err
+}
+
+type StoreErrorHandler func(ctx context.Context, storeErr *StoreError)
 
 type JobManager interface {
 	Submit(ctx context.Context, cmd any, opts ...JobOption) (*Job, error)
