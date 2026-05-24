@@ -48,4 +48,4 @@ func (s *DomainEventStore) Load(ctx context.Context, aggregateID string, afterVe
 	return result, nil
 }
 
-var _ event.DomainEventAppendOnlyStore = (*DomainEventStore)(nil)
+var _ event.EventStore[event.DomainEvent] = (*DomainEventStore)(nil)
