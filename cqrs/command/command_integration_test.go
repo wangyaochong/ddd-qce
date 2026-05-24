@@ -164,3 +164,64 @@ func (a *testIntegrationAspect) AfterCommand(ctx context.Context, cmd any, r any
 	}
 	return nil
 }
+
+func TestCommandDispatch_InterfaceLevel(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	commandmemory.RegisterCommand(bus, &integrationHandler{})
+
+	result, err := command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "iface-dispatch"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.ID != "int-iface-dispatch" {
+		t.Errorf("expected 'int-iface-dispatch', got '%s'", result.ID)
+	}
+}
+
+func TestCommandDispatch_InterfaceLevel_NoHandler(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+
+	_, err := command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "no-handler"})
+	if err == nil {
+		t.Fatal("expected error for unregistered command")
+	}
+}
+
+func TestCommandDispatch_InterfaceLevel_HandlerError(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	commandmemory.RegisterCommand(bus, &integrationFailingHandler{})
+
+	_, err := command.Dispatch[*integrationFailingCommand, *integrationFailingResult](context.Background(), bus, &integrationFailingCommand{})
+	if err == nil {
+		t.Fatal("expected error from failing handler")
+	}
+}
+
+func TestCommandDispatch_InterfaceLevel_NilResult(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	commandmemory.RegisterCommand(bus, &nilResultHandler{})
+
+	result, err := command.Dispatch[*nilResultCommand, *nilResult](context.Background(), bus, &nilResultCommand{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected nil result, got %v", result)
+	}
+}
+
+type nilResultCommand struct {
+	command.BaseCommand
+}
+
+type nilResult struct{}
+
+type nilResultHandler struct{}
+
+func (h *nilResultHandler) Handle(ctx context.Context, cmd *nilResultCommand) (*nilResult, error) {
+	return nil, nil
+}
