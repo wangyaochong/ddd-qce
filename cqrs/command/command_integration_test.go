@@ -37,17 +37,17 @@ func (h *integrationFailingHandler) Handle(ctx context.Context, cmd *integration
 	return nil, context.DeadlineExceeded
 }
 
-func TestCommandExecutor_InterfaceSatisfaction(t *testing.T) {
+func TestCommandBus_InterfaceSatisfaction(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	var _ command.CommandExecutor = commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	var _ command.CommandBus = commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 }
 
-func TestCommandExecutor_Execute(t *testing.T) {
+func TestCommandBus_Execute(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &integrationHandler{})
 
-	var executor command.CommandExecutor = bus
+	var executor command.CommandBus = bus
 
 	result, err := executor.Execute(context.Background(), &integrationCommand{Name: "via-executor"})
 	if err != nil {
@@ -62,11 +62,11 @@ func TestCommandExecutor_Execute(t *testing.T) {
 	}
 }
 
-func TestCommandExecutor_Execute_NoHandler(t *testing.T) {
+func TestCommandBus_Execute_NoHandler(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 
-	var executor command.CommandExecutor = bus
+	var executor command.CommandBus = bus
 
 	_, err := executor.Execute(context.Background(), &integrationCommand{Name: "no-handler"})
 	if err == nil {
@@ -74,12 +74,12 @@ func TestCommandExecutor_Execute_NoHandler(t *testing.T) {
 	}
 }
 
-func TestCommandExecutor_Execute_Error(t *testing.T) {
+func TestCommandBus_Execute_Error(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &integrationFailingHandler{})
 
-	var executor command.CommandExecutor = bus
+	var executor command.CommandBus = bus
 
 	_, err := executor.Execute(context.Background(), &integrationFailingCommand{})
 	if err == nil {
@@ -111,7 +111,7 @@ func TestDispatch_GenericAPI_NoHandler(t *testing.T) {
 	}
 }
 
-func TestCommandExecutor_Execute_WithAspects(t *testing.T) {
+func TestCommandBus_Execute_WithAspects(t *testing.T) {
 	chain := aspect.NewAspectChain()
 
 	var beforeCalled, afterCalled bool
@@ -123,7 +123,7 @@ func TestCommandExecutor_Execute_WithAspects(t *testing.T) {
 	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &integrationHandler{})
 
-	var executor command.CommandExecutor = bus
+	var executor command.CommandBus = bus
 
 	_, err := executor.Execute(context.Background(), &integrationCommand{Name: "aspected"})
 	if err != nil {

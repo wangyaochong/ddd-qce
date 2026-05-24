@@ -10,6 +10,7 @@ import (
 	"github.com/ddd-qce/core/aspect/builtin"
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/event"
+	eventbus "github.com/ddd-qce/core/cqrs/event"
 )
 
 func handlerTypeName(h any) string {
@@ -31,6 +32,8 @@ type EventBus struct {
 	chain    *aspect.AspectChain
 	mu       sync.RWMutex
 }
+
+var _ eventbus.EventBus = (*EventBus)(nil)
 
 type EventBusOption func(*EventBus)
 

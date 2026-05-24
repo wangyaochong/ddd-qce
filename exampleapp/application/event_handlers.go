@@ -5,21 +5,21 @@ import (
 	"fmt"
 	"log"
 
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+	"github.com/ddd-qce/core/cqrs/command"
 	"github.com/ddd-qce/exampleapp/domain"
 )
 
 type OrderPlacedInventoryHandler struct {
-	cmdBus *commandmemory.CommandBus
+	cmdBus command.CommandBus
 }
 
-func NewOrderPlacedInventoryHandler(cmdBus *commandmemory.CommandBus) *OrderPlacedInventoryHandler {
+func NewOrderPlacedInventoryHandler(cmdBus command.CommandBus) *OrderPlacedInventoryHandler {
 	return &OrderPlacedInventoryHandler{cmdBus: cmdBus}
 }
 
 func (h *OrderPlacedInventoryHandler) Handle(ctx context.Context, evt *domain.OrderPlacedEvent) error {
 	log.Printf("[EventHandler] OrderPlaced: reserving inventory for order %s", evt.AggregateID())
-	_, err := commandmemory.Dispatch[*ReserveInventoryCommand, *ReserveInventoryResult](ctx, h.cmdBus, &ReserveInventoryCommand{
+	_, err := command.Dispatch[*ReserveInventoryCommand, *ReserveInventoryResult](ctx, h.cmdBus, &ReserveInventoryCommand{
 		OrderID:   evt.AggregateID(),
 		ProductID: "laptop",
 		Quantity:  1,
@@ -28,16 +28,16 @@ func (h *OrderPlacedInventoryHandler) Handle(ctx context.Context, evt *domain.Or
 }
 
 type OrderCancelledInventoryHandler struct {
-	cmdBus *commandmemory.CommandBus
+	cmdBus command.CommandBus
 }
 
-func NewOrderCancelledInventoryHandler(cmdBus *commandmemory.CommandBus) *OrderCancelledInventoryHandler {
+func NewOrderCancelledInventoryHandler(cmdBus command.CommandBus) *OrderCancelledInventoryHandler {
 	return &OrderCancelledInventoryHandler{cmdBus: cmdBus}
 }
 
 func (h *OrderCancelledInventoryHandler) Handle(ctx context.Context, evt *domain.OrderCancelledEvent) error {
 	log.Printf("[EventHandler] OrderCancelled: releasing inventory for order %s", evt.AggregateID())
-	_, err := commandmemory.Dispatch[*ReleaseInventoryCommand, *ReleaseInventoryResult](ctx, h.cmdBus, &ReleaseInventoryCommand{
+	_, err := command.Dispatch[*ReleaseInventoryCommand, *ReleaseInventoryResult](ctx, h.cmdBus, &ReleaseInventoryCommand{
 		OrderID:   evt.AggregateID(),
 		ProductID: "laptop",
 		Quantity:  1,

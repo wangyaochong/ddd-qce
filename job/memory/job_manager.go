@@ -17,7 +17,7 @@ import (
 
 type JobManager struct {
 	store        jobcore.JobStore
-	executor     command.CommandExecutor
+	executor     command.CommandBus
 	mu           sync.Mutex
 	cancelers    map[string]context.CancelFunc
 	jobs         map[string]*jobcore.Job
@@ -26,7 +26,7 @@ type JobManager struct {
 	stopCh       chan struct{}
 }
 
-func NewJobManager(store jobcore.JobStore, executor command.CommandExecutor, opts ...JobManagerOption) *JobManager {
+func NewJobManager(store jobcore.JobStore, executor command.CommandBus, opts ...JobManagerOption) *JobManager {
 	m := &JobManager{
 		store:     store,
 		executor:  executor,

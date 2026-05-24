@@ -8,17 +8,17 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ddd-qce/core/cqrs/command"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	"github.com/ddd-qce/core/domain/event"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/exampleapp/domain"
 )
 
 type PlaceOrderHandler struct {
-	repo     *OrderRepository
-	eventBus *eventmemory.EventBus
+	repo     OrderRepositoryAdapter
+	eventBus cqrsevent.EventBus
 }
 
-func NewPlaceOrderHandler(repo *OrderRepository, eventBus *eventmemory.EventBus) *PlaceOrderHandler {
+func NewPlaceOrderHandler(repo OrderRepositoryAdapter, eventBus cqrsevent.EventBus) *PlaceOrderHandler {
 	return &PlaceOrderHandler{repo: repo, eventBus: eventBus}
 }
 
@@ -38,8 +38,8 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 		return nil, err
 	}
 
-	eventmemory.Dispatch[*domain.OrderPlacedEvent](ctx, h.eventBus, &domain.OrderPlacedEvent{
-		BaseEvent: event.NewBaseEvent(order.GetID(), time.Now()),
+	cqrsevent.Dispatch[*domain.OrderPlacedEvent](ctx, h.eventBus, &domain.OrderPlacedEvent{
+		BaseEvent: domainevent.NewBaseEvent(order.GetID(), time.Now()),
 		UserID:          order.UserID,
 		TotalAmount:     order.TotalAmount,
 		Items:           order.ItemNames(),
@@ -49,11 +49,11 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 }
 
 type ConfirmPaymentHandler struct {
-	repo     *OrderRepository
-	eventBus *eventmemory.EventBus
+	repo     OrderRepositoryAdapter
+	eventBus cqrsevent.EventBus
 }
 
-func NewConfirmPaymentHandler(repo *OrderRepository, eventBus *eventmemory.EventBus) *ConfirmPaymentHandler {
+func NewConfirmPaymentHandler(repo OrderRepositoryAdapter, eventBus cqrsevent.EventBus) *ConfirmPaymentHandler {
 	return &ConfirmPaymentHandler{repo: repo, eventBus: eventBus}
 }
 
@@ -72,11 +72,11 @@ func (h *ConfirmPaymentHandler) Handle(ctx context.Context, cmd *ConfirmPaymentC
 }
 
 type ShipOrderHandler struct {
-	repo     *OrderRepository
-	eventBus *eventmemory.EventBus
+	repo     OrderRepositoryAdapter
+	eventBus cqrsevent.EventBus
 }
 
-func NewShipOrderHandler(repo *OrderRepository, eventBus *eventmemory.EventBus) *ShipOrderHandler {
+func NewShipOrderHandler(repo OrderRepositoryAdapter, eventBus cqrsevent.EventBus) *ShipOrderHandler {
 	return &ShipOrderHandler{repo: repo, eventBus: eventBus}
 }
 
@@ -95,11 +95,11 @@ func (h *ShipOrderHandler) Handle(ctx context.Context, cmd *ShipOrderCommand) (*
 }
 
 type CancelOrderHandler struct {
-	repo     *OrderRepository
-	eventBus *eventmemory.EventBus
+	repo     OrderRepositoryAdapter
+	eventBus cqrsevent.EventBus
 }
 
-func NewCancelOrderHandler(repo *OrderRepository, eventBus *eventmemory.EventBus) *CancelOrderHandler {
+func NewCancelOrderHandler(repo OrderRepositoryAdapter, eventBus cqrsevent.EventBus) *CancelOrderHandler {
 	return &CancelOrderHandler{repo: repo, eventBus: eventBus}
 }
 
@@ -115,8 +115,8 @@ func (h *CancelOrderHandler) Handle(ctx context.Context, cmd *CancelOrderCommand
 		return nil, err
 	}
 
-	eventmemory.Dispatch[*domain.OrderCancelledEvent](ctx, h.eventBus, &domain.OrderCancelledEvent{
-		BaseEvent: event.NewBaseEvent(order.GetID(), time.Now()),
+	cqrsevent.Dispatch[*domain.OrderCancelledEvent](ctx, h.eventBus, &domain.OrderCancelledEvent{
+		BaseEvent: domainevent.NewBaseEvent(order.GetID(), time.Now()),
 		Reason:          cmd.Reason,
 	})
 
@@ -125,10 +125,10 @@ func (h *CancelOrderHandler) Handle(ctx context.Context, cmd *CancelOrderCommand
 
 type ReserveInventoryHandler struct {
 	inventory *domain.Inventory
-	eventBus  *eventmemory.EventBus
+	eventBus  cqrsevent.EventBus
 }
 
-func NewReserveInventoryHandler(inventory *domain.Inventory, eventBus *eventmemory.EventBus) *ReserveInventoryHandler {
+func NewReserveInventoryHandler(inventory *domain.Inventory, eventBus cqrsevent.EventBus) *ReserveInventoryHandler {
 	return &ReserveInventoryHandler{inventory: inventory, eventBus: eventBus}
 }
 
@@ -137,8 +137,8 @@ func (h *ReserveInventoryHandler) Handle(ctx context.Context, cmd *ReserveInvent
 		return nil, err
 	}
 
-	eventmemory.Dispatch[*domain.InventoryReservedEvent](ctx, h.eventBus, &domain.InventoryReservedEvent{
-		BaseEvent: event.NewBaseEvent(cmd.OrderID, time.Now()),
+	cqrsevent.Dispatch[*domain.InventoryReservedEvent](ctx, h.eventBus, &domain.InventoryReservedEvent{
+		BaseEvent: domainevent.NewBaseEvent(cmd.OrderID, time.Now()),
 		ProductID:       cmd.ProductID,
 		Quantity:        cmd.Quantity,
 	})
@@ -148,10 +148,10 @@ func (h *ReserveInventoryHandler) Handle(ctx context.Context, cmd *ReserveInvent
 
 type ReleaseInventoryHandler struct {
 	inventory *domain.Inventory
-	eventBus  *eventmemory.EventBus
+	eventBus  cqrsevent.EventBus
 }
 
-func NewReleaseInventoryHandler(inventory *domain.Inventory, eventBus *eventmemory.EventBus) *ReleaseInventoryHandler {
+func NewReleaseInventoryHandler(inventory *domain.Inventory, eventBus cqrsevent.EventBus) *ReleaseInventoryHandler {
 	return &ReleaseInventoryHandler{inventory: inventory, eventBus: eventBus}
 }
 
@@ -160,8 +160,8 @@ func (h *ReleaseInventoryHandler) Handle(ctx context.Context, cmd *ReleaseInvent
 		return nil, err
 	}
 
-	eventmemory.Dispatch[*domain.InventoryReleasedEvent](ctx, h.eventBus, &domain.InventoryReleasedEvent{
-		BaseEvent: event.NewBaseEvent(cmd.OrderID, time.Now()),
+	cqrsevent.Dispatch[*domain.InventoryReleasedEvent](ctx, h.eventBus, &domain.InventoryReleasedEvent{
+		BaseEvent: domainevent.NewBaseEvent(cmd.OrderID, time.Now()),
 		ProductID:       cmd.ProductID,
 		Quantity:        cmd.Quantity,
 	})

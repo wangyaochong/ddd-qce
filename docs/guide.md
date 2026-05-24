@@ -404,6 +404,7 @@ func (h *CreateUserHandler) Handle(ctx context.Context, cmd CreateUserCommand) (
 import (
     "context"
     "github.com/ddd-qce/core/aspect"
+    "github.com/ddd-qce/core/cqrs/command"
     commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 )
 
@@ -411,14 +412,14 @@ func main() {
     ctx := context.Background()
 
     chain := aspect.NewAspectChain()
-    bus := commandmemory.NewCommandBus(chain)
+    bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 
-    // 注册 Handler
-    commandmemory.RegisterCommand[CreateUserCommand, string](bus, &CreateUserHandler{userRepo: repo})
+    // 注册 Handler（通过 CommandBus 接口方法）
+    bus.RegisterHandler(&CreateUserHandler{userRepo: repo})
 
-    // 执行 Command（注意：bus 在 ctx 前面）
-    userID, err := commandmemory.Dispatch[CreateUserCommand, string](
-        bus, ctx, CreateUserCommand{
+    // 执行 Command（通过接口级 Dispatch，ctx 在前）
+    userID, err := command.Dispatch[CreateUserCommand, string](
+        ctx, bus, CreateUserCommand{
             Name:  "Alice",
             Email: "alice@example.com",
             Age:   25,
@@ -442,7 +443,7 @@ func (h *DeleteUserHandler) Handle(ctx context.Context, cmd DeleteUserCommand) (
 }
 
 // 执行
-_, err := commandmemory.Dispatch[DeleteUserCommand, struct{}](bus, ctx, cmd)
+_, err := command.Dispatch[DeleteUserCommand, struct{}](ctx, bus, cmd)
 ```
 
 ---
@@ -499,6 +500,7 @@ func (h *GetUserHandler) Handle(ctx context.Context, q GetUserQuery) (*GetUserRe
 import (
     "context"
     "github.com/ddd-qce/core/aspect"
+    "github.com/ddd-qce/core/cqrs/query"
     querymemory "github.com/ddd-qce/core/cqrs/query/memory"
 )
 
@@ -506,14 +508,14 @@ func main() {
     ctx := context.Background()
 
     chain := aspect.NewAspectChain()
-    bus := querymemory.NewQueryBus(chain)
+    bus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
 
-    // 注册 Handler
-    querymemory.RegisterQuery[GetUserQuery, *GetUserResult](bus, &GetUserHandler{userRepo: repo})
+    // 注册 Handler（通过 QueryBus 接口方法）
+    bus.RegisterHandler(&GetUserHandler{userRepo: repo})
 
-    // 执行 Query（注意：bus 在 ctx 前面）
-    result, err := querymemory.Dispatch[GetUserQuery, *GetUserResult](
-        bus, ctx, GetUserQuery{UserID: "user-123"},
+    // 执行 Query（通过接口级 Dispatch，ctx 在前）
+    result, err := query.Dispatch[GetUserQuery, *GetUserResult](
+        ctx, bus, GetUserQuery{UserID: "user-123"},
     )
 }
 ```
@@ -574,6 +576,7 @@ func (h *UpdateSearchIndexHandler) Handle(ctx context.Context, evt UserCreatedEv
 import (
     "context"
     "github.com/ddd-qce/core/aspect"
+    "github.com/ddd-qce/core/cqrs/event"
     eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 )
 
@@ -581,15 +584,14 @@ func main() {
     ctx := context.Background()
 
     chain := aspect.NewAspectChain()
-    // EventBus 是非泛型的，一个实例处理所有事件类型
     bus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
-    // 订阅 Handler（同一事件可多个订阅者）
-    eventmemory.RegisterHandler[UserCreatedEvent](bus, &SendWelcomeEmailHandler{emailService: svc})
-    eventmemory.RegisterHandler[UserCreatedEvent](bus, &UpdateSearchIndexHandler{searchClient: client})
+    // 订阅 Handler（通过 EventBus 接口方法）
+    bus.SubscribeHandler(&SendWelcomeEmailHandler{emailService: svc})
+    bus.SubscribeHandler(&UpdateSearchIndexHandler{searchClient: client})
 
-    // 发布事件
-    err := eventmemory.Dispatch[UserCreatedEvent](bus, ctx, UserCreatedEvent{
+    // 发布事件（通过接口级 Dispatch，ctx 在前）
+    err := event.Dispatch[UserCreatedEvent](ctx, bus, UserCreatedEvent{
         UserID:    "user-123",
         Name:      "Alice",
         Email:     "alice@example.com",
@@ -605,12 +607,12 @@ func main() {
 bus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
 // 订阅不同类型的事件
-eventmemory.RegisterHandler[UserCreatedEvent](bus, &SendWelcomeEmailHandler{})
-eventmemory.RegisterHandler[OrderPlacedEvent](bus, &UpdateInventoryHandler{})
+bus.SubscribeHandler(&SendWelcomeEmailHandler{})
+bus.SubscribeHandler(&UpdateInventoryHandler{})
 
 // 发布不同类型的事件
-eventmemory.Dispatch[UserCreatedEvent](bus, ctx, UserCreatedEvent{...})
-eventmemory.Dispatch[OrderPlacedEvent](bus, ctx, OrderPlacedEvent{...})
+event.Dispatch[UserCreatedEvent](ctx, bus, UserCreatedEvent{...})
+event.Dispatch[OrderPlacedEvent](ctx, bus, OrderPlacedEvent{...})
 ```
 
 ### 5. EventStore 使用
@@ -816,7 +818,7 @@ func main() {
     cBus := commandmemory.NewCommandBus(chain)
 
     jobStore := jobmemory.NewJobStore()
-    // JobManager 需要 CommandExecutor 来执行任务
+    // JobManager 需要 CommandBus 来执行任务
     jobManager := jobmemory.NewJobManager(jobStore, cBus)
 
     // 提交任务
@@ -999,7 +1001,50 @@ backend := pgx.NewBackend(db)
 // backend.Migrate             — pg.Migrate 函数
 ```
 
-### 3. 数据库迁移
+### 3. 环境变量配置切换
+
+框架支持通过环境变量一键切换存储后端，无需修改代码：
+
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `DDD_STORE_TYPE` | `postgresql` | 存储后端类型：`postgresql` 或 `memory` |
+| `DDD_POSTGRES_URI` | 无 | PostgreSQL 连接地址，`postgresql` 模式下必填 |
+
+```bash
+# PostgreSQL 模式（默认）
+DDD_POSTGRES_URI="postgres://user:pass@localhost:5432/mydb" ./myapp
+
+# Memory 模式（开发/测试）
+DDD_STORE_TYPE=memory ./myapp
+```
+
+PostgreSQL 是唯一的生产运行模式。Memory 模式用于设计验证——确保应用层只依赖接口、不依赖具体实现。详见 [架构设计文档](architecture.md#七存储模式设计哲学)。
+
+在应用代码中通过 Provider 模式组装：
+
+```go
+// infrastructure/provider.go
+func NewProvider(cfg *Config) (*StoreComponents, error) {
+    switch cfg.StoreType {
+    case "memory":
+        return &StoreComponents{
+            Backend:    infra.NewMemoryBackend(),
+            EventStore: eventmemory.NewEventStore[domainevent.DomainEvent](),
+            OrderRepo:  application.NewOrderRepository(),
+        }, nil
+    case "postgresql":
+        db, _ := sql.Open("pgx", cfg.PostgresURI)
+        return &StoreComponents{
+            Backend:    infra.NewPgBackend(db),
+            EventStore: eventpg.NewEventStore[domainevent.DomainEvent](db),
+            OrderRepo:  application.NewOrderRepository(),
+            DB:         db,
+        }, nil
+    }
+}
+```
+
+### 4. 数据库迁移
 
 ```go
 // 使用 Backend 的 Migrate 函数
@@ -1011,7 +1056,7 @@ if backend.Migrate != nil {
 err := pg.Migrate(db)
 ```
 
-### 4. 嵌套事务
+### 5. 嵌套事务
 
 ```go
 // PgTransactionManager 自动支持嵌套事务
@@ -1029,7 +1074,7 @@ ctx, _ = txMgr.Begin(ctx)     // BEGIN
 txMgr.Commit(ctx)              // COMMIT
 ```
 
-### 5. 事务内查询
+### 6. 事务内查询
 
 ```go
 import "github.com/ddd-qce/core/pg"
@@ -1053,8 +1098,11 @@ import (
 
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/aspect/builtin"
+    "github.com/ddd-qce/core/cqrs/command"
     commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    "github.com/ddd-qce/core/cqrs/event"
     eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+    "github.com/ddd-qce/core/cqrs/query"
     querymemory "github.com/ddd-qce/core/cqrs/query/memory"
     jobmemory "github.com/ddd-qce/core/job/memory"
     "github.com/ddd-qce/core/trace"
@@ -1077,8 +1125,8 @@ func main() {
     chain.RegisterEventAspect(&builtin.LoggingAspect{Logger: &SimpleLogger{}})
 
     // 3. 创建 Bus
-    qBus := querymemory.NewQueryBus(chain)
-    cBus := commandmemory.NewCommandBus(chain)
+    qBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
+    cBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
     eBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
     // 4. 创建 Job 管理器
@@ -1086,14 +1134,14 @@ func main() {
     jobManager := jobmemory.NewJobManager(jobStore, cBus)
 
     // 5. 注册 Handler
-    // commandmemory.RegisterCommand[CreateUserCommand, string](cBus, &CreateUserHandler{...})
-    // querymemory.RegisterQuery[GetUserQuery, *GetUserResult](qBus, &GetUserHandler{...})
-    // eventmemory.RegisterHandler[UserCreatedEvent](eBus, &SendWelcomeEmailHandler{...})
+    // cBus.RegisterHandler(&CreateUserHandler{...})
+    // qBus.RegisterHandler(&GetUserHandler{...})
+    // eBus.SubscribeHandler(&SendWelcomeEmailHandler{...})
 
     // 6. 执行
-    // commandmemory.Dispatch[CreateUserCommand, string](cBus, ctx, cmd)
-    // querymemory.Dispatch[GetUserQuery, *GetUserResult](qBus, ctx, q)
-    // eventmemory.Dispatch[UserCreatedEvent](eBus, ctx, evt)
+    // command.Dispatch[CreateUserCommand, string](ctx, cBus, cmd)
+    // query.Dispatch[GetUserQuery, *GetUserResult](ctx, qBus, q)
+    // event.Dispatch[UserCreatedEvent](ctx, eBus, evt)
     // jobManager.Submit(ctx, cmd)
 
     // 7. 查看追踪
@@ -1182,15 +1230,18 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (Result, error) {
 }
 ```
 
-### 8. Backend 选择
+### 8. 存储后端选择
 
 ```go
-// 开发/测试：使用内存后端
-backend := infra.NewMemoryBackend()
+// 生产：PostgreSQL 模式（默认）
+// 设置 DDD_POSTGRES_URI 环境变量即可
+DDD_POSTGRES_URI="postgres://..." ./myapp
 
-// 生产：使用 PostgreSQL 后端
-backend := pgx.NewBackend(db)
+// 开发/测试：Memory 模式
+DDD_STORE_TYPE=memory ./myapp
 
 // 切换后端不需要修改业务代码
-// Backend 统一了 TransactionManager、JobStore、TraceStore、MessageStore 接口
+// 应用层只依赖接口，存储层由 Provider 组装
 ```
+
+PostgreSQL 是唯一的生产运行模式。Memory 模式的价值在于验证架构设计——确保依赖倒置、接口隔离等原则得到遵守。

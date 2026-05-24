@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
+	"github.com/ddd-qce/core/cqrs/command"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/query"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
 	domainevent "github.com/ddd-qce/core/domain/event"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
@@ -21,83 +24,114 @@ import (
 	"github.com/ddd-qce/exampleapp/infrastructure"
 )
 
-func TestFullOrderLifecycle(t *testing.T) {
-	app := infrastructure.WireApp()
-	ctx := context.Background()
+func wireTestApp(t *testing.T, storeType string) *infrastructure.AppContext {
+	t.Helper()
+	cfg := &infrastructure.Config{StoreType: storeType}
+	if storeType == infrastructure.StoreTypePostgreSQL {
+		dsn := os.Getenv("DDD_POSTGRES_URI")
+		if dsn == "" {
+			t.Skip("DDD_POSTGRES_URI not set, skipping PostgreSQL test")
+		}
+		cfg.PostgresURI = dsn
+	}
+	app, err := infrastructure.WireAppWithConfig(cfg)
+	if err != nil {
+		t.Fatalf("wire app (%s): %v", storeType, err)
+	}
+	t.Cleanup(func() { app.Close() })
+	return app
+}
 
-	placed, err := commandmemory.Dispatch[*application.PlaceOrderCommand, *application.PlaceOrderResult](ctx, app.CmdBus, &application.PlaceOrderCommand{
-		UserID: "user-001",
-		Items:  []application.ItemInput{{ProductID: "laptop", ProductName: "Laptop", Price: 999.99, Quantity: 1}},
+func runForBothStores(t *testing.T, fn func(t *testing.T, app *infrastructure.AppContext)) {
+	t.Helper()
+	t.Run("Memory", func(t *testing.T) {
+		app := wireTestApp(t, infrastructure.StoreTypeMemory)
+		fn(t, app)
 	})
-	if err != nil {
-		t.Fatalf("place order failed: %v", err)
-	}
-	time.Sleep(100 * time.Millisecond)
+	t.Run("PostgreSQL", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("skipping PostgreSQL test in short mode")
+		}
+		app := wireTestApp(t, infrastructure.StoreTypePostgreSQL)
+		fn(t, app)
+	})
+}
 
-	_, err = commandmemory.Dispatch[*application.ConfirmPaymentCommand, *application.ConfirmPaymentResult](ctx, app.CmdBus, &application.ConfirmPaymentCommand{OrderID: placed.OrderID})
-	if err != nil {
-		t.Fatalf("confirm payment failed: %v", err)
-	}
+func TestFullOrderLifecycle(t *testing.T) {
+	runForBothStores(t, func(t *testing.T, app *infrastructure.AppContext) {
+		ctx := context.Background()
 
-	_, err = commandmemory.Dispatch[*application.ShipOrderCommand, *application.ShipOrderResult](ctx, app.CmdBus, &application.ShipOrderCommand{OrderID: placed.OrderID})
-	if err != nil {
-		t.Fatalf("ship failed: %v", err)
-	}
+		placed, err := command.Dispatch[*application.PlaceOrderCommand, *application.PlaceOrderResult](ctx, app.CmdBus, &application.PlaceOrderCommand{
+			UserID: "user-001",
+			Items:  []application.ItemInput{{ProductID: "laptop", ProductName: "Laptop", Price: 999.99, Quantity: 1}},
+		})
+		if err != nil {
+			t.Fatalf("place order failed: %v", err)
+		}
+		time.Sleep(100 * time.Millisecond)
 
-	order, err := querymemory.Dispatch[*application.GetOrderQuery, *application.GetOrderResult](ctx, app.QueryBus, &application.GetOrderQuery{OrderID: placed.OrderID})
-	if err != nil {
-		t.Fatalf("get order failed: %v", err)
-	}
-	if order.Status != "shipped" {
-		t.Errorf("expected shipped, got %s", order.Status)
-	}
+		_, err = command.Dispatch[*application.ConfirmPaymentCommand, *application.ConfirmPaymentResult](ctx, app.CmdBus, &application.ConfirmPaymentCommand{OrderID: placed.OrderID})
+		if err != nil {
+			t.Fatalf("confirm payment failed: %v", err)
+		}
 
-	traceIDs, _ := app.Backend.TraceStore.ListTraces(ctx, trace.TraceFilter{})
-	if len(traceIDs) == 0 {
-		t.Error("expected traces to be recorded")
-	}
+		_, err = command.Dispatch[*application.ShipOrderCommand, *application.ShipOrderResult](ctx, app.CmdBus, &application.ShipOrderCommand{OrderID: placed.OrderID})
+		if err != nil {
+			t.Fatalf("ship failed: %v", err)
+		}
 
-	if len(app.TxManager.Records) == 0 {
-		t.Error("expected transaction records")
-	}
+		order, err := query.Dispatch[*application.GetOrderQuery, *application.GetOrderResult](ctx, app.QueryBus, &application.GetOrderQuery{OrderID: placed.OrderID})
+		if err != nil {
+			t.Fatalf("get order failed: %v", err)
+		}
+		if order.Status != "shipped" {
+			t.Errorf("expected shipped, got %s", order.Status)
+		}
 
-	if len(app.MetricsRecorder.Durations) == 0 {
-		t.Error("expected metrics records")
-	}
+		traceIDs, _ := app.Backend.TraceStore.ListTraces(ctx, trace.TraceFilter{})
+		if len(traceIDs) == 0 {
+			t.Error("expected traces to be recorded")
+		}
+
+		if len(app.MetricsRecorder.Durations) == 0 {
+			t.Error("expected metrics records")
+		}
+	})
 }
 
 func TestEventSourcingFullCycle(t *testing.T) {
-	app := infrastructure.WireApp()
-	ctx := context.Background()
+	runForBothStores(t, func(t *testing.T, app *infrastructure.AppContext) {
+		ctx := context.Background()
 
-	order, _ := domain.NewOrder("ORD-ES-FULL", "user-001", []*domain.OrderItem{
-		domain.NewOrderItem("laptop", "Laptop", 999, 1),
+		order, _ := domain.NewOrder("ORD-ES-FULL", "user-001", []*domain.OrderItem{
+			domain.NewOrderItem("laptop", "Laptop", 999, 1),
+		})
+		if err := app.EventSourcedRepo.Save(ctx, order); err != nil {
+			t.Fatalf("save failed: %v", err)
+		}
+
+		loaded, err := app.EventSourcedRepo.Load(ctx, "ORD-ES-FULL")
+		if err != nil {
+			t.Fatalf("load failed: %v", err)
+		}
+		if loaded.GetID() != "ORD-ES-FULL" {
+			t.Errorf("expected ORD-ES-FULL, got %s", loaded.GetID())
+		}
+		if loaded.UserID != "user-001" {
+			t.Errorf("expected user-001, got %s", loaded.UserID)
+		}
+
+		events, _ := app.EventStore.Load(ctx, "ORD-ES-FULL", 0)
+		if len(events) != 1 {
+			t.Errorf("expected 1 event, got %d", len(events))
+		}
 	})
-	if err := app.EventSourcedRepo.Save(ctx, order); err != nil {
-		t.Fatalf("save failed: %v", err)
-	}
-
-	loaded, err := app.EventSourcedRepo.Load(ctx, "ORD-ES-FULL")
-	if err != nil {
-		t.Fatalf("load failed: %v", err)
-	}
-	if loaded.GetID() != "ORD-ES-FULL" {
-		t.Errorf("expected ORD-ES-FULL, got %s", loaded.GetID())
-	}
-	if loaded.UserID != "user-001" {
-		t.Errorf("expected user-001, got %s", loaded.UserID)
-	}
-
-	events, _ := app.EventStore.Load(ctx, "ORD-ES-FULL", 0)
-	if len(events) != 1 {
-		t.Errorf("expected 1 event, got %d", len(events))
-	}
 }
 
 func TestJobManagerFullCycle(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
-	commandmemory.RegisterCommand(cmdBus, application.NewGenerateReportHandler())
+	cmdBus.RegisterHandler(application.NewGenerateReportHandler())
 	jobStore := jobmemory.NewJobStore()
 	var storeErrors []*jobcore.StoreError
 	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus, jobmemory.WithStoreErrorHandler(func(ctx context.Context, storeErr *jobcore.StoreError) {
@@ -126,7 +160,7 @@ func TestJobManagerFullCycle(t *testing.T) {
 func TestJobManager_Cancel(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
-	commandmemory.RegisterCommand(cmdBus, application.NewGenerateReportHandler())
+	cmdBus.RegisterHandler(application.NewGenerateReportHandler())
 	jobStore := jobmemory.NewJobStore()
 	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus)
 	ctx := context.Background()
@@ -141,7 +175,7 @@ func TestJobManager_Cancel(t *testing.T) {
 func TestJobManager_Retry(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
-	commandmemory.RegisterCommand(cmdBus, application.NewGenerateReportHandler())
+	cmdBus.RegisterHandler(application.NewGenerateReportHandler())
 	jobStore := jobmemory.NewJobStore()
 	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus)
 	ctx := context.Background()
@@ -160,10 +194,10 @@ func TestJobManager_Retry(t *testing.T) {
 func TestConcurrentEventHandlers_MultiError(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
-	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](eventBus, &successEventHandler{})
-	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](eventBus, &failEventHandler{})
+	eventBus.SubscribeHandler(&successEventHandler{})
+	eventBus.SubscribeHandler(&failEventHandler{})
 	ctx := context.Background()
-	err := eventmemory.Dispatch[*domain.OrderPlacedEvent](ctx, eventBus, &domain.OrderPlacedEvent{
+	err := cqrsevent.Dispatch[*domain.OrderPlacedEvent](ctx, eventBus, &domain.OrderPlacedEvent{
 		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), UserID: "u1", TotalAmount: 100,
 	})
 	time.Sleep(100 * time.Millisecond)
@@ -204,24 +238,25 @@ func TestTraceContextPropagation(t *testing.T) {
 }
 
 func TestRepositoryDelete(t *testing.T) {
-	app := infrastructure.WireApp()
-	ctx := context.Background()
-	order, _ := domain.NewOrder("ORD-DEL", "user-001", []*domain.OrderItem{
-		domain.NewOrderItem("laptop", "Laptop", 999, 1),
+	runForBothStores(t, func(t *testing.T, app *infrastructure.AppContext) {
+		ctx := context.Background()
+		order, _ := domain.NewOrder("ORD-DEL", "user-001", []*domain.OrderItem{
+			domain.NewOrderItem("laptop", "Laptop", 999, 1),
+		})
+		app.OrderRepo.Save(ctx, order)
+		found, err := app.OrderRepo.FindByID(ctx, "ORD-DEL")
+		if err != nil {
+			t.Fatalf("find failed: %v", err)
+		}
+		if found.GetID() != "ORD-DEL" {
+			t.Error("order not found")
+		}
+		app.OrderRepo.Delete(ctx, "ORD-DEL")
+		_, err = app.OrderRepo.FindByID(ctx, "ORD-DEL")
+		if err == nil {
+			t.Error("expected error after delete")
+		}
 	})
-	app.OrderRepo.Save(ctx, order)
-	found, err := app.OrderRepo.FindByID(ctx, "ORD-DEL")
-	if err != nil {
-		t.Fatalf("find failed: %v", err)
-	}
-	if found.GetID() != "ORD-DEL" {
-		t.Error("order not found")
-	}
-	app.OrderRepo.Delete(ctx, "ORD-DEL")
-	_, err = app.OrderRepo.FindByID(ctx, "ORD-DEL")
-	if err == nil {
-		t.Error("expected error after delete")
-	}
 }
 
 func TestCustomAspect(t *testing.T) {
@@ -232,9 +267,9 @@ func TestCustomAspect(t *testing.T) {
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	repo := application.NewOrderRepository()
 	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
-	commandmemory.RegisterCommand(cmdBus, application.NewPlaceOrderHandler(repo, eventBus))
+	cmdBus.RegisterHandler(application.NewPlaceOrderHandler(repo, eventBus))
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*application.PlaceOrderCommand, *application.PlaceOrderResult](ctx, cmdBus, &application.PlaceOrderCommand{
+	_, err := command.Dispatch[*application.PlaceOrderCommand, *application.PlaceOrderResult](ctx, cmdBus, &application.PlaceOrderCommand{
 		UserID: "user-001",
 		Items:  []application.ItemInput{{ProductID: "laptop", ProductName: "Laptop", Price: 999, Quantity: 1}},
 	})

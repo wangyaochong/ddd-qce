@@ -158,20 +158,20 @@ import (
     // ✅ 允许：只引入 order 的 command 包
     ordercmd "myproject/internal/order/command"
 
-    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    "github.com/ddd-qce/core/cqrs/command"
 )
 
 type CreateUserHandler struct {
-    // ✅ 通过 Bus 发送 Command，不直接依赖实现
-    orderCommandBus *commandmemory.CommandBus
+    // ✅ 通过接口依赖，不依赖具体实现
+    orderCommandBus command.CommandBus
 }
 
 func (h *CreateUserHandler) Handle(ctx context.Context, cmd CreateUserCommand) (string, error) {
     // 创建用户...
 
-    // ✅ 合法：发送 Command 到 order 领域
-    _, err := commandmemory.Dispatch[ordercmd.CreateOrderCommand, string](
-        h.orderCommandBus, ctx, ordercmd.CreateOrderCommand{
+    // ✅ 合法：通过接口级 Dispatch 发送 Command 到 order 领域
+    _, err := command.Dispatch[ordercmd.CreateOrderCommand, string](
+        ctx, h.orderCommandBus, ordercmd.CreateOrderCommand{
             UserID: user.ID,
             Items:  cartItems,
         },
@@ -277,11 +277,17 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 |------|--------|------|
 | Command | `cqrs/command` | 命令接口 + BaseCommand 结构体 |
 | CommandHandler[T,R] | `cqrs/command` | 命令处理器接口 |
-| CommandBus | `cqrs/command/memory` | 内存命令总线，RegisterCommand[T,R](bus, handler) / Dispatch[T,R](ctx, bus, cmd) |
+| CommandBus | `cqrs/command` | 命令总线接口，Execute(ctx, cmd any) (any, error) + RegisterHandler(handler any) error |
+| Dispatch[T,R] | `cqrs/command` | 接口级泛型调度函数，接受 CommandBus，调用者无需依赖具体实现 |
 | Query | `cqrs/query` | 查询接口 + BaseQuery 结构体 |
 | QueryHandler[T,R] | `cqrs/query` | 查询处理器接口 |
-| QueryBus | `cqrs/query/memory` | 内存查询总线，RegisterQuery[T,R](bus, handler) / Dispatch[T,R](ctx, bus, q) |
-| EventBus | `cqrs/event` | 事件总线接口，Publish(ctx, evt) error |
+| QueryBus | `cqrs/query` | 查询总线接口，Execute(ctx, query any) (any, error) + RegisterHandler(handler any) error |
+| Dispatch[T,R] | `cqrs/query` | 接口级泛型调度函数，接受 QueryBus，调用者无需依赖具体实现 |
+| EventBus | `cqrs/event` | 事件总线接口，SubscribeHandler(handler any) error / Publish(ctx, evt) error |
+| Dispatch[T] | `cqrs/event` | 接口级泛型调度函数，接受 EventBus，调用者无需依赖具体实现 |
+| MemoryCommandBus | `cqrs/command/memory` | 内存命令总线，实现 CommandBus 接口，RegisterCommand[T,R](bus, handler) / Dispatch[T,R](ctx, bus, cmd) |
+| MemoryQueryBus | `cqrs/query/memory` | 内存查询总线，实现 QueryBus 接口，RegisterQuery[T,R](bus, handler) / Dispatch[T,R](ctx, bus, q) |
+| MemoryEventBus | `cqrs/event/memory` | 内存事件总线，实现 EventBus 接口，RegisterHandler[T](bus, handler) / Dispatch[T](ctx, bus, evt) |
 | EventStore[T] | `cqrs/event/memory` | 内存事件存储，实现 domain/event.EventStore[T]（支持指针类型和接口类型 T） |
 | EventStore[T] | `cqrs/event/pg` | PostgreSQL 事件存储，实现 domain/event.EventStore[T]（接口类型 T 需 WithFactory） |
 
@@ -363,7 +369,114 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | pgx 依赖隔离到 it/ 模块 | `go mod tidy` 忽略 build tags，只有独立模块才能真正移除依赖 |
 | Backend 全局统一配置 | 所有基础设施组件共享同一后端，避免配置碎片化 |
 | Savepoint 嵌套事务 | inner Commit = RELEASE SAVEPOINT，inner Rollback = ROLLBACK TO SAVEPOINT + aborted 标记 |
+| CommandBus/QueryBus 统一接口 | CommandBus/QueryBus 包含 Execute + RegisterHandler，Dispatch 接受 Bus 类型，简化依赖关系 |
+| 接口级 Dispatch 泛型 | Dispatch[T,R] 定义在接口包，调用者只依赖接口，不引入具体实现包 |
+| 环境变量切换存储后端 | DDD_STORE_TYPE=postgresql\|memory + DDD_POSTGRES_URI，默认 PostgreSQL，memory 仅用于设计验证 |
 
 详细使用指南请查看 [实战指南](guide.md)。
 
 想了解如何将本框架与 Actor 模型结合，请查看 [Actor + CQRS + DDD 组合架构](actor-cqrs-ddd.md)。
+
+---
+
+## 七、存储模式设计哲学
+
+### PostgreSQL 是生产模式
+
+本项目以 PostgreSQL 为**唯一的生产运行模式**。所有持久化组件——事件存储、任务存储、追踪存储、消息存储、事务管理——在 PostgreSQL 模式下使用真实的数据库实现，确保数据持久化和事务一致性。
+
+```bash
+# 生产模式（默认）
+DDD_POSTGRES_URI="postgres://user:pass@localhost:5432/mydb" ./exampleapp
+```
+
+### Memory 模式的价值：设计验证
+
+Memory 模式**不是**生产降级方案，而是架构设计的验证工具。它的存在价值在于：
+
+1. **验证依赖倒置原则（DIP）**：如果应用层代码能零修改地在 memory 和 postgresql 之间切换，说明应用层确实只依赖接口，不依赖具体实现。一旦应用层偷偷 import 了 `cqrs/command/memory` 包，memory 模式的测试就会暴露这个违规。
+
+2. **验证接口隔离原则（ISP）**：Handler 通过 `Dispatch[T,R]` 调用 Bus 的 `Execute`，Wire 层调用 Bus 的 `RegisterHandler`。调用者只使用自己需要的方法，Go 隐式接口天然支持更窄的消费者定义。
+
+3. **快速回归测试**：单元测试和集成测试无需启动数据库，通过 `DDD_STORE_TYPE=memory` 可在毫秒级完成全部业务逻辑验证。
+
+4. **契约测试**：同一套测试逻辑跑 memory 和 postgresql 两种实现，确保行为一致性。如果 memory 实现和 postgresql 实现行为不同，说明接口契约定义有问题。
+
+```bash
+# Memory 模式（仅用于开发测试）
+DDD_STORE_TYPE=memory ./exampleapp
+```
+
+### 接口分层与依赖方向
+
+```
+                    依赖方向
+                    ──────►
+
+┌─────────────┐   ┌──────────────────┐   ┌─────────────────┐
+│ application │   │ cqrs/command     │   │ cqrs/command/   │
+│ (handler)   │──►│ CommandBus       │   │    memory        │
+│             │   │ Dispatch[T,R]    │   │ CommandBus 实现  │
+└─────────────┘   └──────────────────┘   └─────────────────┘
+                         ▲                        │
+                         │                        │
+                    接口包只定义           实现包 import 接口包
+                    抽象，不知道           （依赖倒置）
+                    任何实现
+
+┌─────────────┐   ┌──────────────────┐   ┌─────────────────┐
+│ infrastructure│  │ cqrs/command     │   │ cqrs/command/   │
+│ (wire)      │──►│ CommandBus       │   │    memory        │
+│             │   │ (注册+执行)       │   │ 具体实例化       │
+└─────────────┘   └──────────────────┘   └─────────────────┘
+```
+
+**关键约束**：
+
+- `application` 层只 import `cqrs/command`、`cqrs/query`、`cqrs/event` 接口包，**永远不 import** `cqrs/*/memory` 或 `cqrs/*/pg` 实现包
+- `infrastructure` 层（wire）是**唯一** import 实现包的地方，负责实例化和组装
+- `interfaces` 层（HTTP 等）只通过 `AppContext` 的接口字段调用，不 import 实现包
+
+### Provider 模式
+
+存储后端的创建封装在 `Provider` 中，通过环境变量一键切换：
+
+```go
+// infrastructure/provider.go
+type StoreComponents struct {
+    Backend      *infra.Backend
+    EventStore   domainevent.EventStore[domainevent.DomainEvent]
+    OrderRepo    application.OrderRepositoryAdapter
+    DB           *sql.DB   // postgresql 模式下非 nil
+}
+
+func NewProvider(cfg *Config) (*StoreComponents, error) {
+    switch cfg.StoreType {
+    case "memory":      return newMemoryProvider()
+    case "postgresql":  return newPgProvider(cfg.PostgresURI)
+    }
+}
+```
+
+### 配置项
+
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `DDD_STORE_TYPE` | `postgresql` | 存储后端类型：`postgresql` 或 `memory` |
+| `DDD_POSTGRES_URI` | 无 | PostgreSQL 连接地址，`postgresql` 模式下必填 |
+
+### 测试策略
+
+| 测试类型 | 存储模式 | 运行条件 | 目的 |
+|----------|----------|----------|------|
+| 单元测试 | memory | 始终运行 | 验证业务逻辑，无外部依赖 |
+| 契约测试 | memory + postgresql | `-short` 跳 PG | 验证两种实现行为一致 |
+| 集成测试 | memory + postgresql | `-short` 跳 PG | 验证完整生命周期 |
+
+```bash
+# 快速测试（仅 memory，无需数据库）
+go test ./... -short
+
+# 完整测试（memory + postgresql）
+DDD_POSTGRES_URI="postgres://..." go test ./...
+```

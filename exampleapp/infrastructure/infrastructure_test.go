@@ -150,7 +150,7 @@ func TestNewEventBus_Direct(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 	handler := &testEventHandler{}
-	eventmemory.RegisterHandler[*testDomainEvent](bus, handler)
+	bus.SubscribeHandler(handler)
 	ctx := context.Background()
 	bus.Publish(ctx, &testDomainEvent{BaseEvent: event.NewBaseEvent("A1", time.Now())})
 	time.Sleep(50 * time.Millisecond)

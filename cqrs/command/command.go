@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 )
 
@@ -25,6 +26,21 @@ type CommandHandler[T Command, R any] interface {
 	Handle(ctx context.Context, cmd T) (R, error)
 }
 
-type CommandExecutor interface {
+type CommandBus interface {
 	Execute(ctx context.Context, cmd any) (any, error)
+	RegisterHandler(handler any) error
+}
+
+func Dispatch[T Command, R any](ctx context.Context, bus CommandBus, cmd T) (R, error) {
+	result, err := bus.Execute(ctx, cmd)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	typed, ok := result.(R)
+	if !ok {
+		var zero R
+		return zero, fmt.Errorf("command Dispatch: result type mismatch for command %T, got %T", cmd, result)
+	}
+	return typed, nil
 }

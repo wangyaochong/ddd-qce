@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 )
 
@@ -23,4 +24,23 @@ func QueryNameOf(q any) string {
 
 type QueryHandler[T Query, R any] interface {
 	Handle(ctx context.Context, query T) (R, error)
+}
+
+type QueryBus interface {
+	Execute(ctx context.Context, query any) (any, error)
+	RegisterHandler(handler any) error
+}
+
+func Dispatch[T Query, R any](ctx context.Context, bus QueryBus, q T) (R, error) {
+	result, err := bus.Execute(ctx, q)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	typed, ok := result.(R)
+	if !ok {
+		var zero R
+		return zero, fmt.Errorf("query Dispatch: result type mismatch for query %T, got %T", q, result)
+	}
+	return typed, nil
 }

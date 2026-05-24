@@ -9,6 +9,7 @@ import (
 
 func main() {
 	app := infrastructure.WireApp()
+	defer app.Close()
 	server := httpinterface.NewServer(app)
 	log.Println("DDD-QCE E-Commerce starting on http://localhost:8080")
 	if err := server.ListenAndServe(); err != nil {

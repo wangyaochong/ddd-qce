@@ -7,15 +7,16 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/cqrs/command"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/query"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
 	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/exampleapp/domain"
 )
 
-func setupTestApp() (*commandmemory.CommandBus, *querymemory.QueryBus, *eventmemory.EventBus, *OrderRepository, *domain.Inventory) {
+func setupTestApp() (command.CommandBus, query.QueryBus, cqrsevent.EventBus, *OrderRepository, *domain.Inventory) {
 	chain := aspect.NewAspectChain()
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	queryBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
@@ -23,16 +24,16 @@ func setupTestApp() (*commandmemory.CommandBus, *querymemory.QueryBus, *eventmem
 	repo := NewOrderRepository()
 	inventory := domain.NewInventory()
 
-	commandmemory.RegisterCommand(cmdBus, NewPlaceOrderHandler(repo, eventBus))
-	commandmemory.RegisterCommand(cmdBus, NewConfirmPaymentHandler(repo, eventBus))
-	commandmemory.RegisterCommand(cmdBus, NewShipOrderHandler(repo, eventBus))
-	commandmemory.RegisterCommand(cmdBus, NewCancelOrderHandler(repo, eventBus))
-	commandmemory.RegisterCommand(cmdBus, NewReserveInventoryHandler(inventory, eventBus))
-	commandmemory.RegisterCommand(cmdBus, NewReleaseInventoryHandler(inventory, eventBus))
+	cmdBus.RegisterHandler(NewPlaceOrderHandler(repo, eventBus))
+	cmdBus.RegisterHandler(NewConfirmPaymentHandler(repo, eventBus))
+	cmdBus.RegisterHandler(NewShipOrderHandler(repo, eventBus))
+	cmdBus.RegisterHandler(NewCancelOrderHandler(repo, eventBus))
+	cmdBus.RegisterHandler(NewReserveInventoryHandler(inventory, eventBus))
+	cmdBus.RegisterHandler(NewReleaseInventoryHandler(inventory, eventBus))
 
-	querymemory.RegisterQuery(queryBus, NewGetOrderHandler(repo))
-	querymemory.RegisterQuery(queryBus, NewListOrdersHandler(repo))
-	querymemory.RegisterQuery(queryBus, NewGetInventoryHandler(inventory))
+	queryBus.RegisterHandler(NewGetOrderHandler(repo))
+	queryBus.RegisterHandler(NewListOrdersHandler(repo))
+	queryBus.RegisterHandler(NewGetInventoryHandler(inventory))
 
 	return cmdBus, queryBus, eventBus, repo, inventory
 }
@@ -40,7 +41,7 @@ func setupTestApp() (*commandmemory.CommandBus, *querymemory.QueryBus, *eventmem
 func TestPlaceOrderCommand(t *testing.T) {
 	cmdBus, _, _, _, _ := setupTestApp()
 	ctx := context.Background()
-	result, err := commandmemory.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
+	result, err := command.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
 		UserID: "user-001",
 		Items: []ItemInput{
 			{ProductID: "laptop", ProductName: "Laptop", Price: 999.99, Quantity: 1},
@@ -60,11 +61,11 @@ func TestPlaceOrderCommand(t *testing.T) {
 func TestConfirmPaymentCommand(t *testing.T) {
 	cmdBus, _, _, _, _ := setupTestApp()
 	ctx := context.Background()
-	placed, _ := commandmemory.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
+	placed, _ := command.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
 		UserID: "user-001",
 		Items:  []ItemInput{{ProductID: "laptop", ProductName: "Laptop", Price: 999, Quantity: 1}},
 	})
-	result, err := commandmemory.Dispatch[*ConfirmPaymentCommand, *ConfirmPaymentResult](ctx, cmdBus, &ConfirmPaymentCommand{OrderID: placed.OrderID})
+	result, err := command.Dispatch[*ConfirmPaymentCommand, *ConfirmPaymentResult](ctx, cmdBus, &ConfirmPaymentCommand{OrderID: placed.OrderID})
 	if err != nil {
 		t.Fatalf("confirm payment failed: %v", err)
 	}
@@ -76,12 +77,12 @@ func TestConfirmPaymentCommand(t *testing.T) {
 func TestShipOrderCommand(t *testing.T) {
 	cmdBus, _, _, _, _ := setupTestApp()
 	ctx := context.Background()
-	placed, _ := commandmemory.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
+	placed, _ := command.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
 		UserID: "user-001",
 		Items:  []ItemInput{{ProductID: "laptop", ProductName: "Laptop", Price: 999, Quantity: 1}},
 	})
-	commandmemory.Dispatch[*ConfirmPaymentCommand, *ConfirmPaymentResult](ctx, cmdBus, &ConfirmPaymentCommand{OrderID: placed.OrderID})
-	result, err := commandmemory.Dispatch[*ShipOrderCommand, *ShipOrderResult](ctx, cmdBus, &ShipOrderCommand{OrderID: placed.OrderID})
+	command.Dispatch[*ConfirmPaymentCommand, *ConfirmPaymentResult](ctx, cmdBus, &ConfirmPaymentCommand{OrderID: placed.OrderID})
+	result, err := command.Dispatch[*ShipOrderCommand, *ShipOrderResult](ctx, cmdBus, &ShipOrderCommand{OrderID: placed.OrderID})
 	if err != nil {
 		t.Fatalf("ship failed: %v", err)
 	}
@@ -93,11 +94,11 @@ func TestShipOrderCommand(t *testing.T) {
 func TestCancelOrderCommand(t *testing.T) {
 	cmdBus, _, _, _, _ := setupTestApp()
 	ctx := context.Background()
-	placed, _ := commandmemory.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
+	placed, _ := command.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
 		UserID: "user-001",
 		Items:  []ItemInput{{ProductID: "laptop", ProductName: "Laptop", Price: 999, Quantity: 1}},
 	})
-	result, err := commandmemory.Dispatch[*CancelOrderCommand, *CancelOrderResult](ctx, cmdBus, &CancelOrderCommand{OrderID: placed.OrderID, Reason: "test"})
+	result, err := command.Dispatch[*CancelOrderCommand, *CancelOrderResult](ctx, cmdBus, &CancelOrderCommand{OrderID: placed.OrderID, Reason: "test"})
 	if err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
@@ -109,7 +110,7 @@ func TestCancelOrderCommand(t *testing.T) {
 func TestReserveInventoryCommand(t *testing.T) {
 	cmdBus, _, _, _, inv := setupTestApp()
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*ReserveInventoryCommand, *ReserveInventoryResult](ctx, cmdBus, &ReserveInventoryCommand{
+	_, err := command.Dispatch[*ReserveInventoryCommand, *ReserveInventoryResult](ctx, cmdBus, &ReserveInventoryCommand{
 		OrderID: "O1", ProductID: "laptop", Quantity: 1,
 	})
 	if err != nil {
@@ -127,10 +128,10 @@ func TestReserveInventoryCommand(t *testing.T) {
 func TestReleaseInventoryCommand(t *testing.T) {
 	cmdBus, _, _, _, inv := setupTestApp()
 	ctx := context.Background()
-	commandmemory.Dispatch[*ReserveInventoryCommand, *ReserveInventoryResult](ctx, cmdBus, &ReserveInventoryCommand{
+	command.Dispatch[*ReserveInventoryCommand, *ReserveInventoryResult](ctx, cmdBus, &ReserveInventoryCommand{
 		OrderID: "O1", ProductID: "laptop", Quantity: 1,
 	})
-	_, err := commandmemory.Dispatch[*ReleaseInventoryCommand, *ReleaseInventoryResult](ctx, cmdBus, &ReleaseInventoryCommand{
+	_, err := command.Dispatch[*ReleaseInventoryCommand, *ReleaseInventoryResult](ctx, cmdBus, &ReleaseInventoryCommand{
 		OrderID: "O1", ProductID: "laptop", Quantity: 1,
 	})
 	if err != nil {
@@ -149,7 +150,7 @@ func TestGetOrderQuery(t *testing.T) {
 		domain.NewOrderItem("laptop", "Laptop", 999, 1),
 	})
 	repo.Save(ctx, order)
-	result, err := querymemory.Dispatch[*GetOrderQuery, *GetOrderResult](ctx, qBus, &GetOrderQuery{OrderID: "ORD-Q1"})
+	result, err := query.Dispatch[*GetOrderQuery, *GetOrderResult](ctx, qBus, &GetOrderQuery{OrderID: "ORD-Q1"})
 	if err != nil {
 		t.Fatalf("get order failed: %v", err)
 	}
@@ -165,7 +166,7 @@ func TestListOrdersQuery(t *testing.T) {
 	o2, _ := domain.NewOrder("ORD-L2", "u2", []*domain.OrderItem{domain.NewOrderItem("mouse", "Mouse", 29, 1)})
 	repo.Save(ctx, o1)
 	repo.Save(ctx, o2)
-	result, err := querymemory.Dispatch[*ListOrdersQuery, *ListOrdersResult](ctx, qBus, &ListOrdersQuery{})
+	result, err := query.Dispatch[*ListOrdersQuery, *ListOrdersResult](ctx, qBus, &ListOrdersQuery{})
 	if err != nil {
 		t.Fatalf("list orders failed: %v", err)
 	}
@@ -177,7 +178,7 @@ func TestListOrdersQuery(t *testing.T) {
 func TestGetInventoryQuery(t *testing.T) {
 	_, qBus, _, _, _ := setupTestApp()
 	ctx := context.Background()
-	result, err := querymemory.Dispatch[*GetInventoryQuery, *GetInventoryResult](ctx, qBus, &GetInventoryQuery{})
+	result, err := query.Dispatch[*GetInventoryQuery, *GetInventoryResult](ctx, qBus, &GetInventoryQuery{})
 	if err != nil {
 		t.Fatalf("get inventory failed: %v", err)
 	}
@@ -299,10 +300,10 @@ func TestCommandBus_Execute_TypeErased(t *testing.T) {
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	repo := NewOrderRepository()
 	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
-	commandmemory.RegisterCommand(cmdBus, NewPlaceOrderHandler(repo, eventBus))
+	cmdBus.RegisterHandler(NewPlaceOrderHandler(repo, eventBus))
 	ctx := context.Background()
 
-	var executor command.CommandExecutor = cmdBus
+	var executor command.CommandBus = cmdBus
 	result, err := executor.Execute(ctx, &PlaceOrderCommand{
 		UserID: "user-001",
 		Items:  []ItemInput{{ProductID: "laptop", ProductName: "Laptop", Price: 999, Quantity: 1}},
@@ -336,9 +337,9 @@ func TestQueryNameOf(t *testing.T) {
 func TestOrderPlacedEventHandler(t *testing.T) {
 	cmdBus, _, eventBus, _, _ := setupTestApp()
 	ctx := context.Background()
-	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](eventBus, NewOrderPlacedInventoryHandler(cmdBus))
+	eventBus.SubscribeHandler(NewOrderPlacedInventoryHandler(cmdBus))
 
-	eventmemory.Dispatch[*domain.OrderPlacedEvent](ctx, eventBus, &domain.OrderPlacedEvent{
+	cqrsevent.Dispatch[*domain.OrderPlacedEvent](ctx, eventBus, &domain.OrderPlacedEvent{
 		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), UserID: "u1", TotalAmount: 100,
 	})
 	time.Sleep(100 * time.Millisecond)
@@ -347,9 +348,9 @@ func TestOrderPlacedEventHandler(t *testing.T) {
 func TestOrderCancelledEventHandler(t *testing.T) {
 	cmdBus, _, eventBus, _, _ := setupTestApp()
 	ctx := context.Background()
-	eventmemory.RegisterHandler[*domain.OrderCancelledEvent](eventBus, NewOrderCancelledInventoryHandler(cmdBus))
+	eventBus.SubscribeHandler(NewOrderCancelledInventoryHandler(cmdBus))
 
-	eventmemory.Dispatch[*domain.OrderCancelledEvent](ctx, eventBus, &domain.OrderCancelledEvent{
+	cqrsevent.Dispatch[*domain.OrderCancelledEvent](ctx, eventBus, &domain.OrderCancelledEvent{
 		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), Reason: "test",
 	})
 	time.Sleep(100 * time.Millisecond)
@@ -358,10 +359,10 @@ func TestOrderCancelledEventHandler(t *testing.T) {
 func TestMultiEventHandler_ConcurrentPublish(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	freshBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
-	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](freshBus, NewOrderPlacedNotificationHandler())
-	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](freshBus, &loggingNotificationHandler{})
+	freshBus.SubscribeHandler(NewOrderPlacedNotificationHandler())
+	freshBus.SubscribeHandler(&loggingNotificationHandler{})
 	ctx := context.Background()
-	eventmemory.Dispatch[*domain.OrderPlacedEvent](ctx, freshBus, &domain.OrderPlacedEvent{
+	cqrsevent.Dispatch[*domain.OrderPlacedEvent](ctx, freshBus, &domain.OrderPlacedEvent{
 		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), UserID: "u1", TotalAmount: 100,
 	})
 	time.Sleep(100 * time.Millisecond)

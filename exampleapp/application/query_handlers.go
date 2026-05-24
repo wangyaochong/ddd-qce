@@ -9,10 +9,10 @@ import (
 )
 
 type GetOrderHandler struct {
-	repo *OrderRepository
+	repo OrderRepositoryAdapter
 }
 
-func NewGetOrderHandler(repo *OrderRepository) *GetOrderHandler {
+func NewGetOrderHandler(repo OrderRepositoryAdapter) *GetOrderHandler {
 	return &GetOrderHandler{repo: repo}
 }
 
@@ -25,10 +25,10 @@ func (h *GetOrderHandler) Handle(ctx context.Context, q *GetOrderQuery) (*GetOrd
 }
 
 type ListOrdersHandler struct {
-	repo *OrderRepository
+	repo OrderRepositoryAdapter
 }
 
-func NewListOrdersHandler(repo *OrderRepository) *ListOrdersHandler {
+func NewListOrdersHandler(repo OrderRepositoryAdapter) *ListOrdersHandler {
 	return &ListOrdersHandler{repo: repo}
 }
 

@@ -19,7 +19,7 @@ type CommandBus struct {
 	mu       sync.RWMutex
 }
 
-var _ command.CommandExecutor = (*CommandBus)(nil)
+var _ command.CommandBus = (*CommandBus)(nil)
 
 type CommandBusOption func(*CommandBus)
 
@@ -40,23 +40,84 @@ func NewCommandBus(opts ...CommandBusOption) *CommandBus {
 }
 
 func RegisterCommand[T command.Command, R any](bus *CommandBus, handler command.CommandHandler[T, R]) error {
-	bus.mu.Lock()
-	defer bus.mu.Unlock()
-	var zero T
-	cmdType := reflect.TypeOf(zero)
-	if existing, exists := bus.handlers[cmdType]; exists {
-		return fmt.Errorf("handler already registered for command type %T (existing: %T, new: %T)", zero, existing, handler)
+	return bus.RegisterHandler(handler)
+}
+
+func (b *CommandBus) RegisterHandler(handler any) error {
+	handlerType := reflect.TypeOf(handler)
+	evtType, ok := extractCommandHandlerCommandType(handlerType)
+	if !ok {
+		return fmt.Errorf("RegisterHandler: handler must implement command.CommandHandler[T], got %T", handler)
 	}
-	bus.handlers[cmdType] = handler
-	bus.invokers[cmdType] = func(cmd any, ctx context.Context) (any, error) {
-		typedCmd, ok := cmd.(T)
-		if !ok {
-			var zeroR R
-			return zeroR, fmt.Errorf("command type mismatch: expected %T, got %T", zero, cmd)
-		}
-		return handler.Handle(ctx, typedCmd)
+	invoker, err := makeCommandInvoker(handler, handlerType)
+	if err != nil {
+		return fmt.Errorf("RegisterHandler: %w", err)
 	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if _, exists := b.handlers[evtType]; exists {
+		return fmt.Errorf("handler already registered for command type %v", evtType)
+	}
+	b.handlers[evtType] = handler
+	b.invokers[evtType] = invoker
 	return nil
+}
+
+func extractCommandHandlerCommandType(handlerType reflect.Type) (reflect.Type, bool) {
+	if handlerType.Kind() != reflect.Ptr {
+		for i := 0; i < handlerType.NumMethod(); i++ {
+			method := handlerType.Method(i)
+			if method.Name != "Handle" {
+				continue
+			}
+			return extractCommandTypeFromHandleMethod(method.Type), true
+		}
+		return nil, false
+	}
+
+	handleMethod, ok := handlerType.MethodByName("Handle")
+	if !ok {
+		return nil, false
+	}
+	ct := extractCommandTypeFromHandleMethod(handleMethod.Type)
+	if ct == nil {
+		return nil, false
+	}
+	return ct, true
+}
+
+func extractCommandTypeFromHandleMethod(methodType reflect.Type) reflect.Type {
+	if methodType.NumIn() != 3 {
+		return nil
+	}
+	return methodType.In(2)
+}
+
+func makeCommandInvoker(handler any, handlerType reflect.Type) (commandInvoker, error) {
+	handleMethod, ok := handlerType.MethodByName("Handle")
+	if !ok {
+		return nil, fmt.Errorf("handler %T does not have a Handle method", handler)
+	}
+	return func(cmd any, ctx context.Context) (any, error) {
+		args := []reflect.Value{
+			reflect.ValueOf(handler),
+			reflect.ValueOf(ctx),
+			reflect.ValueOf(cmd),
+		}
+		results := handleMethod.Func.Call(args)
+		var err error
+		if len(results) >= 2 {
+			if e, ok := results[1].Interface().(error); ok {
+				err = e
+			}
+		}
+		if len(results) >= 1 {
+			return results[0].Interface(), err
+		}
+		return nil, err
+	}, nil
 }
 
 func Dispatch[T command.Command, R any](ctx context.Context, bus *CommandBus, cmd T) (R, error) {

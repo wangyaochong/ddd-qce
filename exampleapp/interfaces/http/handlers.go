@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/query"
 	"github.com/ddd-qce/core/domain/event"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 	"github.com/ddd-qce/exampleapp/application"
@@ -45,12 +45,12 @@ func resolveTemplatePath() string {
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ordersResult, err := querymemory.Dispatch[*application.ListOrdersQuery, *application.ListOrdersResult](ctx, h.app.QueryBus, &application.ListOrdersQuery{})
+	ordersResult, err := query.Dispatch[*application.ListOrdersQuery, *application.ListOrdersResult](ctx, h.app.QueryBus, &application.ListOrdersQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	inventoryResult, err := querymemory.Dispatch[*application.GetInventoryQuery, *application.GetInventoryResult](ctx, h.app.QueryBus, &application.GetInventoryQuery{})
+	inventoryResult, err := query.Dispatch[*application.GetInventoryQuery, *application.GetInventoryResult](ctx, h.app.QueryBus, &application.GetInventoryQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -90,7 +90,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	result, err := querymemory.Dispatch[*application.ListOrdersQuery, *application.ListOrdersResult](ctx, h.app.QueryBus, &application.ListOrdersQuery{})
+	result, err := query.Dispatch[*application.ListOrdersQuery, *application.ListOrdersResult](ctx, h.app.QueryBus, &application.ListOrdersQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -100,7 +100,7 @@ func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) NewOrderForm(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	inventoryResult, err := querymemory.Dispatch[*application.GetInventoryQuery, *application.GetInventoryResult](ctx, h.app.QueryBus, &application.GetInventoryQuery{})
+	inventoryResult, err := query.Dispatch[*application.GetInventoryQuery, *application.GetInventoryResult](ctx, h.app.QueryBus, &application.GetInventoryQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -135,7 +135,7 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := commandmemory.Dispatch[*application.PlaceOrderCommand, *application.PlaceOrderResult](ctx, h.app.CmdBus, &application.PlaceOrderCommand{
+	result, err := command.Dispatch[*application.PlaceOrderCommand, *application.PlaceOrderResult](ctx, h.app.CmdBus, &application.PlaceOrderCommand{
 		UserID: userID,
 		Items:  items,
 	})
@@ -149,7 +149,7 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	result, err := querymemory.Dispatch[*application.GetOrderQuery, *application.GetOrderResult](ctx, h.app.QueryBus, &application.GetOrderQuery{OrderID: orderID})
+	result, err := query.Dispatch[*application.GetOrderQuery, *application.GetOrderResult](ctx, h.app.QueryBus, &application.GetOrderQuery{OrderID: orderID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -160,7 +160,7 @@ func (h *Handler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ConfirmPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	_, err := commandmemory.Dispatch[*application.ConfirmPaymentCommand, *application.ConfirmPaymentResult](ctx, h.app.CmdBus, &application.ConfirmPaymentCommand{OrderID: orderID})
+	_, err := command.Dispatch[*application.ConfirmPaymentCommand, *application.ConfirmPaymentResult](ctx, h.app.CmdBus, &application.ConfirmPaymentCommand{OrderID: orderID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -171,7 +171,7 @@ func (h *Handler) ConfirmPayment(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ShipOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	_, err := commandmemory.Dispatch[*application.ShipOrderCommand, *application.ShipOrderResult](ctx, h.app.CmdBus, &application.ShipOrderCommand{OrderID: orderID})
+	_, err := command.Dispatch[*application.ShipOrderCommand, *application.ShipOrderResult](ctx, h.app.CmdBus, &application.ShipOrderCommand{OrderID: orderID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -183,7 +183,7 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
 	reason := r.FormValue("reason")
-	_, err := commandmemory.Dispatch[*application.CancelOrderCommand, *application.CancelOrderResult](ctx, h.app.CmdBus, &application.CancelOrderCommand{OrderID: orderID, Reason: reason})
+	_, err := command.Dispatch[*application.CancelOrderCommand, *application.CancelOrderResult](ctx, h.app.CmdBus, &application.CancelOrderCommand{OrderID: orderID, Reason: reason})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -245,7 +245,7 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 		views[i] = view
 	}
 
-	order, err := querymemory.Dispatch[*application.GetOrderQuery, *application.GetOrderResult](ctx, h.app.QueryBus, &application.GetOrderQuery{OrderID: orderID})
+	order, err := query.Dispatch[*application.GetOrderQuery, *application.GetOrderResult](ctx, h.app.QueryBus, &application.GetOrderQuery{OrderID: orderID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -255,7 +255,7 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	result, err := querymemory.Dispatch[*application.GetInventoryQuery, *application.GetInventoryResult](ctx, h.app.QueryBus, &application.GetInventoryQuery{})
+	result, err := query.Dispatch[*application.GetInventoryQuery, *application.GetInventoryResult](ctx, h.app.QueryBus, &application.GetInventoryQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

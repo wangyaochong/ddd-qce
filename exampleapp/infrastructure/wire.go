@@ -6,6 +6,9 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
+	"github.com/ddd-qce/core/cqrs/command"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/query"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
@@ -19,23 +22,47 @@ import (
 
 type AppContext struct {
 	Chain      *aspect.AspectChain
-	CmdBus     *commandmemory.CommandBus
-	QueryBus   *querymemory.QueryBus
-	EventBus   *eventmemory.EventBus
+	CmdBus     command.CommandBus
+	QueryBus   query.QueryBus
+	EventBus   cqrsevent.EventBus
 	Backend    *infra.Backend
 	JobManager *jobmemory.JobManager
 
-	OrderRepo        *application.OrderRepository
+	OrderRepo        application.OrderRepositoryAdapter
 	EventSourcedRepo *application.OrderEventSourcedRepository
 	EventStore       domainevent.EventStore[domainevent.DomainEvent]
 	Inventory        *domain.Inventory
 
 	MetricsRecorder *AppMetricsRecorder
 	TxManager       *AppTransactionManager
+
+	store *StoreComponents
+}
+
+func (app *AppContext) Close() {
+	if app.store != nil && app.store.DB != nil {
+		app.store.DB.Close()
+	}
 }
 
 func WireApp() *AppContext {
-	backend := infra.NewMemoryBackend()
+	app, err := WireAppWithConfig(LoadConfig())
+	if err != nil {
+		panic(err)
+	}
+	return app
+}
+
+func WireAppWithConfig(cfg *Config) (*AppContext, error) {
+	store, err := NewProvider(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return WireAppWithStore(store)
+}
+
+func WireAppWithStore(store *StoreComponents) (*AppContext, error) {
+	backend := store.Backend
 
 	logger := NewAppLogger()
 	metricsRecorder := NewAppMetricsRecorder()
@@ -52,28 +79,51 @@ func WireApp() *AppContext {
 	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
 	inventory := domain.NewInventory()
-	orderRepo := application.NewOrderRepository()
-	eventStore, err := eventmemory.NewEventStore[domainevent.DomainEvent]()
-	if err != nil {
-		panic(fmt.Sprintf("create event store: %v", err))
-	}
+	orderRepo := store.OrderRepo
+	eventStore := store.EventStore
 	eventSourcedRepo := application.NewOrderEventSourcedRepository(eventStore, orderRepo)
 
-	commandmemory.RegisterCommand(cmdBus, application.NewPlaceOrderHandler(orderRepo, eventBus))
-	commandmemory.RegisterCommand(cmdBus, application.NewConfirmPaymentHandler(orderRepo, eventBus))
-	commandmemory.RegisterCommand(cmdBus, application.NewShipOrderHandler(orderRepo, eventBus))
-	commandmemory.RegisterCommand(cmdBus, application.NewCancelOrderHandler(orderRepo, eventBus))
-	commandmemory.RegisterCommand(cmdBus, application.NewReserveInventoryHandler(inventory, eventBus))
-	commandmemory.RegisterCommand(cmdBus, application.NewReleaseInventoryHandler(inventory, eventBus))
-	commandmemory.RegisterCommand(cmdBus, application.NewGenerateReportHandler())
+	if err := cmdBus.RegisterHandler(application.NewPlaceOrderHandler(orderRepo, eventBus)); err != nil {
+		return nil, fmt.Errorf("register PlaceOrderHandler: %w", err)
+	}
+	if err := cmdBus.RegisterHandler(application.NewConfirmPaymentHandler(orderRepo, eventBus)); err != nil {
+		return nil, fmt.Errorf("register ConfirmPaymentHandler: %w", err)
+	}
+	if err := cmdBus.RegisterHandler(application.NewShipOrderHandler(orderRepo, eventBus)); err != nil {
+		return nil, fmt.Errorf("register ShipOrderHandler: %w", err)
+	}
+	if err := cmdBus.RegisterHandler(application.NewCancelOrderHandler(orderRepo, eventBus)); err != nil {
+		return nil, fmt.Errorf("register CancelOrderHandler: %w", err)
+	}
+	if err := cmdBus.RegisterHandler(application.NewReserveInventoryHandler(inventory, eventBus)); err != nil {
+		return nil, fmt.Errorf("register ReserveInventoryHandler: %w", err)
+	}
+	if err := cmdBus.RegisterHandler(application.NewReleaseInventoryHandler(inventory, eventBus)); err != nil {
+		return nil, fmt.Errorf("register ReleaseInventoryHandler: %w", err)
+	}
+	if err := cmdBus.RegisterHandler(application.NewGenerateReportHandler()); err != nil {
+		return nil, fmt.Errorf("register GenerateReportHandler: %w", err)
+	}
 
-	querymemory.RegisterQuery(queryBus, application.NewGetOrderHandler(orderRepo))
-	querymemory.RegisterQuery(queryBus, application.NewListOrdersHandler(orderRepo))
-	querymemory.RegisterQuery(queryBus, application.NewGetInventoryHandler(inventory))
+	if err := queryBus.RegisterHandler(application.NewGetOrderHandler(orderRepo)); err != nil {
+		return nil, fmt.Errorf("register GetOrderHandler: %w", err)
+	}
+	if err := queryBus.RegisterHandler(application.NewListOrdersHandler(orderRepo)); err != nil {
+		return nil, fmt.Errorf("register ListOrdersHandler: %w", err)
+	}
+	if err := queryBus.RegisterHandler(application.NewGetInventoryHandler(inventory)); err != nil {
+		return nil, fmt.Errorf("register GetInventoryHandler: %w", err)
+	}
 
-	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](eventBus, application.NewOrderPlacedInventoryHandler(cmdBus))
-	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](eventBus, application.NewOrderPlacedNotificationHandler())
-	eventmemory.RegisterHandler[*domain.OrderCancelledEvent](eventBus, application.NewOrderCancelledInventoryHandler(cmdBus))
+	if err := eventBus.SubscribeHandler(application.NewOrderPlacedInventoryHandler(cmdBus)); err != nil {
+		return nil, fmt.Errorf("register OrderPlacedInventoryHandler: %w", err)
+	}
+	if err := eventBus.SubscribeHandler(application.NewOrderPlacedNotificationHandler()); err != nil {
+		return nil, fmt.Errorf("register OrderPlacedNotificationHandler: %w", err)
+	}
+	if err := eventBus.SubscribeHandler(application.NewOrderCancelledInventoryHandler(cmdBus)); err != nil {
+		return nil, fmt.Errorf("register OrderCancelledInventoryHandler: %w", err)
+	}
 
 	jobManager := jobmemory.NewJobManager(backend.JobStore, cmdBus, jobmemory.WithStoreErrorHandler(func(ctx context.Context, storeErr *jobcore.StoreError) {
 		logger.Error("job store error: %v", storeErr)
@@ -92,5 +142,6 @@ func WireApp() *AppContext {
 		Inventory:        inventory,
 		MetricsRecorder:  metricsRecorder,
 		TxManager:        txManager,
-	}
+		store:            store,
+	}, nil
 }

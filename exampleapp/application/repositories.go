@@ -10,6 +10,13 @@ import (
 	"github.com/ddd-qce/exampleapp/domain"
 )
 
+type OrderRepositoryAdapter interface {
+	Save(ctx context.Context, order *domain.Order) error
+	FindByID(ctx context.Context, id string) (*domain.Order, error)
+	Delete(ctx context.Context, id string) error
+	FindAll() []*domain.Order
+}
+
 type OrderRepository struct {
 	mu     sync.RWMutex
 	orders map[string]*domain.Order
@@ -60,12 +67,12 @@ var _ repository.Repository[*domain.Order] = (*OrderRepository)(nil)
 
 type OrderEventSourcedRepository struct {
 	eventStore event.EventStore[event.DomainEvent]
-	orderRepo  *OrderRepository
+	orderRepo  OrderRepositoryAdapter
 }
 
 func NewOrderEventSourcedRepository(
 	eventStore event.EventStore[event.DomainEvent],
-	orderRepo *OrderRepository,
+	orderRepo OrderRepositoryAdapter,
 ) *OrderEventSourcedRepository {
 	return &OrderEventSourcedRepository{
 		eventStore: eventStore,

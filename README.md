@@ -11,6 +11,7 @@ DDD-QCE 是一个基于 **CQRS + Event Sourcing + AOP** 的 Go 领域驱动开�
 - **异步 Job**: 支持超时、重试、取消的后台任务系统
 - **泛型安全**: 基于 Go 1.18+ 泛型，类型安全的 Handler 注册与调度
 - **可插拔持久化**: 统一 Backend 抽象，内存实现开箱即用，PostgreSQL 生产就绪
+- **环境变量配置切换**: 通过 `DDD_STORE_TYPE` + `DDD_POSTGRES_URI` 一键切换存储后端，无需改代码
 - **乐观锁**: 聚合保存自动版本检查，防止并发冲突
 - **嵌套事务**: 基于 SAVEPOINT 的嵌套事务支持
 - **实体增强**: AuditableEntity（审计）、SoftDeletableEntity（软删除）、IDGenerator（ID 生成）、ValueObject（值对象）
@@ -35,8 +36,10 @@ import (
 
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/aspect/builtin"
-    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    "github.com/ddd-qce/core/cqrs/command"
     "github.com/ddd-qce/core/cqrs/event"
+    "github.com/ddd-qce/core/cqrs/query"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
     eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
     querymemory "github.com/ddd-qce/core/cqrs/query/memory"
     "github.com/ddd-qce/core/trace"
@@ -92,22 +95,21 @@ func main() {
     // 创建切面链
     chain := aspect.NewAspectChain()
     chain.RegisterCommandAspect(&builtin.TracingAspect{Store: trace.NewInMemoryTraceStore()})
-    chain.RegisterCommandAspect(&builtin.LoggingAspect{Logger: &SimpleLogger{}})
 
-    // 创建 Bus
-    qBus := querymemory.NewQueryBus(chain)
-    cBus := commandmemory.NewCommandBus(chain)
-    eBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+    // 创建 Bus（具体实现仅在组装时使用）
+    cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+    queryBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
+    eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
-    // 注册 Handler
-    commandmemory.RegisterCommand[CreateUserCommand, string](cBus, &CreateUserHandler{})
-    querymemory.RegisterQuery[GetUserQuery, string](qBus, &GetUserHandler{})
-    eventmemory.RegisterHandler[UserCreatedEvent](eBus, &UserCreatedHandler{})
+    // 注册 Handler（通过 Bus 接口方法）
+    cmdBus.RegisterHandler(&CreateUserHandler{})
+    queryBus.RegisterHandler(&GetUserHandler{})
+    eventBus.SubscribeHandler(&UserCreatedHandler{})
 
-    // 执行
-    commandmemory.Dispatch[CreateUserCommand, string](cBus, ctx, CreateUserCommand{Name: "Alice", Email: "alice@example.com"})
-    querymemory.Dispatch[GetUserQuery, string](qBus, ctx, GetUserQuery{UserID: "user-123"})
-    eBus.Publish(ctx, UserCreatedEvent{UserID: "user-123", Name: "Alice", CreatedAt: time.Now()})
+    // 执行（通过接口级 Dispatch，ctx 在前）
+    command.Dispatch[CreateUserCommand, string](ctx, cmdBus, CreateUserCommand{Name: "Alice", Email: "alice@example.com"})
+    query.Dispatch[GetUserQuery, string](ctx, queryBus, GetUserQuery{UserID: "user-123"})
+    event.Dispatch[UserCreatedEvent](ctx, eventBus, UserCreatedEvent{UserID: "user-123", Name: "Alice", CreatedAt: time.Now()})
 }
 ```
 
@@ -174,12 +176,12 @@ go run example/main.go
 │
 ├── /cqrs                        # CQRS 层
 │   ├── /aspect                  # Aspect / CommandAspect / QueryAspect / EventAspect 接口
-│   ├── /command                 # Command / CommandHandler[T,R] / CommandExecutor 接口
-│   │   └── /memory              # 内存 CommandBus（RegisterCommand / Dispatch）
-│   ├── /query                   # Query / QueryHandler[T,R] 接口
-│   │   └── /memory              # 内存 QueryBus（RegisterQuery / Dispatch）
-│   └── /event                   # EventBus 接口
-│       ├── /memory              # 内存 EventBus / RegisterHandler[T] / Dispatch[T] / EventStore[T]（支持接口类型 T）
+│   ├── /command                 # Command / CommandHandler[T,R] / CommandBus 接口 + Dispatch[T,R]
+│   │   └── /memory              # 内存 CommandBus 实现（RegisterHandler 方法）
+│   ├── /query                   # Query / QueryHandler[T,R] / QueryBus 接口 + Dispatch[T,R]
+│   │   └── /memory              # 内存 QueryBus 实现（Execute + RegisterHandler 方法）
+│   └── /event                   # EventBus 接口 + Dispatch[T]
+│       ├── /memory              # 内存 EventBus / EventStore[T] 实现
 │       └── /pg                  # PostgreSQL EventStore[T]（接口类型 T 需 WithFactory）
 │
 ├── /aspect                      # 切面链实现
@@ -213,6 +215,7 @@ go run example/main.go
 ├── /infra                       # 基础设施抽象
 │   ├── backend.go               # Backend 结构体 + TransactionManager 接口
 │   ├── memory_backend.go        # NewMemoryBackend() + MemoryTransactionManager
+│   ├── pg_backend.go            # NewPgBackend(db) PostgreSQL 后端工厂
 │   └── /repository/pg           # PgRepository / PgEventSourcedRepository（乐观锁 + 快照）
 │
 ├── /example                     # 独立示例模块（module github.com/ddd-qce/example）
