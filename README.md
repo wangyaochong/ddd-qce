@@ -178,8 +178,8 @@ go run example/main.go
 │   │   └── /memory              # 内存 CommandBus（RegisterCommand / Dispatch）
 │   ├── /query                   # Query / QueryHandler[T,R] 接口
 │   │   └── /memory              # 内存 QueryBus（RegisterQuery / Dispatch）
-│   └── /event                   # EventBus / TypedEventBus[T] / AppendOnlyStore[T] 接口
-│       ├── /memory              # 内存 EventBus / RegisterHandler[T] / Dispatch[T] / DomainEventStore / EventStore[T]
+│   └── /event                   # EventBus 接口 / EventStore[T] re-export from domain/event
+│       ├── /memory              # 内存 EventBus / RegisterHandler[T] / Dispatch[T] / DomainEventStore(impl EventStore[DomainEvent]) / EventStore[T]
 │       └── /pg                  # PostgreSQL EventStore[T]
 │
 ├── /aspect                      # 切面链实现
