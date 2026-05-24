@@ -2,6 +2,7 @@ package trace
 
 import (
 	"context"
+	"encoding/hex"
 
 	"github.com/google/uuid"
 )
@@ -15,11 +16,13 @@ type traceContext struct {
 }
 
 func NewTraceID() string {
-	return uuid.New().String()
+	id := uuid.New()
+	return hex.EncodeToString(id[:])
 }
 
 func NewSpanID() string {
-	return uuid.New().String()
+	id := uuid.New()
+	return hex.EncodeToString(id[:])
 }
 
 func WithTrace(ctx context.Context, traceID, spanID string) context.Context {

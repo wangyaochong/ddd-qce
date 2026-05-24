@@ -259,10 +259,10 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 
 | 组件 | 包路径 | 说明 |
 |------|--------|------|
-| Entity | `domain/entity` | 实体基类，提供 id (私有)、ID()、Equals()、IsEmpty()、Validate()、MarshalJSON/UnmarshalJSON |
+| Entity | `domain/entity` | 实体基类，提供 id (私有)、GetID()、Equals()、IsEmpty()、Validate()、MarshalJSON/UnmarshalJSON |
 | AuditableEntity | `domain/entity` | 审计实体，嵌入 Entity + createdAt/updatedAt (私有) + CreatedAt()/UpdatedAt() + Touch() + FromData 构造器 |
 | SoftDeletableEntity | `domain/entity` | 软删除实体，嵌入 AuditableEntity + deletedAt (私有) + DeletedAt() + SoftDelete()/Restore()/IsDeleted() + FromData 构造器 |
-| IDGenerator | `domain/entity` | ID 生成器类型，DefaultIDGenerator (UUID)，NewEntityWithID()，SetIDGenerator() |
+| IDGenerator | `domain/entity` | ID 生成器类型，DefaultIDGenerator() (UUID hex)，NewEntityWithID() |
 | AggregateRoot | `domain/aggregate` | 聚合根，嵌入 Entity + Version + 事件收集/回溯 + EventApplier |
 | ValueObject[T] | `domain/valueobject` | 泛型值对象，New[T]() / MustNew[T]() / Value() / Equals() / Validate() / DeepEquals() |
 | DomainEvent | `domain/event` | 领域事件接口，AggregateID() / EventType() / OccurredAt() |

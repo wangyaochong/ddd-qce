@@ -73,13 +73,7 @@ func (a *AggregateRoot) SetSnapshotVersion(v int) {
 	a.version = v
 }
 
-func (a *AggregateRoot) forceSetVersion(v int) {
-	a.version = v
-}
 
-func (a *AggregateRoot) setApplier(applier EventApplier) {
-	a.applier = applier
-}
 
 func (a *AggregateRoot) Apply(evt event.DomainEvent) error {
 	a.uncommittedEvents = append(a.uncommittedEvents, evt)
@@ -106,12 +100,12 @@ func (a *AggregateRoot) LoadFromHistory(events []event.DomainEvent) error {
 }
 
 func (a *AggregateRoot) applyEvent(evt event.DomainEvent) error {
-	a.version++
 	if a.applier != nil {
 		a.applier.When(evt)
 	} else if !a.skipApplierCheck {
 		return fmt.Errorf("AggregateRoot: applier not set, use NewAggregateRootWithApplier(id, self) or NewEventCollector(id)")
 	}
+	a.version++
 	return nil
 }
 

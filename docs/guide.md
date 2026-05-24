@@ -28,17 +28,19 @@ func NewProduct(id, name string, price float64) *Product {
 ### 2. 自动生成 ID
 
 ```go
-// 使用 DefaultIDGenerator（UUID v4）
+// 自动生成 UUID hex 格式 ID（32 字符，无连字符）
 product := &Product{
     Entity: *entity.NewEntityWithID(),
     Name:   name,
     Price:  price,
 }
 
-// 自定义 ID 生成器
-entity.SetIDGenerator(func() string {
-    return "prod-" + uuid.New().String()
-})
+// 自定义 ID 直接传入
+product := &Product{
+    Entity: *entity.NewEntity(myCustomGen()),
+    Name:   name,
+    Price:  price,
+}
 ```
 
 ### 3. 实体方法
@@ -46,7 +48,7 @@ entity.SetIDGenerator(func() string {
 ```go
 p := NewProduct("prod-1", "Product A", 100.0)
 
-p.ID         // "prod-1"
+p.GetID()      // "prod-1"
 p.Equals(other)   // 基于 ID 判断相等性
 p.IsEmpty()       // ID 为空时返回 true
 p.Validate()      // 返回 ID 为空的错误（可由子类覆写）

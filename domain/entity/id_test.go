@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -15,13 +14,16 @@ func TestNewEntityWithID(t *testing.T) {
 	}
 }
 
-func TestNewEntityWithID_UUIDFormat(t *testing.T) {
+func TestNewEntityWithID_UUIDHexFormat(t *testing.T) {
 	e := NewEntityWithID()
-	if len(e.GetID()) != 36 {
-		t.Errorf("expected UUID format (36 chars), got %d chars: %s", len(e.GetID()), e.GetID())
+	if len(e.GetID()) != 32 {
+		t.Errorf("expected UUID hex format (32 chars), got %d chars: %s", len(e.GetID()), e.GetID())
 	}
-	if strings.Count(e.GetID(), "-") != 4 {
-		t.Errorf("expected UUID format (4 dashes), got %d dashes: %s", strings.Count(e.GetID(), "-"), e.GetID())
+	for _, c := range e.GetID() {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			t.Errorf("expected lowercase hex chars only, got '%c' in %s", c, e.GetID())
+			break
+		}
 	}
 }
 
@@ -36,33 +38,16 @@ func TestNewEntityWithID_Uniqueness(t *testing.T) {
 	}
 }
 
-func TestSetIDGenerator(t *testing.T) {
-	original := DefaultIDGenerator()
-	defer func() { SetIDGenerator(original) }()
-
-	counter := 0
-	SetIDGenerator(func() string {
-		counter++
-		return "custom-id"
-	})
-
-	e := NewEntityWithID()
-	if e.GetID() != "custom-id" {
-		t.Errorf("expected custom ID 'custom-id', got '%s'", e.GetID())
+func TestDefaultIDGenerator(t *testing.T) {
+	gen := DefaultIDGenerator()
+	id := gen()
+	if len(id) != 32 {
+		t.Errorf("expected UUID hex format (32 chars), got %d chars: %s", len(id), id)
 	}
-	if counter != 1 {
-		t.Errorf("expected custom generator to be called once, got %d calls", counter)
-	}
-}
-
-func TestSetIDGenerator_NilDoesNotOverride(t *testing.T) {
-	original := DefaultIDGenerator()
-	defer func() { SetIDGenerator(original) }()
-
-	SetIDGenerator(nil)
-
-	e := NewEntityWithID()
-	if e.GetID() == "" {
-		t.Error("expected default generator to still work after nil SetIDGenerator")
+	for _, c := range id {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			t.Errorf("expected lowercase hex chars only, got '%c' in %s", c, id)
+			break
+		}
 	}
 }

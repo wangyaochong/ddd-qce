@@ -106,6 +106,45 @@ func TestPgRepository_SaveAndFindByID(t *testing.T) {
 	if found.Amount != 99.5 {
 		t.Errorf("expected Amount 99.5, got %f", found.Amount)
 	}
+	if found.Version() != 0 {
+		t.Errorf("expected version 0 after load, got %d", found.Version())
+	}
+}
+
+func TestPgRepository_FindByID_VersionRestoredForOptimisticLock(t *testing.T) {
+	db := testutil.OpenTestDB(t, "ddd_qce_repo_test")
+	repo := pgrepo.NewRepository[*testOrder](db)
+	ctx := context.Background()
+
+	order := newTestOrder("order-version")
+	order.Name = "v1"
+	order.Amount = 10
+	if err := repo.Save(ctx, order); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	loaded, err := repo.FindByID(ctx, "order-version")
+	if err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+
+	loaded.Name = "v2"
+	loaded.Amount = 20
+	if err := repo.Save(ctx, loaded); err != nil {
+		t.Fatalf("Save after FindByID should succeed with correct version, got: %v", err)
+	}
+
+	duplicate := newTestOrder("order-version")
+	duplicate.Name = "conflict"
+	duplicate.Amount = 30
+	err = repo.Save(ctx, duplicate)
+	if err == nil {
+		t.Fatal("expected OptimisticLockError for stale version")
+	}
+	var ole *pgrepo.OptimisticLockError
+	if !errors.As(err, &ole) {
+		t.Errorf("expected *OptimisticLockError, got %T: %v", err, err)
+	}
 }
 
 func TestPgRepository_FindByID_NotFound(t *testing.T) {

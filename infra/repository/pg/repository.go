@@ -105,6 +105,7 @@ func (r *PgRepository[T]) FindByID(ctx context.Context, id string) (T, error) {
 	if err != nil {
 		return agg, fmt.Errorf("deserialize aggregate: %w", err)
 	}
+	agg.GetAggregateRoot().SetSnapshotVersion(version)
 	return agg, nil
 }
 
