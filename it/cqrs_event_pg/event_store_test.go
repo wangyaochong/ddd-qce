@@ -107,9 +107,12 @@ func TestPgEventStore_LoadNotFound(t *testing.T) {
 	store := pgevent.NewEventStore[*testDomainEvent](db)
 	ctx := context.Background()
 
-	_, err := store.Load(ctx, "nonexistent", 0)
-	if err == nil {
-		t.Fatal("expected error for nonexistent aggregate")
+	loaded, err := store.Load(ctx, "nonexistent", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(loaded) != 0 {
+		t.Errorf("expected empty slice for nonexistent aggregate, got %d events", len(loaded))
 	}
 }
 

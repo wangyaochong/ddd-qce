@@ -39,11 +39,7 @@ func (s *DomainEventStore) Load(ctx context.Context, aggregateID string, afterVe
 	defer s.mu.RUnlock()
 
 	events, exists := s.events[aggregateID]
-	if !exists {
-		return nil, fmt.Errorf("no events found for aggregate: %s", aggregateID)
-	}
-
-	if afterVersion >= len(events) {
+	if !exists || afterVersion >= len(events) {
 		return []event.DomainEvent{}, nil
 	}
 

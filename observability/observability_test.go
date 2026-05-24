@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -261,4 +262,125 @@ func TestDashboard_JobsWithoutManager(t *testing.T) {
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("expected 503, got %d", w.Code)
 	}
+}
+
+func TestInMemoryMessageStore_Commands(t *testing.T) {
+	store := NewInMemoryMessageStore(WithMaxSize(5))
+
+	now := time.Now()
+	store.RecordCommand(context.Background(), &builtin.CommandEntry{
+		CommandType: "PlaceOrder", TraceID: "t1", CreatedAt: now, Duration: 100 * time.Millisecond,
+	})
+	store.RecordCommand(context.Background(), &builtin.CommandEntry{
+		CommandType: "CancelOrder", TraceID: "t2", CreatedAt: now, Error: "not found", Duration: 50 * time.Millisecond,
+	})
+
+	entries, err := store.QueryCommands(context.Background(), MessageFilter{Type: "PlaceOrder"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1, got %d", len(entries))
+	}
+	if entries[0].CommandType != "PlaceOrder" {
+		t.Errorf("expected PlaceOrder, got %s", entries[0].CommandType)
+	}
+
+	all, _ := store.QueryCommands(context.Background(), MessageFilter{})
+	if len(all) != 2 {
+		t.Errorf("expected 2, got %d", len(all))
+	}
+
+	errOnly, _ := store.QueryCommands(context.Background(), MessageFilter{Status: "error"})
+	if len(errOnly) != 1 {
+		t.Errorf("expected 1 error, got %d", len(errOnly))
+	}
+}
+
+func TestInMemoryMessageStore_MaxSize(t *testing.T) {
+	store := NewInMemoryMessageStore(WithMaxSize(3))
+
+	for i := 0; i < 5; i++ {
+		store.RecordQuery(context.Background(), &builtin.QueryEntry{
+			QueryType: fmt.Sprintf("Q%d", i), CreatedAt: time.Now(),
+		})
+	}
+
+	entries, _ := store.QueryQueries(context.Background(), MessageFilter{})
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 (maxSize), got %d", len(entries))
+	}
+	if entries[0].QueryType != "Q4" {
+		t.Errorf("expected most recent first, got %s", entries[0].QueryType)
+	}
+}
+
+func TestInMemoryMessageStore_Events(t *testing.T) {
+	store := NewInMemoryMessageStore()
+
+	store.RecordEvent(context.Background(), &builtin.EventEntry{
+		EventType: "OrderPlaced", AggregateID: "A1", CreatedAt: time.Now(),
+	})
+	store.RecordEvent(context.Background(), &builtin.EventEntry{
+		EventType: "OrderCancelled", AggregateID: "A2", CreatedAt: time.Now(),
+	})
+
+	byAgg, _ := store.QueryEvents(context.Background(), MessageFilter{AggregateID: "A1"})
+	if len(byAgg) != 1 {
+		t.Fatalf("expected 1, got %d", len(byAgg))
+	}
+	if byAgg[0].EventType != "OrderPlaced" {
+		t.Errorf("expected OrderPlaced, got %s", byAgg[0].EventType)
+	}
+}
+
+func TestInMemoryMessageStore_ImplementsMessageStore(t *testing.T) {
+	var _ builtin.MessageStore = NewInMemoryMessageStore()
+}
+
+func TestInMemoryMessageStore_ImplementsReader(t *testing.T) {
+	var _ MessageStoreReader = NewInMemoryMessageStore()
+}
+
+func TestComposeMetrics(t *testing.T) {
+	s1 := NewStatsCollector()
+	s2 := NewStatsCollector()
+
+	composed := ComposeMetrics(s1, s2)
+	composed.RecordDuration("Command/Test", 100*time.Millisecond)
+	composed.RecordError("Command/Test", fmt.Errorf("err"))
+
+	st1, _ := s1.GetStats("Command/Test")
+	st2, _ := s2.GetStats("Command/Test")
+
+	if st1.Count != 1 || st2.Count != 1 {
+		t.Errorf("expected both recorders to have count 1, got %d and %d", st1.Count, st2.Count)
+	}
+	if st1.ErrorCount != 1 || st2.ErrorCount != 1 {
+		t.Errorf("expected both recorders to have 1 error, got %d and %d", st1.ErrorCount, st2.ErrorCount)
+	}
+}
+
+func TestDashboard_CommandsWithReader(t *testing.T) {
+	s := NewStatsCollector()
+	store := NewInMemoryMessageStore()
+	store.RecordCommand(context.Background(), &builtin.CommandEntry{
+		CommandType: "PlaceOrder", TraceID: "t1", CreatedAt: time.Now(), Duration: 100 * time.Millisecond,
+	})
+
+	d := NewDashboard(s, WithMessageReader(store))
+	mux := http.NewServeMux()
+	d.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ddd/commands", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestOTelBridge_ImplementsMetricsRecorder(t *testing.T) {
+	var _ builtin.MetricsRecorder = NewOTelBridge(OTelConfig{}, nil)
 }

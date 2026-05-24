@@ -320,7 +320,7 @@ func (o *Order) Confirm(ctx context.Context) error {
 
     o.Status = OrderStatusConfirmed
 
-    evt := OrderConfirmedEvent{OrderID: o.ID(), UserID: o.UserID}
+    evt := OrderConfirmedEvent{OrderID: o.ID, UserID: o.UserID}
     o.Apply(evt)
     o.eventBus.Publish(ctx, evt)
 
@@ -334,7 +334,7 @@ func (o *Order) Pay(ctx context.Context, paymentID string, amount float64) error
 
     o.Status = OrderStatusPaid
 
-    evt := OrderPaidEvent{OrderID: o.ID(), UserID: o.UserID, PaymentID: paymentID, PaidAmount: amount}
+    evt := OrderPaidEvent{OrderID: o.ID, UserID: o.UserID, PaymentID: paymentID, PaidAmount: amount}
     o.Apply(evt)
     o.eventBus.Publish(ctx, evt)
 
@@ -348,7 +348,7 @@ func (o *Order) Cancel(ctx context.Context, reason string) error {
 
     o.Status = OrderStatusCancelled
 
-    evt := OrderCancelledEvent{OrderID: o.ID(), UserID: o.UserID, Reason: reason}
+    evt := OrderCancelledEvent{OrderID: o.ID, UserID: o.UserID, Reason: reason}
     o.Apply(evt)
     o.eventBus.Publish(ctx, evt)
 

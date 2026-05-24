@@ -22,7 +22,7 @@ func NewOrderRepository() *OrderRepository {
 func (r *OrderRepository) Save(ctx context.Context, order *domain.Order) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.orders[order.ID()] = order
+	r.orders[order.ID] = order
 	return nil
 }
 
@@ -76,7 +76,7 @@ func NewOrderEventSourcedRepository(
 func (r *OrderEventSourcedRepository) Save(ctx context.Context, order *domain.Order) error {
 	uncommitted := order.UncommittedEvents()
 	if len(uncommitted) > 0 {
-		if err := r.eventStore.Append(ctx, order.ID(), order.Version()-len(uncommitted), uncommitted); err != nil {
+		if err := r.eventStore.Append(ctx, order.ID, order.Version()-len(uncommitted), uncommitted); err != nil {
 			return err
 		}
 		order.MarkEventsAsCommitted()

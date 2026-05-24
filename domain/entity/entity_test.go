@@ -7,8 +7,8 @@ import (
 
 func TestNewEntity(t *testing.T) {
 	e := NewEntity("user-1")
-	if e.ID() != "user-1" {
-		t.Errorf("expected ID 'user-1', got '%s'", e.ID())
+	if e.ID != "user-1" {
+		t.Errorf("expected ID 'user-1', got '%s'", e.ID)
 	}
 }
 
@@ -16,13 +16,6 @@ func TestNewEntity_EmptyID(t *testing.T) {
 	e := NewEntity("")
 	if !e.IsEmpty() {
 		t.Error("expected entity with empty ID to be empty")
-	}
-}
-
-func TestID(t *testing.T) {
-	e := NewEntity("user-1")
-	if e.ID() != "user-1" {
-		t.Errorf("expected ID 'user-1', got '%s'", e.ID())
 	}
 }
 
@@ -104,7 +97,7 @@ func TestEntity_JSONRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(data, &e2); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
-	if e2.ID() != "user-1" {
-		t.Errorf("expected ID 'user-1' after round trip, got '%s'", e2.ID())
+	if e2.ID != "user-1" {
+		t.Errorf("expected ID 'user-1' after round trip, got '%s'", e2.ID)
 	}
 }

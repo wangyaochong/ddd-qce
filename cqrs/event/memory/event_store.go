@@ -94,11 +94,7 @@ func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersi
 	defer s.mu.RUnlock()
 
 	events, exists := s.events[aggregateID]
-	if !exists {
-		return nil, fmt.Errorf("no events found for aggregate: %s", aggregateID)
-	}
-
-	if afterVersion >= len(events) {
+	if !exists || afterVersion >= len(events) {
 		return []T{}, nil
 	}
 

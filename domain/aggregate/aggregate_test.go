@@ -18,8 +18,8 @@ func (e *testDomainEvent) OccurredAt() time.Time { return e.occurredAt }
 
 func TestNewAggregateRoot(t *testing.T) {
 	agg := NewAggregateRoot("order-1")
-	if agg.ID() != "order-1" {
-		t.Errorf("expected ID 'order-1', got '%s'", agg.ID())
+	if agg.ID != "order-1" {
+		t.Errorf("expected ID 'order-1', got '%s'", agg.ID)
 	}
 	if agg.Version() != 0 {
 		t.Errorf("expected version 0, got %d", agg.Version())

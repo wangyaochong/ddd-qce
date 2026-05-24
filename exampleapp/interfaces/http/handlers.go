@@ -205,7 +205,11 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 	orderID := r.PathValue("id")
 	events, err := h.app.DomainEventStore.Load(ctx, orderID, 0)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(events) == 0 {
+		http.Error(w, "order not found", http.StatusNotFound)
 		return
 	}
 

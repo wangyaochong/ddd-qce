@@ -146,8 +146,8 @@ func TestOrderAggregate_When(t *testing.T) {
 
 func TestOrderItem_EntityBasics(t *testing.T) {
 	item := NewOrderItem("p1", "Laptop", 999, 2)
-	if item.ID() != "p1" {
-		t.Errorf("expected p1, got %s", item.ID())
+	if item.ID != "p1" {
+		t.Errorf("expected p1, got %s", item.ID)
 	}
 	if item.Subtotal() != 1998 {
 		t.Errorf("expected 1998, got %.2f", item.Subtotal())

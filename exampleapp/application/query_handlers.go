@@ -69,7 +69,7 @@ func toOrderView(o *domain.Order) *GetOrderResult {
 	items := make([]OrderViewItem, len(o.Items))
 	for i, item := range o.Items {
 		items[i] = OrderViewItem{
-			ProductID:   item.ID(),
+			ProductID:   item.ID,
 			ProductName: item.ProductName,
 			Price:       item.Price,
 			Quantity:    item.Quantity,
@@ -77,7 +77,7 @@ func toOrderView(o *domain.Order) *GetOrderResult {
 		}
 	}
 	result := &GetOrderResult{
-		OrderID:     o.ID(),
+		OrderID:     o.ID,
 		UserID:      o.UserID,
 		Status:      string(o.Status),
 		TotalAmount: o.TotalAmount,

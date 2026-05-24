@@ -198,8 +198,8 @@ func TestOrderRepository_CRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find failed: %v", err)
 	}
-	if found.ID() != "ORD-CRUD" {
-		t.Errorf("expected ORD-CRUD, got %s", found.ID())
+	if found.ID != "ORD-CRUD" {
+		t.Errorf("expected ORD-CRUD, got %s", found.ID)
 	}
 	if err := repo.Delete(ctx, "ORD-CRUD"); err != nil {
 		t.Fatalf("delete failed: %v", err)
@@ -228,8 +228,8 @@ func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
-	if loaded.ID() != "ORD-ES1" {
-		t.Errorf("expected ORD-ES1, got %s", loaded.ID())
+	if loaded.ID != "ORD-ES1" {
+		t.Errorf("expected ORD-ES1, got %s", loaded.ID)
 	}
 	if loaded.UserID != "user-001" {
 		t.Errorf("expected user-001, got %s", loaded.UserID)

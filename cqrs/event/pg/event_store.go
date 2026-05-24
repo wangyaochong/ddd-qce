@@ -127,8 +127,5 @@ func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersi
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate events: %w", err)
 	}
-	if len(result) == 0 {
-		return nil, fmt.Errorf("no events found for aggregate: %s", aggregateID)
-	}
 	return result, nil
 }

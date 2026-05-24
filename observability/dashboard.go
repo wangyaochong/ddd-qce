@@ -16,6 +16,7 @@ type Dashboard struct {
 	stats      *StatsCollector
 	traceStore trace.TraceStore
 	jobMgr     jobcore.JobManager
+	msgReader  MessageStoreReader
 	config     DashboardConfig
 }
 
@@ -77,6 +78,10 @@ func WithDashboardJobManager(jm jobcore.JobManager) DashboardOption {
 	return func(d *Dashboard) { d.jobMgr = jm }
 }
 
+func WithMessageReader(r MessageStoreReader) DashboardOption {
+	return func(d *Dashboard) { d.msgReader = r }
+}
+
 type DashboardConfig struct {
 	Prefix         string
 	EnableStats    bool
@@ -110,13 +115,13 @@ func (d *Dashboard) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc(p+"/stats", d.handleStats)
 	}
 	if d.config.EnableCommands {
-		mux.HandleFunc(p+"/commands", d.handleNotImplemented)
+		mux.HandleFunc(p+"/commands", d.handleCommands)
 	}
 	if d.config.EnableQueries {
-		mux.HandleFunc(p+"/queries", d.handleNotImplemented)
+		mux.HandleFunc(p+"/queries", d.handleQueries)
 	}
 	if d.config.EnableEvents {
-		mux.HandleFunc(p+"/events", d.handleNotImplemented)
+		mux.HandleFunc(p+"/events", d.handleEvents)
 	}
 	if d.config.EnableJobs {
 		mux.HandleFunc(p+"/jobs", d.handleJobs)
@@ -139,16 +144,17 @@ func (d *Dashboard) handleStats(w http.ResponseWriter, r *http.Request) {
 	opType := r.URL.Query().Get("type")
 
 	var result any
-	if name != "" {
+	switch {
+	case name != "":
 		stats, ok := d.stats.GetStats(name)
 		if !ok {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "operation not found"})
 			return
 		}
 		result = stats
-	} else if opType != "" {
+	case opType != "":
 		result = d.stats.GetStatsByType(opType)
-	} else {
+	default:
 		result = d.stats.GetAllStats()
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -309,14 +315,104 @@ func (d *Dashboard) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (d *Dashboard) handleNotImplemented(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{
-		"error": "endpoint requires MessageStoreReader, coming in P1",
-	})
+func (d *Dashboard) handleCommands(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if d.msgReader == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "message store reader not configured"})
+		return
+	}
+
+	filter := d.parseMessageFilter(r)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	entries, err := d.msgReader.QueryCommands(ctx, filter)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, entries)
+}
+
+func (d *Dashboard) handleQueries(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if d.msgReader == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "message store reader not configured"})
+		return
+	}
+
+	filter := d.parseMessageFilter(r)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	entries, err := d.msgReader.QueryQueries(ctx, filter)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, entries)
+}
+
+func (d *Dashboard) handleEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if d.msgReader == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "message store reader not configured"})
+		return
+	}
+
+	filter := d.parseMessageFilter(r)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	entries, err := d.msgReader.QueryEvents(ctx, filter)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, entries)
+}
+
+func (d *Dashboard) parseMessageFilter(r *http.Request) MessageFilter {
+	limit := d.config.QueryLimit
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 {
+			limit = v
+		}
+	}
+
+	filter := MessageFilter{
+		Type:        r.URL.Query().Get("type"),
+		TraceID:     r.URL.Query().Get("traceID"),
+		AggregateID: r.URL.Query().Get("aggregateID"),
+		Status:      r.URL.Query().Get("status"),
+		Limit:       limit,
+	}
+
+	if since := r.URL.Query().Get("since"); since != "" {
+		if ts, err := strconv.ParseInt(since, 10, 64); err == nil {
+			filter.Since = time.Unix(ts, 0)
+		}
+	}
+
+	return filter
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		return
+	}
 }

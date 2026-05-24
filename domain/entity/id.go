@@ -29,7 +29,7 @@ func NewEntityWithID() *Entity {
 	idGenHolder.mu.RLock()
 	gen := idGenHolder.gen
 	idGenHolder.mu.RUnlock()
-	return &Entity{id: gen()}
+	return &Entity{ID: gen()}
 }
 
 func SetIDGenerator(gen IDGenerator) {

@@ -38,14 +38,14 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 	}
 
 	eventmemory.Dispatch[*domain.OrderPlacedEvent](ctx, h.eventBus, &domain.OrderPlacedEvent{
-		OrderID:     order.ID(),
+		OrderID:     order.ID,
 		UserID:      order.UserID,
 		TotalAmount: order.TotalAmount,
 		Items:       order.ItemNames(),
 		Time:        time.Now(),
 	})
 
-	return &PlaceOrderResult{OrderID: order.ID(), TotalAmount: order.TotalAmount}, nil
+	return &PlaceOrderResult{OrderID: order.ID, TotalAmount: order.TotalAmount}, nil
 }
 
 type ConfirmPaymentHandler struct {
@@ -116,7 +116,7 @@ func (h *CancelOrderHandler) Handle(ctx context.Context, cmd *CancelOrderCommand
 	}
 
 	eventmemory.Dispatch[*domain.OrderCancelledEvent](ctx, h.eventBus, &domain.OrderCancelledEvent{
-		OrderID: order.ID(),
+		OrderID: order.ID,
 		Reason:  cmd.Reason,
 		Time:    time.Now(),
 	})

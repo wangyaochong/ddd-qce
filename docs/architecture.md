@@ -360,7 +360,7 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | 决策 | 原因 |
 |------|------|
 | Entity ID 类型为 `string` | 简单灵活，通过 IDGenerator 抽象生成逻辑 |
-| AggregateRoot 嵌入 Entity | Go embedding 使 `a.ID()` 仍可直接访问，零破坏性 |
+| AggregateRoot 嵌入 Entity | Go embedding 使 `a.ID` 仍可直接访问，零破坏性 |
 | EventBus 非泛型统一 | 1 个实例处理所有事件类型，RegisterHandler[T]/Dispatch[T] 保留类型安全 |
 | Dispatch 参数顺序：ctx 在 bus 前 | ctx 是请求上下文，bus 是总线实例，遵循 Go 惯例 |
 | AppendOnlyStore 4 参数签名 | Append(ctx, aggregateID, expectedVersion, events) 支持乐观锁 |

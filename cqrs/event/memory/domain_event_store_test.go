@@ -124,9 +124,12 @@ func TestDomainEventStore_NotFound(t *testing.T) {
 	store := NewDomainEventStore()
 	ctx := context.Background()
 
-	_, err := store.Load(ctx, "O999", 0)
-	if err == nil {
-		t.Fatal("expected error for missing aggregate")
+	loaded, err := store.Load(ctx, "O999", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(loaded) != 0 {
+		t.Errorf("expected empty slice for missing aggregate, got %d events", len(loaded))
 	}
 }
 
