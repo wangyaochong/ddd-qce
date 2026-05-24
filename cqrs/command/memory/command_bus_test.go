@@ -233,23 +233,16 @@ func TestCommandBus_WithAspects(t *testing.T) {
 	}
 }
 
-func TestCommandBus_DuplicateRegistration_Panics(t *testing.T) {
+func TestCommandBus_DuplicateRegistration_ReturnsError(t *testing.T) {
 	bus := NewCommandBus()
-	RegisterCommand(bus, &testCreateUserHandler{})
+	if err := RegisterCommand(bus, &testCreateUserHandler{}); err != nil {
+		t.Fatalf("first registration should succeed: %v", err)
+	}
 
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic for duplicate registration")
-		}
-		msg := r.(string)
-		expected := "handler already registered for command type: *memory.testCreateUserCommand"
-		if msg != expected {
-			t.Errorf("expected panic message %q, got %q", expected, msg)
-		}
-	}()
-
-	RegisterCommand(bus, &testCreateUserHandler{})
+	err := RegisterCommand(bus, &testCreateUserHandler{})
+	if err == nil {
+		t.Fatal("expected error for duplicate registration")
+	}
 }
 
 type testCommandAspect struct {

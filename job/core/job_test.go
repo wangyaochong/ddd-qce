@@ -39,37 +39,159 @@ func TestJobOptions_Combined(t *testing.T) {
 	}
 }
 
-func TestJob_LockUnlock(t *testing.T) {
-	job := &Job{ID: "job-1", Status: JobStatusPending}
-
-	job.Lock()
-	job.Status = JobStatusRunning
-	job.Unlock()
-
-	if job.Status != JobStatusRunning {
-		t.Errorf("expected status running, got %s", job.Status)
+func TestJob_MarkRunning(t *testing.T) {
+	job := NewJob("job-1", nil)
+	if job.GetStatus() != JobStatusPending {
+		t.Errorf("expected pending, got %s", job.GetStatus())
+	}
+	job.MarkRunning()
+	if job.GetStatus() != JobStatusRunning {
+		t.Errorf("expected running, got %s", job.GetStatus())
+	}
+	if job.GetStartedAt().IsZero() {
+		t.Error("expected startedAt to be set")
 	}
 }
 
-func TestJob_LockUnlock_Concurrent(t *testing.T) {
-	job := &Job{ID: "job-1", Status: JobStatusPending}
+func TestJob_MarkRunning_Concurrent(t *testing.T) {
+	job := NewJob("job-1", nil)
 	var wg sync.WaitGroup
 
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func(n int) {
+		go func() {
 			defer wg.Done()
-			job.Lock()
-			job.Status = JobStatusRunning
-			job.Result = n
-			job.Unlock()
-		}(i)
+			job.MarkRunning()
+		}()
 	}
 
 	wg.Wait()
 
-	if job.Status != JobStatusRunning {
-		t.Errorf("expected status running, got %s", job.Status)
+	if job.GetStatus() != JobStatusRunning {
+		t.Errorf("expected status running, got %s", job.GetStatus())
+	}
+}
+
+func TestJob_TryComplete(t *testing.T) {
+	job := NewJob("job-1", nil)
+	if !job.TryComplete("result") {
+		t.Error("expected TryComplete to succeed")
+	}
+	if job.GetStatus() != JobStatusCompleted {
+		t.Errorf("expected completed, got %s", job.GetStatus())
+	}
+	if job.GetResult() != "result" {
+		t.Errorf("expected result, got %v", job.GetResult())
+	}
+	if job.GetCompletedAt().IsZero() {
+		t.Error("expected completedAt to be set")
+	}
+}
+
+func TestJob_TryComplete_Cancelled(t *testing.T) {
+	job := NewJob("job-1", nil)
+	_ = job.TryCancel()
+	if job.TryComplete("result") {
+		t.Error("expected TryComplete to fail for cancelled job")
+	}
+	if job.GetStatus() != JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", job.GetStatus())
+	}
+}
+
+func TestJob_TryFail(t *testing.T) {
+	job := NewJob("job-1", nil)
+	cancelled, shouldRetry := job.TryFail("something went wrong")
+	if cancelled {
+		t.Error("expected not cancelled")
+	}
+	if shouldRetry {
+		t.Error("expected no retry (maxRetries=0)")
+	}
+	if job.GetStatus() != JobStatusFailed {
+		t.Errorf("expected failed, got %s", job.GetStatus())
+	}
+	if job.GetError() != "something went wrong" {
+		t.Errorf("expected error message, got %s", job.GetError())
+	}
+}
+
+func TestJob_TryFail_WithRetry(t *testing.T) {
+	job := NewJob("job-1", nil, WithMaxRetries(2))
+	cancelled, shouldRetry := job.TryFail("fail")
+	if cancelled {
+		t.Error("expected not cancelled")
+	}
+	if !shouldRetry {
+		t.Error("expected retry")
+	}
+	if job.RetryCount != 1 {
+		t.Errorf("expected retry count 1, got %d", job.RetryCount)
+	}
+}
+
+func TestJob_TryFail_Cancelled(t *testing.T) {
+	job := NewJob("job-1", nil)
+	_ = job.TryCancel()
+	cancelled, shouldRetry := job.TryFail("fail")
+	if !cancelled {
+		t.Error("expected cancelled")
+	}
+	if shouldRetry {
+		t.Error("expected no retry for cancelled job")
+	}
+}
+
+func TestJob_TryCancel(t *testing.T) {
+	job := NewJob("job-1", nil)
+	job.MarkRunning()
+	if err := job.TryCancel(); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if job.GetStatus() != JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", job.GetStatus())
+	}
+	if job.GetCompletedAt().IsZero() {
+		t.Error("expected completedAt to be set")
+	}
+}
+
+func TestJob_TryCancel_AlreadyCompleted(t *testing.T) {
+	job := NewJob("job-1", nil)
+	job.TryComplete("result")
+	if err := job.TryCancel(); err == nil {
+		t.Error("expected error when cancelling completed job")
+	}
+}
+
+func TestJob_ResetForRetry(t *testing.T) {
+	job := NewJob("job-1", nil, WithMaxRetries(1))
+	job.MarkRunning()
+	job.TryFail("fail")
+	if err := job.ResetForRetry(); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if job.GetStatus() != JobStatusPending {
+		t.Errorf("expected pending, got %s", job.GetStatus())
+	}
+	if job.GetError() != "" {
+		t.Errorf("expected empty error, got %s", job.GetError())
+	}
+	if job.GetResult() != nil {
+		t.Errorf("expected nil result, got %v", job.GetResult())
+	}
+	if !job.GetStartedAt().IsZero() {
+		t.Error("expected zero startedAt")
+	}
+	if !job.GetCompletedAt().IsZero() {
+		t.Error("expected zero completedAt")
+	}
+}
+
+func TestJob_ResetForRetry_NotFailed(t *testing.T) {
+	job := NewJob("job-1", nil)
+	if err := job.ResetForRetry(); err == nil {
+		t.Error("expected error when resetting non-failed job")
 	}
 }
 
@@ -154,15 +276,34 @@ func TestJob_Snapshot_IncludesCommandType(t *testing.T) {
 		ID:          "j1",
 		Command:     &testSampleCmd{Name: "test"},
 		CommandType: "core.testSampleCmd",
-		Result:      &testSampleResult{File: "out.pdf"},
-		ResultType:  "core.testSampleResult",
 	}
+	job.SetResult(&testSampleResult{File: "out.pdf"})
+	job.SetResultType("core.testSampleResult")
 	snap := job.Snapshot()
 	if snap.CommandType != "core.testSampleCmd" {
 		t.Errorf("expected CommandType preserved, got %q", snap.CommandType)
 	}
-	if snap.ResultType != "core.testSampleResult" {
-		t.Errorf("expected ResultType preserved, got %q", snap.ResultType)
+	if snap.GetResultType() != "core.testSampleResult" {
+		t.Errorf("expected ResultType preserved, got %q", snap.GetResultType())
+	}
+}
+
+func TestNewJob(t *testing.T) {
+	job := NewJob("j1", &testSampleCmd{Name: "test"}, WithTimeout(5*time.Second), WithMaxRetries(3))
+	if job.ID != "j1" {
+		t.Errorf("expected ID 'j1', got %s", job.ID)
+	}
+	if job.GetStatus() != JobStatusPending {
+		t.Errorf("expected pending, got %s", job.GetStatus())
+	}
+	if job.Timeout != 5*time.Second {
+		t.Errorf("expected timeout 5s, got %v", job.Timeout)
+	}
+	if job.MaxRetries != 3 {
+		t.Errorf("expected max retries 3, got %d", job.MaxRetries)
+	}
+	if job.CreatedAt.IsZero() {
+		t.Error("expected createdAt to be set")
 	}
 }
 

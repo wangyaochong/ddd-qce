@@ -8,13 +8,13 @@ import (
 	"reflect"
 	"sync"
 
+	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/event"
 	corepg "github.com/ddd-qce/core/pg"
 )
 
 type EventStore[T event.DomainEvent] struct {
 	db      *sql.DB
-	once    sync.Once
 	pool    sync.Pool
 	newFunc func() T
 }
@@ -25,25 +25,39 @@ func WithFactory[T event.DomainEvent](factory func() T) EventStoreOption[T] {
 	return func(s *EventStore[T]) { s.newFunc = factory }
 }
 
-func NewEventStore[T event.DomainEvent](db *sql.DB, opts ...EventStoreOption[T]) *EventStore[T] {
+func NewEventStore[T event.DomainEvent](db *sql.DB, opts ...EventStoreOption[T]) (*EventStore[T], error) {
+	var zero T
+	t := reflect.TypeOf(zero)
+	if t == nil || t.Kind() != reflect.Ptr {
+		return nil, fmt.Errorf("PgEventStore[T]: T must be a pointer type, got %v", t)
+	}
+
 	s := &EventStore[T]{
 		db: db,
-		pool: sync.Pool{
-			New: func() any {
-				var zero T
-				v := reflect.New(reflect.TypeOf(zero).Elem()).Interface()
-				typed, ok := v.(T)
-				if !ok {
-					panic(fmt.Sprintf("PgEventStore[T]: pool New returned unexpected type %T, expected %T", v, zero))
-				}
-				return typed
-			},
-		},
 	}
+
 	for _, opt := range opts {
 		opt(s)
 	}
-	return s
+
+	if s.newFunc != nil {
+		return s, nil
+	}
+
+	s.pool = sync.Pool{
+		New: func() any {
+			return reflect.New(t.Elem()).Interface()
+		},
+	}
+
+	if v := s.pool.Get(); v != nil {
+		if _, ok := v.(T); !ok {
+			return nil, fmt.Errorf("PgEventStore[T]: pool New returned unexpected type %T, expected %T", v, zero)
+		}
+		s.pool.Put(v)
+	}
+
+	return s, nil
 }
 
 func isUniqueViolation(err error) bool {
@@ -53,29 +67,19 @@ func isUniqueViolation(err error) bool {
 	return false
 }
 
-func (s *EventStore[T]) assertPointerType() {
-	s.once.Do(func() {
-		var zero T
-		if reflect.TypeOf(zero).Kind() != reflect.Ptr {
-			panic(fmt.Sprintf("PgEventStore[T]: T must be a pointer type, got %v", reflect.TypeOf(zero)))
-		}
-	})
-}
-
-func (s *EventStore[T]) alloc() T {
+func (s *EventStore[T]) alloc() (T, error) {
 	if s.newFunc != nil {
-		return s.newFunc()
+		return s.newFunc(), nil
 	}
 	v, ok := s.pool.Get().(T)
 	if !ok {
 		var zero T
-		panic(fmt.Sprintf("PgEventStore[T]: pool returned unexpected type, expected %T", zero))
+		return zero, fmt.Errorf("PgEventStore[T]: pool returned unexpected type, expected %T", zero)
 	}
-	return v
+	return v, nil
 }
 
 func (s *EventStore[T]) Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error {
-	s.assertPointerType()
 	q := corepg.GetQuerier(ctx, s.db)
 	for i, evt := range events {
 		data, err := json.Marshal(evt)
@@ -90,7 +94,7 @@ func (s *EventStore[T]) Append(ctx context.Context, aggregateID string, expected
 		)
 		if err != nil {
 			if isUniqueViolation(err) {
-				return fmt.Errorf("concurrency conflict: version %d already exists for aggregate %s", version, aggregateID)
+				return fmt.Errorf("concurrency conflict: version %d already exists for aggregate %s: %w", version, aggregateID, ddderror.ErrConcurrency)
 			}
 			return fmt.Errorf("insert event: %w", err)
 		}
@@ -99,7 +103,6 @@ func (s *EventStore[T]) Append(ctx context.Context, aggregateID string, expected
 }
 
 func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error) {
-	s.assertPointerType()
 	q := corepg.GetQuerier(ctx, s.db)
 	rows, err := q.QueryContext(ctx,
 		`SELECT event_data FROM ddd_domain_events
@@ -112,13 +115,16 @@ func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersi
 	}
 	defer rows.Close()
 
-	var result []T
+	result := make([]T, 0)
 	for rows.Next() {
 		var data []byte
 		if err := rows.Scan(&data); err != nil {
 			return nil, fmt.Errorf("scan event: %w", err)
 		}
-		evt := s.alloc()
+		evt, err := s.alloc()
+		if err != nil {
+			return nil, fmt.Errorf("allocate event: %w", err)
+		}
 		if err := json.Unmarshal(data, evt); err != nil {
 			return nil, fmt.Errorf("unmarshal event: %w", err)
 		}

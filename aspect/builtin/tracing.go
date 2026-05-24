@@ -2,15 +2,16 @@ package builtin
 
 import (
 	"context"
-	"log"
 	"reflect"
 	"time"
 
+	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/trace"
 )
 
 type TracingAspect struct {
-	Store trace.TraceStore
+	Store  trace.TraceStore
+	Logger Logger
 }
 
 func NewTracingAspect(store trace.TraceStore) *TracingAspect {
@@ -55,13 +56,19 @@ func (a *TracingAspect) AfterCommand(ctx context.Context, cmd any, result any, e
 	if span, ok := ctx.Value(spanKey{}).(*trace.Span); ok {
 		span.Duration = duration
 		if err != nil {
-			span.Status = trace.SpanStatusError
+			if ddderror.IsDomainError(err) {
+				span.Status = "business_error"
+			} else {
+				span.Status = trace.SpanStatusError
+			}
 			span.Error = err.Error()
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
 		if err := a.Store.RecordSpan(ctx, span); err != nil {
-			log.Printf("[TracingAspect] RecordSpan failed: %v", err)
+			if a.Logger != nil {
+				a.Logger.Error("TracingAspect RecordSpan failed", "error", err)
+			}
 		}
 	}
 	return nil
@@ -97,13 +104,19 @@ func (a *TracingAspect) AfterQuery(ctx context.Context, query any, result any, e
 	if span, ok := ctx.Value(spanKey{}).(*trace.Span); ok {
 		span.Duration = duration
 		if err != nil {
-			span.Status = trace.SpanStatusError
+			if ddderror.IsDomainError(err) {
+				span.Status = "business_error"
+			} else {
+				span.Status = trace.SpanStatusError
+			}
 			span.Error = err.Error()
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
 		if err := a.Store.RecordSpan(ctx, span); err != nil {
-			log.Printf("[TracingAspect] RecordSpan failed: %v", err)
+			if a.Logger != nil {
+				a.Logger.Error("TracingAspect RecordSpan failed", "error", err)
+			}
 		}
 	}
 	return nil
@@ -139,13 +152,19 @@ func (a *TracingAspect) AfterPublish(ctx context.Context, event any, err error, 
 	if span, ok := ctx.Value(spanKey{}).(*trace.Span); ok {
 		span.Duration = duration
 		if err != nil {
-			span.Status = trace.SpanStatusError
+			if ddderror.IsDomainError(err) {
+				span.Status = "business_error"
+			} else {
+				span.Status = trace.SpanStatusError
+			}
 			span.Error = err.Error()
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
 		if err := a.Store.RecordSpan(ctx, span); err != nil {
-			log.Printf("[TracingAspect] RecordSpan failed: %v", err)
+			if a.Logger != nil {
+				a.Logger.Error("TracingAspect RecordSpan failed", "error", err)
+			}
 		}
 	}
 	return nil

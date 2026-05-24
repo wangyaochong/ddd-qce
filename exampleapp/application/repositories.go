@@ -22,7 +22,7 @@ func NewOrderRepository() *OrderRepository {
 func (r *OrderRepository) Save(ctx context.Context, order *domain.Order) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.orders[order.ID] = order
+	r.orders[order.GetID()] = order
 	return nil
 }
 
@@ -76,7 +76,7 @@ func NewOrderEventSourcedRepository(
 func (r *OrderEventSourcedRepository) Save(ctx context.Context, order *domain.Order) error {
 	uncommitted := order.UncommittedEvents()
 	if len(uncommitted) > 0 {
-		if err := r.eventStore.Append(ctx, order.ID, order.Version()-len(uncommitted), uncommitted); err != nil {
+		if err := r.eventStore.Append(ctx, order.GetID(), order.Version()-len(uncommitted), uncommitted); err != nil {
 			return err
 		}
 		order.MarkEventsAsCommitted()
@@ -93,7 +93,9 @@ func (r *OrderEventSourcedRepository) Load(ctx context.Context, id string) (*dom
 		return nil, fmt.Errorf("order %s not found in event store", id)
 	}
 	order := domain.NewOrderForReplay(id)
-	order.LoadFromHistory(events)
+	if err := order.LoadFromHistory(events); err != nil {
+		return nil, fmt.Errorf("load order %s from history: %w", id, err)
+	}
 	return order, nil
 }
 

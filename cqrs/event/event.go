@@ -7,6 +7,6 @@ import (
 )
 
 type EventBus interface {
-	SubscribeHandler(handler any)
+	SubscribeHandler(handler any) error
 	Publish(ctx context.Context, evt event.DomainEvent) error
 }

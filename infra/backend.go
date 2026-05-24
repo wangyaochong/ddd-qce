@@ -1,10 +1,20 @@
 package infra
 
 import (
+	"context"
+
 	"github.com/ddd-qce/core/aspect/builtin"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )
+
+type Migrator interface {
+	Migrate(ctx context.Context) error
+}
+
+type NopMigrator struct{}
+
+func (NopMigrator) Migrate(_ context.Context) error { return nil }
 
 type Backend struct {
 	TransactionManager builtin.TransactionManager
@@ -12,7 +22,7 @@ type Backend struct {
 	TypeRegistry       *jobcore.TypeRegistry
 	TraceStore         trace.TraceStore
 	MessageStore       builtin.MessageStore
-	Migrate            func() error
+	Migrator           Migrator
 }
 
 type BackendOption func(*Backend)
@@ -37,8 +47,8 @@ func WithMessageStore(store builtin.MessageStore) BackendOption {
 	return func(b *Backend) { b.MessageStore = store }
 }
 
-func WithMigrate(migrate func() error) BackendOption {
-	return func(b *Backend) { b.Migrate = migrate }
+func WithMigrator(m Migrator) BackendOption {
+	return func(b *Backend) { b.Migrator = m }
 }
 
 func NewBackend(opts ...BackendOption) *Backend {

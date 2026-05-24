@@ -80,8 +80,8 @@ func TestEventSourcingFullCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
-	if loaded.ID != "ORD-ES-FULL" {
-		t.Errorf("expected ORD-ES-FULL, got %s", loaded.ID)
+	if loaded.GetID() != "ORD-ES-FULL" {
+		t.Errorf("expected ORD-ES-FULL, got %s", loaded.GetID())
 	}
 	if loaded.UserID != "user-001" {
 		t.Errorf("expected user-001, got %s", loaded.UserID)
@@ -112,8 +112,8 @@ func TestJobManagerFullCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCompleted {
-		t.Errorf("expected completed, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCompleted {
+		t.Errorf("expected completed, got %s", result.GetStatus())
 	}
 
 	jobs, _ := jobMgr.ListByStatus(ctx, jobcore.JobStatusCompleted)
@@ -149,7 +149,7 @@ func TestJobManager_Retry(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	status, _ := jobMgr.GetStatus(ctx, job.ID)
-	if status.Status == jobcore.JobStatusFailed {
+	if status.GetStatus() == jobcore.JobStatusFailed {
 		if err := jobMgr.Retry(ctx, job.ID); err != nil {
 			t.Logf("retry result: %v (may be expected)", err)
 		}
@@ -213,7 +213,7 @@ func TestRepositoryDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find failed: %v", err)
 	}
-	if found.ID != "ORD-DEL" {
+	if found.GetID() != "ORD-DEL" {
 		t.Error("order not found")
 	}
 	app.OrderRepo.Delete(ctx, "ORD-DEL")
@@ -272,7 +272,7 @@ func (a *testCustomAspect) AfterPublish(ctx context.Context, e any, err error, d
 func TestJobStore_CRUD(t *testing.T) {
 	store := jobmemory.NewJobStore()
 	ctx := context.Background()
-	job := &jobcore.Job{ID: "J1", Status: jobcore.JobStatusPending}
+	job := jobcore.NewJob("J1", nil)
 	if err := store.Create(ctx, job); err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
@@ -283,13 +283,13 @@ func TestJobStore_CRUD(t *testing.T) {
 	if found.ID != "J1" {
 		t.Errorf("expected J1, got %s", found.ID)
 	}
-	found.Status = jobcore.JobStatusRunning
+	found.SetStatus(jobcore.JobStatusRunning)
 	if err := store.Update(ctx, found); err != nil {
 		t.Fatalf("update failed: %v", err)
 	}
 	updated, _ := store.Get(ctx, "J1")
-	if updated.Status != jobcore.JobStatusRunning {
-		t.Errorf("expected running, got %s", updated.Status)
+	if updated.GetStatus() != jobcore.JobStatusRunning {
+		t.Errorf("expected running, got %s", updated.GetStatus())
 	}
 	jobs, _ := store.List(ctx, jobcore.JobStatusRunning)
 	if len(jobs) != 1 {

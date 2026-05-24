@@ -245,19 +245,17 @@ func TestEventBus_PublishRoutesCorrectly(t *testing.T) {
 	}
 }
 
-func TestEventBus_DuplicateSubscription_Panics(t *testing.T) {
+func TestEventBus_DuplicateSubscription_ReturnsError(t *testing.T) {
 	bus := NewEventBus()
 	handler := &testUserEventHandler{}
-	RegisterHandler[*testUserEvent](bus, handler)
+	if err := RegisterHandler[*testUserEvent](bus, handler); err != nil {
+		t.Fatalf("first subscription should succeed: %v", err)
+	}
 
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic for duplicate subscription")
-		}
-	}()
-
-	RegisterHandler[*testUserEvent](bus, handler)
+	err := RegisterHandler[*testUserEvent](bus, handler)
+	if err == nil {
+		t.Fatal("expected error for duplicate subscription")
+	}
 }
 
 func TestEventBus_NilChainGroup(t *testing.T) {

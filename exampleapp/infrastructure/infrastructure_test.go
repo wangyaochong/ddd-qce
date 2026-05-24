@@ -176,7 +176,10 @@ func (h *testEventHandler) Handle(ctx context.Context, evt *testDomainEvent) err
 }
 
 func TestEventStore_Reflect(t *testing.T) {
-	store := eventmemory.NewEventStore[*testDomainEvent]()
+	store, err := eventmemory.NewEventStore[*testDomainEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 	err := store.Append(ctx, "A1", 0, []*testDomainEvent{{ID: "A1", Time: time.Now()}})
 	if err != nil {
@@ -192,9 +195,12 @@ func TestEventStore_Reflect(t *testing.T) {
 }
 
 func TestEventStoreWithFactory(t *testing.T) {
-	store := eventmemory.NewEventStore[*testDomainEvent](eventmemory.WithFactory[*testDomainEvent](func() *testDomainEvent {
+	store, err := eventmemory.NewEventStore[*testDomainEvent](eventmemory.WithFactory[*testDomainEvent](func() *testDomainEvent {
 		return &testDomainEvent{}
 	}))
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 	store.Append(ctx, "A1", 0, []*testDomainEvent{{ID: "A1", Time: time.Now()}})
 	events, _ := store.Load(ctx, "A1", 0)
@@ -204,7 +210,10 @@ func TestEventStoreWithFactory(t *testing.T) {
 }
 
 func TestEventStore_Versioning(t *testing.T) {
-	store := eventmemory.NewEventStore[*testDomainEvent]()
+	store, err := eventmemory.NewEventStore[*testDomainEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 	store.Append(ctx, "A1", 0, []*testDomainEvent{
 		{ID: "A1", Time: time.Now()},
@@ -391,16 +400,17 @@ func TestJobOption_WithMaxRetries(t *testing.T) {
 }
 
 func TestJob_Snapshot(t *testing.T) {
-	job := &jobcore.Job{ID: "J1", Status: jobcore.JobStatusRunning}
+	job := &jobcore.Job{ID: "J1"}
+	job.SetStatus(jobcore.JobStatusRunning)
 	snap := job.Snapshot()
 	if snap.ID != "J1" {
 		t.Error("snapshot ID mismatch")
 	}
-	if snap.Status != jobcore.JobStatusRunning {
+	if snap.GetStatus() != jobcore.JobStatusRunning {
 		t.Error("snapshot Status mismatch")
 	}
-	snap.Status = jobcore.JobStatusCompleted
-	if job.Status == jobcore.JobStatusCompleted {
+	snap.SetStatus(jobcore.JobStatusCompleted)
+	if job.GetStatus() == jobcore.JobStatusCompleted {
 		t.Error("snapshot should be independent from original")
 	}
 }

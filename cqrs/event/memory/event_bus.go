@@ -2,13 +2,13 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"sync"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
+	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/event"
 )
 
@@ -49,16 +49,21 @@ func NewEventBus(opts ...EventBusOption) *EventBus {
 	return b
 }
 
-func (b *EventBus) SubscribeHandler(handler any) {
+func (b *EventBus) SubscribeHandler(handler any) error {
 	handlerType := reflect.TypeOf(handler)
 	evtType, ok := extractEventHandlerEventType(handlerType)
 	if !ok {
-		panic(fmt.Sprintf("SubscribeHandler: handler must implement event.EventHandler[T], got %T", handler))
+		return fmt.Errorf("SubscribeHandler: handler must implement event.EventHandler[T], got %T", handler)
+	}
+
+	invoke, err := makeHandlerInvoker(handler, handlerType)
+	if err != nil {
+		return fmt.Errorf("SubscribeHandler: %w", err)
 	}
 
 	entry := handlerEntry{
 		handler: handler,
-		invoke:  makeHandlerInvoker(handler, handlerType),
+		invoke:  invoke,
 		name:    handlerTypeName(handler),
 	}
 
@@ -67,10 +72,11 @@ func (b *EventBus) SubscribeHandler(handler any) {
 
 	for _, existing := range b.handlers[evtType] {
 		if reflect.ValueOf(existing.handler).Pointer() == reflect.ValueOf(handler).Pointer() {
-			panic(fmt.Sprintf("handler already subscribed for event type: %s", evtType))
+			return fmt.Errorf("handler already subscribed for event type: %s", evtType)
 		}
 	}
 	b.handlers[evtType] = append(b.handlers[evtType], entry)
+	return nil
 }
 
 func (b *EventBus) Publish(ctx context.Context, evt event.DomainEvent) error {
@@ -121,7 +127,14 @@ func (b *EventBus) Publish(ctx context.Context, evt event.DomainEvent) error {
 			errs = append(errs, err)
 		}
 	}
-	return errors.Join(errs...)
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		return ddderror.NewMultiError(errs...)
+	}
 }
 
 func (b *EventBus) HandlerCount(evtType reflect.Type) int {
@@ -130,8 +143,8 @@ func (b *EventBus) HandlerCount(evtType reflect.Type) int {
 	return len(b.handlers[evtType])
 }
 
-func RegisterHandler[T event.DomainEvent](bus *EventBus, handler event.EventHandler[T]) {
-	bus.SubscribeHandler(handler)
+func RegisterHandler[T event.DomainEvent](bus *EventBus, handler event.EventHandler[T]) error {
+	return bus.SubscribeHandler(handler)
 }
 
 func Dispatch[T event.DomainEvent](ctx context.Context, bus *EventBus, evt T) error {
@@ -171,12 +184,12 @@ func extractEventTypeFromHandleMethod(methodType reflect.Type) reflect.Type {
 	return methodType.In(2)
 }
 
-func makeHandlerInvoker(handler any, handlerType reflect.Type) func(ctx context.Context, evt event.DomainEvent) error {
+func makeHandlerInvoker(handler any, handlerType reflect.Type) (func(ctx context.Context, evt event.DomainEvent) error, error) {
 	handleMethod, ok := handlerType.MethodByName("Handle")
 	if !ok {
-		panic(fmt.Sprintf("handler %T does not have a Handle method", handler))
+		return nil, fmt.Errorf("handler %T does not have a Handle method", handler)
 	}
-	return func(ctx context.Context, evt event.DomainEvent) error {
+	invoker := func(ctx context.Context, evt event.DomainEvent) error {
 		args := []reflect.Value{
 			reflect.ValueOf(handler),
 			reflect.ValueOf(ctx),
@@ -190,4 +203,5 @@ func makeHandlerInvoker(handler any, handlerType reflect.Type) func(ctx context.
 		}
 		return nil
 	}
+	return invoker, nil
 }

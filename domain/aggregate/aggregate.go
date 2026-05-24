@@ -77,13 +77,13 @@ func (a *AggregateRoot) forceSetVersion(v int) {
 	a.version = v
 }
 
-func (a *AggregateRoot) SetApplier(applier EventApplier) {
+func (a *AggregateRoot) setApplier(applier EventApplier) {
 	a.applier = applier
 }
 
-func (a *AggregateRoot) Apply(evt event.DomainEvent) {
+func (a *AggregateRoot) Apply(evt event.DomainEvent) error {
 	a.uncommittedEvents = append(a.uncommittedEvents, evt)
-	a.applyEvent(evt)
+	return a.applyEvent(evt)
 }
 
 func (a *AggregateRoot) UncommittedEvents() []event.DomainEvent {
@@ -96,19 +96,23 @@ func (a *AggregateRoot) MarkEventsAsCommitted() {
 	a.uncommittedEvents = nil
 }
 
-func (a *AggregateRoot) LoadFromHistory(events []event.DomainEvent) {
+func (a *AggregateRoot) LoadFromHistory(events []event.DomainEvent) error {
 	for _, evt := range events {
-		a.applyEvent(evt)
+		if err := a.applyEvent(evt); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (a *AggregateRoot) applyEvent(evt event.DomainEvent) {
+func (a *AggregateRoot) applyEvent(evt event.DomainEvent) error {
 	a.version++
 	if a.applier != nil {
 		a.applier.When(evt)
 	} else if !a.skipApplierCheck {
-		panic("AggregateRoot: applier not set, use NewAggregateRootWithApplier(id, self) or NewEventCollector(id)")
+		return fmt.Errorf("AggregateRoot: applier not set, use NewAggregateRootWithApplier(id, self) or NewEventCollector(id)")
 	}
+	return nil
 }
 
 type AggregateRootValidator interface {

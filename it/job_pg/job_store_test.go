@@ -4,37 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	jobcore "github.com/ddd-qce/core/job/core"
 	pgjob "github.com/ddd-qce/core/job/pg"
-	corepg "github.com/ddd-qce/core/pg"
+	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func openTestDBForJob(t *testing.T) *sql.DB {
-	t.Helper()
-	dsn := os.Getenv("TEST_PG_DSN")
-	if dsn == "" {
-		dsn = "host=/var/run/postgresql dbname=ddd_qce_job_test user=root password=root sslmode=disable"
-	}
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("open db failed: %v", err)
-	}
-	if err := db.Ping(); err != nil {
-		t.Fatalf("ping db failed: %v", err)
-	}
-	t.Cleanup(func() {
-		corepg.DropAll(db)
-		db.Close()
-	})
-	if err := corepg.Migrate(db); err != nil {
-		t.Fatalf("migrate failed: %v", err)
-	}
-	return db
+	return testutil.OpenTestDB(t, "ddd_qce_job_test")
 }
 
 func TestPgJobStore_CreateAndGet(t *testing.T) {
@@ -46,12 +26,12 @@ func TestPgJobStore_CreateAndGet(t *testing.T) {
 	job := &jobcore.Job{
 		ID:         "job-1",
 		Command:    map[string]any{"action": "process"},
-		Status:     jobcore.JobStatusPending,
 		CreatedAt:  now,
 		Timeout:    30 * time.Second,
 		MaxRetries: 3,
 		RetryCount: 0,
 	}
+	job.SetStatus(jobcore.JobStatusPending)
 
 	if err := store.Create(ctx, job); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -64,8 +44,8 @@ func TestPgJobStore_CreateAndGet(t *testing.T) {
 	if got.ID != "job-1" {
 		t.Errorf("expected ID 'job-1', got %s", got.ID)
 	}
-	if got.Status != jobcore.JobStatusPending {
-		t.Errorf("expected status pending, got %s", got.Status)
+	if got.GetStatus() != jobcore.JobStatusPending {
+		t.Errorf("expected status pending, got %s", got.GetStatus())
 	}
 }
 
@@ -77,22 +57,22 @@ func TestPgJobStore_Update(t *testing.T) {
 	job := &jobcore.Job{
 		ID:         "job-2",
 		Command:    map[string]any{"action": "run"},
-		Status:     jobcore.JobStatusPending,
 		CreatedAt:  time.Now().Truncate(time.Microsecond),
 		Timeout:    time.Minute,
 		MaxRetries: 3,
 	}
+	job.SetStatus(jobcore.JobStatusPending)
 	store.Create(ctx, job)
 
-	job.Status = jobcore.JobStatusRunning
-	job.StartedAt = time.Now().Truncate(time.Microsecond)
+	job.SetStatus(jobcore.JobStatusRunning)
+	job.SetStartedAt(time.Now().Truncate(time.Microsecond))
 	if err := store.Update(ctx, job); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
 	got, _ := store.Get(ctx, "job-2")
-	if got.Status != jobcore.JobStatusRunning {
-		t.Errorf("expected status running, got %s", got.Status)
+	if got.GetStatus() != jobcore.JobStatusRunning {
+		t.Errorf("expected status running, got %s", got.GetStatus())
 	}
 }
 
@@ -102,9 +82,10 @@ func TestPgJobStore_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	job := &jobcore.Job{
-		ID: "job-3", Command: "delete-me", Status: jobcore.JobStatusPending,
+		ID: "job-3", Command: "delete-me",
 		CreatedAt: time.Now(), Timeout: time.Minute, MaxRetries: 0,
 	}
+	job.SetStatus(jobcore.JobStatusPending)
 	store.Create(ctx, job)
 
 	if err := store.Delete(ctx, "job-3"); err != nil {
@@ -136,9 +117,10 @@ func TestPgJobStore_List(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		job := &jobcore.Job{
 			ID: fmt.Sprintf("job-list-%d", i), Command: "list-test",
-			Status: jobcore.JobStatusPending, CreatedAt: time.Now(),
+			CreatedAt: time.Now(),
 			Timeout: time.Minute, MaxRetries: 0,
 		}
+		job.SetStatus(jobcore.JobStatusPending)
 		store.Create(ctx, job)
 	}
 
@@ -199,10 +181,10 @@ func TestPgJobStore_TypedRoundTrip(t *testing.T) {
 	job := &jobcore.Job{
 		ID:        "job-typed-1",
 		Command:   cmd,
-		Status:    jobcore.JobStatusPending,
 		CreatedAt: time.Now().Truncate(time.Microsecond),
 		Timeout:   time.Minute,
 	}
+	job.SetStatus(jobcore.JobStatusPending)
 
 	if err := store.Create(ctx, job); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -234,14 +216,14 @@ func TestPgJobStore_TypedResultRoundTrip(t *testing.T) {
 	job := &jobcore.Job{
 		ID:        "job-typed-2",
 		Command:   cmd,
-		Status:    jobcore.JobStatusPending,
 		CreatedAt: time.Now().Truncate(time.Microsecond),
 		Timeout:   time.Minute,
 	}
+	job.SetStatus(jobcore.JobStatusPending)
 	store.Create(ctx, job)
 
-	job.Status = jobcore.JobStatusCompleted
-	job.Result = &testGenReportResult{File: "report.pdf"}
+	job.SetStatus(jobcore.JobStatusCompleted)
+	job.SetResult(&testGenReportResult{File: "report.pdf"})
 	if err := store.Update(ctx, job); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -251,9 +233,9 @@ func TestPgJobStore_TypedResultRoundTrip(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	typedResult, ok := got.Result.(*testGenReportResult)
+	typedResult, ok := got.GetResult().(*testGenReportResult)
 	if !ok {
-		t.Fatalf("expected *testGenReportResult, got %T", got.Result)
+		t.Fatalf("expected *testGenReportResult, got %T", got.GetResult())
 	}
 	if typedResult.File != "report.pdf" {
 		t.Errorf("expected file 'report.pdf', got %s", typedResult.File)
@@ -269,10 +251,10 @@ func TestPgJobStore_WithoutRegistry_Fallback(t *testing.T) {
 	job := &jobcore.Job{
 		ID:        "job-fallback-1",
 		Command:   cmd,
-		Status:    jobcore.JobStatusPending,
 		CreatedAt: time.Now().Truncate(time.Microsecond),
 		Timeout:   time.Minute,
 	}
+	job.SetStatus(jobcore.JobStatusPending)
 	store.Create(ctx, job)
 
 	got, err := store.Get(ctx, "job-fallback-1")

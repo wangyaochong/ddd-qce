@@ -46,7 +46,7 @@ func TestOrderAggregate_ConfirmPayment(t *testing.T) {
 func TestOrderAggregate_Ship(t *testing.T) {
 	order := mustCreateOrder("ORD-001", "user-001")
 	order.MarkEventsAsCommitted()
-	order.ConfirmPayment()
+	_ = order.ConfirmPayment()
 	order.MarkEventsAsCommitted()
 	if err := order.Ship(); err != nil {
 		t.Fatalf("ship failed: %v", err)
@@ -79,9 +79,8 @@ func TestOrderAggregate_WithApplier(t *testing.T) {
 
 func TestOrderAggregate_SetApplier(t *testing.T) {
 	o := &Order{UserID: "u1", Status: OrderStatusPending}
-	o.AggregateRoot = *aggregate.NewAggregateRoot("ORD-SET")
-	o.SetApplier(o)
-	o.Apply(&OrderPlacedEvent{OrderID: "ORD-SET", UserID: "u1", TotalAmount: 100, Time: time.Now()})
+	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier("ORD-SET", o)
+	_ = o.Apply(&OrderPlacedEvent{OrderID: "ORD-SET", UserID: "u1", TotalAmount: 100, Time: time.Now()})
 	if o.UserID != "u1" {
 		t.Errorf("When not applied via SetApplier, got UserID=%s", o.UserID)
 	}
@@ -92,7 +91,7 @@ func TestOrderAggregate_SetApplier(t *testing.T) {
 
 func TestEventCollector_EventsOnly(t *testing.T) {
 	ar := NewOrderEventCollector("COLLECT-001")
-	ar.Apply(&OrderPlacedEvent{OrderID: "COLLECT-001", UserID: "u1", TotalAmount: 50, Time: time.Now()})
+	_ = ar.Apply(&OrderPlacedEvent{OrderID: "COLLECT-001", UserID: "u1", TotalAmount: 50, Time: time.Now()})
 	if len(ar.UncommittedEvents()) != 1 {
 		t.Errorf("expected 1 event, got %d", len(ar.UncommittedEvents()))
 	}
@@ -121,8 +120,8 @@ func TestOrderAggregate_InvalidTransition(t *testing.T) {
 	if err := order.Ship(); err == nil {
 		t.Error("expected error: cannot ship pending order")
 	}
-	order.ConfirmPayment()
-	order.Cancel("test")
+	_ = order.ConfirmPayment()
+	_ = order.Cancel("test")
 	if err := order.Ship(); err == nil {
 		t.Error("expected error: cannot ship cancelled order")
 	}
@@ -130,9 +129,8 @@ func TestOrderAggregate_InvalidTransition(t *testing.T) {
 
 func TestOrderAggregate_When(t *testing.T) {
 	o := &Order{}
-	o.AggregateRoot = *aggregate.NewAggregateRoot("ORD-WHEN")
-	o.SetApplier(o)
-	o.LoadFromHistory([]event.DomainEvent{
+	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier("ORD-WHEN", o)
+	_ = o.LoadFromHistory([]event.DomainEvent{
 		&OrderPlacedEvent{OrderID: "ORD-WHEN", UserID: "u1", TotalAmount: 200, Time: time.Now()},
 		&PaymentConfirmedEvent{OrderID: "ORD-WHEN", Time: time.Now()},
 	})
@@ -146,8 +144,8 @@ func TestOrderAggregate_When(t *testing.T) {
 
 func TestOrderItem_EntityBasics(t *testing.T) {
 	item := NewOrderItem("p1", "Laptop", 999, 2)
-	if item.ID != "p1" {
-		t.Errorf("expected p1, got %s", item.ID)
+	if item.GetID() != "p1" {
+		t.Errorf("expected p1, got %s", item.GetID())
 	}
 	if item.Subtotal() != 1998 {
 		t.Errorf("expected 1998, got %.2f", item.Subtotal())

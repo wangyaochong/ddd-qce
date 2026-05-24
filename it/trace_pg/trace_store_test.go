@@ -4,37 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
-	corepg "github.com/ddd-qce/core/pg"
 	pgtrace "github.com/ddd-qce/core/trace/pg"
 	"github.com/ddd-qce/core/trace"
+	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func openTestDBForTrace(t *testing.T) *sql.DB {
-	t.Helper()
-	dsn := os.Getenv("TEST_PG_DSN")
-	if dsn == "" {
-		dsn = "host=/var/run/postgresql dbname=ddd_qce_trace_test user=root password=root sslmode=disable"
-	}
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("open db failed: %v", err)
-	}
-	if err := db.Ping(); err != nil {
-		t.Fatalf("ping db failed: %v", err)
-	}
-	t.Cleanup(func() {
-		corepg.DropAll(db)
-		db.Close()
-	})
-	if err := corepg.Migrate(db); err != nil {
-		t.Fatalf("migrate failed: %v", err)
-	}
-	return db
+	return testutil.OpenTestDB(t, "ddd_qce_trace_test")
 }
 
 func TestPgTraceStore_RecordAndGetTrace(t *testing.T) {

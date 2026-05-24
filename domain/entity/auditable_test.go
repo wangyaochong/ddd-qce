@@ -10,8 +10,8 @@ func TestNewAuditableEntity(t *testing.T) {
 	e := NewAuditableEntity("user-1")
 	after := time.Now()
 
-	if e.ID != "user-1" {
-		t.Errorf("expected ID 'user-1', got '%s'", e.ID)
+	if e.GetID() != "user-1" {
+		t.Errorf("expected ID 'user-1', got '%s'", e.GetID())
 	}
 	if e.CreatedAt.Before(before) || e.CreatedAt.After(after) {
 		t.Errorf("expected CreatedAt between %v and %v, got %v", before, after, e.CreatedAt)
@@ -71,8 +71,8 @@ func TestNewAuditableEntityFromData(t *testing.T) {
 	ut := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	e := NewAuditableEntityFromData("user-1", ct, ut)
 
-	if e.ID != "user-1" {
-		t.Errorf("expected ID 'user-1', got '%s'", e.ID)
+	if e.GetID() != "user-1" {
+		t.Errorf("expected ID 'user-1', got '%s'", e.GetID())
 	}
 	if e.CreatedAt != ct {
 		t.Errorf("expected CreatedAt %v, got %v", ct, e.CreatedAt)

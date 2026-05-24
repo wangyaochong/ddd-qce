@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ddd-qce/core/cqrs/command"
+	ddderror "github.com/ddd-qce/core/error"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )
@@ -20,6 +21,8 @@ type JobManager struct {
 	cancelers    map[string]context.CancelFunc
 	jobs         map[string]*jobcore.Job
 	onStoreError jobcore.StoreErrorHandler
+	wg           sync.WaitGroup
+	stopCh       chan struct{}
 }
 
 func NewJobManager(store jobcore.JobStore, executor command.CommandExecutor, opts ...JobManagerOption) *JobManager {
@@ -28,6 +31,7 @@ func NewJobManager(store jobcore.JobStore, executor command.CommandExecutor, opt
 		executor:  executor,
 		cancelers: make(map[string]context.CancelFunc),
 		jobs:      make(map[string]*jobcore.Job),
+		stopCh:    make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -55,17 +59,7 @@ func (m *JobManager) handleStoreError(ctx context.Context, jobID string, operati
 }
 
 func (m *JobManager) Submit(ctx context.Context, cmd any, opts ...jobcore.JobOption) (*jobcore.Job, error) {
-	job := &jobcore.Job{
-		ID:         uuid.New().String(),
-		Command:    cmd,
-		Status:     jobcore.JobStatusPending,
-		CreatedAt:  time.Now(),
-		MaxRetries: 0,
-	}
-
-	for _, opt := range opts {
-		opt(job)
-	}
+	job := jobcore.NewJob(uuid.New().String(), cmd, opts...)
 
 	if err := m.store.Create(ctx, job); err != nil {
 		return nil, err
@@ -75,11 +69,14 @@ func (m *JobManager) Submit(ctx context.Context, cmd any, opts ...jobcore.JobOpt
 	m.jobs[job.ID] = job
 	m.mu.Unlock()
 
+	m.wg.Add(1)
 	go m.executeJob(job, trace.GetTraceID(ctx), trace.GetSpanID(ctx))
 	return job, nil
 }
 
 func (m *JobManager) executeJob(job *jobcore.Job, parentTraceID, parentSpanID string) {
+	defer m.wg.Done()
+
 	bgCtx := context.Background()
 	if parentTraceID != "" {
 		spanID := trace.NewSpanID()
@@ -88,10 +85,13 @@ func (m *JobManager) executeJob(job *jobcore.Job, parentTraceID, parentSpanID st
 	}
 
 	for {
-		job.Lock()
-		job.Status = jobcore.JobStatusRunning
-		job.StartedAt = time.Now()
-		job.Unlock()
+		select {
+		case <-m.stopCh:
+			return
+		default:
+		}
+
+		job.MarkRunning()
 
 		if err := m.store.Update(bgCtx, job); err != nil {
 			m.handleStoreError(bgCtx, job.ID, "update_running", err)
@@ -111,39 +111,30 @@ func (m *JobManager) executeJob(job *jobcore.Job, parentTraceID, parentSpanID st
 		m.mu.Unlock()
 
 		result, err := m.executor.Execute(execCtx, job.Command)
+		cancel()
 
 		m.mu.Lock()
 		delete(m.cancelers, job.ID)
 		m.mu.Unlock()
 
-		job.Lock()
-		job.CompletedAt = time.Now()
 		if err != nil {
-			if job.Status == jobcore.JobStatusCancelled {
-				job.Unlock()
+			cancelled, shouldRetry := job.TryFail(err.Error())
+			if cancelled {
 				job.MarkDone()
 				break
 			}
-			job.Status = jobcore.JobStatusFailed
-			job.Error = err.Error()
-			if job.RetryCount < job.MaxRetries {
-				job.RetryCount++
-				job.Unlock()
+			if shouldRetry {
 				if err := m.store.Update(bgCtx, job); err != nil {
 					m.handleStoreError(bgCtx, job.ID, "update_retry", err)
 				}
 				continue
 			}
 		} else {
-			if job.Status == jobcore.JobStatusCancelled {
-				job.Unlock()
+			if !job.TryComplete(result) {
 				job.MarkDone()
 				break
 			}
-			job.Status = jobcore.JobStatusCompleted
-			job.Result = result
 		}
-		job.Unlock()
 
 		if err := m.store.Update(bgCtx, job); err != nil {
 			m.handleStoreError(bgCtx, job.ID, "update_final", err)
@@ -163,10 +154,8 @@ func (m *JobManager) Cancel(ctx context.Context, jobID string) error {
 	m.mu.Unlock()
 
 	if liveExists {
-		liveJob.Lock()
-		if liveJob.Status == jobcore.JobStatusCompleted || liveJob.Status == jobcore.JobStatusCancelled {
-			liveJob.Unlock()
-			return fmt.Errorf("job %s cannot be cancelled (status: %s)", jobID, liveJob.Status)
+		if err := liveJob.TryCancel(); err != nil {
+			return err
 		}
 
 		m.mu.Lock()
@@ -177,9 +166,6 @@ func (m *JobManager) Cancel(ctx context.Context, jobID string) error {
 			cancel()
 		}
 
-		liveJob.Status = jobcore.JobStatusCancelled
-		liveJob.CompletedAt = time.Now()
-		liveJob.Unlock()
 		liveJob.MarkDone()
 
 		if err := m.store.Update(ctx, liveJob); err != nil {
@@ -193,15 +179,9 @@ func (m *JobManager) Cancel(ctx context.Context, jobID string) error {
 		return err
 	}
 
-	job.Lock()
-	if job.Status == jobcore.JobStatusCompleted || job.Status == jobcore.JobStatusCancelled {
-		job.Unlock()
-		return fmt.Errorf("job %s cannot be cancelled (status: %s)", jobID, job.Status)
+	if err := job.TryCancel(); err != nil {
+		return err
 	}
-
-	job.Status = jobcore.JobStatusCancelled
-	job.CompletedAt = time.Now()
-	job.Unlock()
 
 	return m.store.Update(ctx, job)
 }
@@ -212,18 +192,9 @@ func (m *JobManager) Retry(ctx context.Context, jobID string) error {
 	m.mu.Unlock()
 
 	if liveExists {
-		liveJob.Lock()
-		if liveJob.Status != jobcore.JobStatusFailed {
-			liveJob.Unlock()
-			return fmt.Errorf("job %s is not in failed state", jobID)
+		if err := liveJob.ResetForRetry(); err != nil {
+			return err
 		}
-
-		liveJob.Status = jobcore.JobStatusPending
-		liveJob.Error = ""
-		liveJob.Result = nil
-		liveJob.StartedAt = time.Time{}
-		liveJob.CompletedAt = time.Time{}
-		liveJob.Unlock()
 
 		liveJob.ResetDone()
 
@@ -231,6 +202,7 @@ func (m *JobManager) Retry(ctx context.Context, jobID string) error {
 			return fmt.Errorf("failed to reset job for retry: %w", err)
 		}
 
+		m.wg.Add(1)
 		go m.executeJob(liveJob, trace.GetTraceID(ctx), trace.GetSpanID(ctx))
 		return nil
 	}
@@ -240,18 +212,9 @@ func (m *JobManager) Retry(ctx context.Context, jobID string) error {
 		return err
 	}
 
-	job.Lock()
-	if job.Status != jobcore.JobStatusFailed {
-		job.Unlock()
-		return fmt.Errorf("job %s is not in failed state", jobID)
+	if err := job.ResetForRetry(); err != nil {
+		return err
 	}
-
-	job.Status = jobcore.JobStatusPending
-	job.Error = ""
-	job.Result = nil
-	job.StartedAt = time.Time{}
-	job.CompletedAt = time.Time{}
-	job.Unlock()
 
 	job.ResetDone()
 
@@ -263,6 +226,7 @@ func (m *JobManager) Retry(ctx context.Context, jobID string) error {
 	m.jobs[job.ID] = job
 	m.mu.Unlock()
 
+	m.wg.Add(1)
 	go m.executeJob(job, trace.GetTraceID(ctx), trace.GetSpanID(ctx))
 	return nil
 }
@@ -273,7 +237,7 @@ func (m *JobManager) Wait(ctx context.Context, jobID string, timeout time.Durati
 	m.mu.Unlock()
 
 	if !exists {
-		return nil, fmt.Errorf("job %s not found", jobID)
+		return nil, fmt.Errorf("job %s: %w", jobID, ddderror.ErrJobNotFound)
 	}
 
 	select {
@@ -288,4 +252,28 @@ func (m *JobManager) Wait(ctx context.Context, jobID string, timeout time.Durati
 
 func (m *JobManager) ListByStatus(ctx context.Context, status jobcore.JobStatus) ([]*jobcore.Job, error) {
 	return m.store.List(ctx, status)
+}
+
+func (m *JobManager) Shutdown(ctx context.Context) error {
+	close(m.stopCh)
+
+	m.mu.Lock()
+	for id, cancel := range m.cancelers {
+		cancel()
+		delete(m.cancelers, id)
+	}
+	m.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		m.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

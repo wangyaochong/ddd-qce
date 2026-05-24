@@ -2,6 +2,7 @@ package aspect
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -117,6 +118,8 @@ func (c *AspectChain) runQueryAspects(
 	if afterErr := a.AfterQuery(newCtx, query, result, err, duration); afterErr != nil {
 		if err == nil {
 			err = afterErr
+		} else {
+			err = errors.Join(err, afterErr)
 		}
 	}
 
@@ -160,6 +163,8 @@ func (c *AspectChain) runCommandAspects(
 	if afterErr := a.AfterCommand(newCtx, cmd, result, err, duration); afterErr != nil {
 		if err == nil {
 			err = afterErr
+		} else {
+			err = errors.Join(err, afterErr)
 		}
 	}
 
@@ -203,6 +208,8 @@ func (c *AspectChain) runEventAspects(
 	if afterErr := a.AfterPublish(newCtx, event, err, duration); afterErr != nil {
 		if err == nil {
 			err = afterErr
+		} else {
+			err = errors.Join(err, afterErr)
 		}
 	}
 

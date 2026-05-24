@@ -146,7 +146,7 @@ func (s *sameRefJobStore) List(ctx context.Context, status jobcore.JobStatus) ([
 	defer s.mu.RUnlock()
 	var result []*jobcore.Job
 	for _, job := range s.jobs {
-		if job.Status == status {
+		if job.GetStatus() == status {
 			result = append(result, job)
 		}
 	}
@@ -192,8 +192,8 @@ func TestJobManager_CancelledJob_ErrorDuringExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCancelled {
-		t.Errorf("expected cancelled, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", result.GetStatus())
 	}
 }
 
@@ -229,8 +229,8 @@ func TestJobManager_CancelledJob_SuccessDuringExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCancelled {
-		t.Errorf("expected cancelled, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", result.GetStatus())
 	}
 }
 
@@ -276,8 +276,8 @@ func TestJobManager_Cancel_SecondGetFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCancelled {
-		t.Errorf("expected cancelled, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", result.GetStatus())
 	}
 }
 
@@ -296,8 +296,8 @@ func TestJobManager_Cancel_AlreadyCompletedOnSecondGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCompleted {
-		t.Fatalf("expected completed, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCompleted {
+		t.Fatalf("expected completed, got %s", result.GetStatus())
 	}
 
 	err = manager.Cancel(ctx, job.ID)
@@ -347,7 +347,7 @@ func TestJobManager_Cancel_JobCompletedBetweenGets(t *testing.T) {
 			return nil, err
 		}
 		if getCount == 2 {
-			job.Status = jobcore.JobStatusCompleted
+			job.SetStatus(jobcore.JobStatusCompleted)
 		}
 		return job, nil
 	}
@@ -384,7 +384,7 @@ func TestJobManager_Cancel_JobCancelledBetweenGets(t *testing.T) {
 			return nil, err
 		}
 		if getCount == 2 {
-			job.Status = jobcore.JobStatusCancelled
+			job.SetStatus(jobcore.JobStatusCancelled)
 		}
 		return job, nil
 	}

@@ -39,13 +39,13 @@ func NewCommandBus(opts ...CommandBusOption) *CommandBus {
 	return b
 }
 
-func RegisterCommand[T command.Command, R any](bus *CommandBus, handler command.CommandHandler[T, R]) {
+func RegisterCommand[T command.Command, R any](bus *CommandBus, handler command.CommandHandler[T, R]) error {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
 	var zero T
 	cmdType := reflect.TypeOf(zero)
-	if _, exists := bus.handlers[cmdType]; exists {
-		panic(fmt.Sprintf("handler already registered for command type: %s", cmdType))
+	if existing, exists := bus.handlers[cmdType]; exists {
+		return fmt.Errorf("handler already registered for command type %T (existing: %T, new: %T)", zero, existing, handler)
 	}
 	bus.handlers[cmdType] = handler
 	bus.invokers[cmdType] = func(cmd any, ctx context.Context) (any, error) {
@@ -56,6 +56,7 @@ func RegisterCommand[T command.Command, R any](bus *CommandBus, handler command.
 		}
 		return handler.Handle(ctx, typedCmd)
 	}
+	return nil
 }
 
 func Dispatch[T command.Command, R any](ctx context.Context, bus *CommandBus, cmd T) (R, error) {

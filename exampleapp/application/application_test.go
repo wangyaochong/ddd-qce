@@ -198,8 +198,8 @@ func TestOrderRepository_CRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find failed: %v", err)
 	}
-	if found.ID != "ORD-CRUD" {
-		t.Errorf("expected ORD-CRUD, got %s", found.ID)
+	if found.GetID() != "ORD-CRUD" {
+		t.Errorf("expected ORD-CRUD, got %s", found.GetID())
 	}
 	if err := repo.Delete(ctx, "ORD-CRUD"); err != nil {
 		t.Fatalf("delete failed: %v", err)
@@ -228,8 +228,8 @@ func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
-	if loaded.ID != "ORD-ES1" {
-		t.Errorf("expected ORD-ES1, got %s", loaded.ID)
+	if loaded.GetID() != "ORD-ES1" {
+		t.Errorf("expected ORD-ES1, got %s", loaded.GetID())
 	}
 	if loaded.UserID != "user-001" {
 		t.Errorf("expected user-001, got %s", loaded.UserID)
@@ -266,8 +266,8 @@ func TestEventSourcedRepo_MultipleEventTypes(t *testing.T) {
 	order, _ := domain.NewOrder("ORD-MT", "user-001", []*domain.OrderItem{
 		domain.NewOrderItem("laptop", "Laptop", 999, 1),
 	})
-	order.ConfirmPayment()
-	order.Ship()
+	_ = order.ConfirmPayment()
+	_ = order.Ship()
 	if err := esRepo.Save(ctx, order); err != nil {
 		t.Fatalf("save failed: %v", err)
 	}

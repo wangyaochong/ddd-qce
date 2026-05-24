@@ -1,6 +1,7 @@
 package pgx
 
 import (
+	"context"
 	"database/sql"
 
 	pgmsg "github.com/ddd-qce/core/aspect/builtin/pg"
@@ -10,6 +11,14 @@ import (
 	pgtrace "github.com/ddd-qce/core/trace/pg"
 )
 
+type pgMigrator struct {
+	db *sql.DB
+}
+
+func (m *pgMigrator) Migrate(_ context.Context) error {
+	return corepg.Migrate(m.db)
+}
+
 func NewPGBackend(db *sql.DB, opts ...infra.BackendOption) *infra.Backend {
 	jobStoreOpts := []pgjob.JobStoreOption{}
 	defaults := []infra.BackendOption{
@@ -17,7 +26,7 @@ func NewPGBackend(db *sql.DB, opts ...infra.BackendOption) *infra.Backend {
 		infra.WithJobStore(pgjob.NewJobStore(db, jobStoreOpts...)),
 		infra.WithTraceStore(pgtrace.NewTraceStore(db)),
 		infra.WithMessageStore(pgmsg.NewMessageStore(db)),
-		infra.WithMigrate(func() error { return corepg.Migrate(db) }),
+		infra.WithMigrator(&pgMigrator{db: db}),
 	}
 	return infra.NewBackend(append(defaults, opts...)...)
 }

@@ -11,7 +11,7 @@ type AuditableEntity struct {
 func NewAuditableEntity(id string) *AuditableEntity {
 	now := time.Now()
 	return &AuditableEntity{
-		Entity:    Entity{ID: id},
+		Entity:    Entity{id: id},
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -19,7 +19,7 @@ func NewAuditableEntity(id string) *AuditableEntity {
 
 func NewAuditableEntityFromData(id string, createdAt, updatedAt time.Time) *AuditableEntity {
 	return &AuditableEntity{
-		Entity:    Entity{ID: id},
+		Entity:    Entity{id: id},
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
 	}

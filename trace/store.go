@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	ddderror "github.com/ddd-qce/core/error"
 )
 
 type TraceStore interface {
@@ -41,7 +43,7 @@ func (s *InMemoryTraceStore) GetTrace(ctx context.Context, traceID string) ([]*S
 
 	indexes, exists := s.traceIndex[traceID]
 	if !exists {
-		return nil, fmt.Errorf("trace %s not found", traceID)
+		return nil, fmt.Errorf("trace %s: %w", traceID, ddderror.ErrNotFound)
 	}
 
 	result := make([]*Span, len(indexes))

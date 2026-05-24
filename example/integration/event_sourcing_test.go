@@ -61,8 +61,14 @@ func (s *OrderState) ApplyCancelled(event *orderCancelled) {
 func TestEventSourcing_CreateApplySaveLoadReplay(t *testing.T) {
 	ctx := context.Background()
 
-	createdStore := eventmemory.NewEventStore[*orderCreated]()
-	confirmedStore := eventmemory.NewEventStore[*orderConfirmed]()
+	createdStore, err := eventmemory.NewEventStore[*orderCreated]()
+	if err != nil {
+		t.Fatalf("create created store: %v", err)
+	}
+	confirmedStore, err := eventmemory.NewEventStore[*orderConfirmed]()
+	if err != nil {
+		t.Fatalf("create confirmed store: %v", err)
+	}
 
 	createdEvents := []*orderCreated{
 		{OrderID: "ORD-001", UserID: "user-001", Amount: 99.99},
@@ -114,7 +120,10 @@ func TestEventSourcing_CreateApplySaveLoadReplay(t *testing.T) {
 
 func TestEventSourcing_MultipleAggregates(t *testing.T) {
 	ctx := context.Background()
-	store := eventmemory.NewEventStore[*orderCreated]()
+	store, err := eventmemory.NewEventStore[*orderCreated]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 
 	events := []*orderCreated{
 		{OrderID: "ORD-001", UserID: "user-001", Amount: 100.00},
@@ -147,7 +156,10 @@ func TestEventSourcing_MultipleAggregates(t *testing.T) {
 
 func TestEventSourcing_Versioning(t *testing.T) {
 	ctx := context.Background()
-	store := eventmemory.NewEventStore[*orderCreated]()
+	store, err := eventmemory.NewEventStore[*orderCreated]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 
 	events := []*orderCreated{
 		{OrderID: "ORD-001", UserID: "user-001", Amount: 100.00},
@@ -187,9 +199,18 @@ func TestEventSourcing_Versioning(t *testing.T) {
 
 func TestEventSourcing_FullReplay(t *testing.T) {
 	ctx := context.Background()
-	createdStore := eventmemory.NewEventStore[*orderCreated]()
-	confirmedStore := eventmemory.NewEventStore[*orderConfirmed]()
-	cancelledStore := eventmemory.NewEventStore[*orderCancelled]()
+	createdStore, err := eventmemory.NewEventStore[*orderCreated]()
+	if err != nil {
+		t.Fatalf("create created store: %v", err)
+	}
+	confirmedStore, err := eventmemory.NewEventStore[*orderConfirmed]()
+	if err != nil {
+		t.Fatalf("create confirmed store: %v", err)
+	}
+	cancelledStore, err := eventmemory.NewEventStore[*orderCancelled]()
+	if err != nil {
+		t.Fatalf("create cancelled store: %v", err)
+	}
 
 	createdStore.Append(ctx, "ORD-001", 0, []*orderCreated{
 		{OrderID: "ORD-001", UserID: "user-001", Amount: 500.00},

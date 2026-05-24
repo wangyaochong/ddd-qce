@@ -7,8 +7,8 @@ import (
 
 func TestNewSoftDeletableEntity(t *testing.T) {
 	e := NewSoftDeletableEntity("doc-1")
-	if e.ID != "doc-1" {
-		t.Errorf("expected ID 'doc-1', got '%s'", e.ID)
+	if e.GetID() != "doc-1" {
+		t.Errorf("expected ID 'doc-1', got '%s'", e.GetID())
 	}
 	if e.IsDeleted() {
 		t.Error("expected new soft deletable entity to not be deleted")
@@ -83,8 +83,8 @@ func TestNewSoftDeletableEntityFromData(t *testing.T) {
 	dt := time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
 	e := NewSoftDeletableEntityFromData("doc-1", ct, ut, &dt)
 
-	if e.ID != "doc-1" {
-		t.Errorf("expected ID 'doc-1', got '%s'", e.ID)
+	if e.GetID() != "doc-1" {
+		t.Errorf("expected ID 'doc-1', got '%s'", e.GetID())
 	}
 	if !e.IsDeleted() {
 		t.Error("expected entity to be deleted")

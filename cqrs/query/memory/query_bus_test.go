@@ -213,23 +213,16 @@ func TestQueryBus_WithAspects(t *testing.T) {
 	}
 }
 
-func TestQueryBus_DuplicateRegistration_Panics(t *testing.T) {
+func TestQueryBus_DuplicateRegistration_ReturnsError(t *testing.T) {
 	bus := NewQueryBus()
-	RegisterQuery(bus, &testGetUserHandler{})
+	if err := RegisterQuery(bus, &testGetUserHandler{}); err != nil {
+		t.Fatalf("first registration should succeed: %v", err)
+	}
 
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic for duplicate registration")
-		}
-		msg := r.(string)
-		expected := "handler already registered for query type: *memory.testGetUserQuery"
-		if msg != expected {
-			t.Errorf("expected panic message %q, got %q", expected, msg)
-		}
-	}()
-
-	RegisterQuery(bus, &testGetUserHandler{})
+	err := RegisterQuery(bus, &testGetUserHandler{})
+	if err == nil {
+		t.Fatal("expected error for duplicate registration")
+	}
 }
 
 type testQueryAspect struct {

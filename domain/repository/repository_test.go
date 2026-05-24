@@ -13,14 +13,12 @@ import (
 
 type TestAggregate struct {
 	*aggregate.AggregateRoot
-	ID      string
 	Name    string
 	Version int
 }
 
 func NewTestAggregate(id, name string) *TestAggregate {
 	ta := &TestAggregate{
-		ID:      id,
 		Name:    name,
 		Version: 0,
 	}
@@ -52,7 +50,7 @@ func NewInMemoryRepository() *InMemoryRepository {
 func (r *InMemoryRepository) Save(ctx context.Context, agg *TestAggregate) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.aggregates[agg.ID] = agg
+	r.aggregates[agg.GetID()] = agg
 	return nil
 }
 
@@ -88,7 +86,7 @@ func (r *InMemoryEventSourcingRepository) Save(ctx context.Context, agg *TestAgg
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	events := agg.UncommittedEvents()
-	r.events[agg.ID] = append(r.events[agg.ID], events...)
+	r.events[agg.GetID()] = append(r.events[agg.GetID()], events...)
 	agg.MarkEventsAsCommitted()
 	return nil
 }
@@ -120,8 +118,8 @@ func TestRepository_SaveAndFindByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on find: %v", err)
 	}
-	if loaded.ID != "agg-001" {
-		t.Errorf("expected ID 'agg-001', got %s", loaded.ID)
+	if loaded.GetID() != "agg-001" {
+		t.Errorf("expected ID 'agg-001', got %s", loaded.GetID())
 	}
 	if loaded.Name != "Test Aggregate" {
 		t.Errorf("expected name 'Test Aggregate', got %s", loaded.Name)
@@ -176,8 +174,8 @@ func TestEventSourcingRepository_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on load: %v", err)
 	}
-	if loaded.ID != "agg-003" {
-		t.Errorf("expected ID 'agg-003', got %s", loaded.ID)
+	if loaded.GetID() != "agg-003" {
+		t.Errorf("expected ID 'agg-003', got %s", loaded.GetID())
 	}
 }
 

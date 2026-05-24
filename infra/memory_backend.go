@@ -13,6 +13,7 @@ import (
 type memTxKey struct{}
 
 type memTxState struct {
+	mu      sync.Mutex
 	depth   int
 	aborted bool
 }
@@ -27,9 +28,9 @@ func NewMemoryTransactionManager() *MemoryTransactionManager {
 
 func (m *MemoryTransactionManager) Begin(ctx context.Context) (context.Context, error) {
 	if state, ok := ctx.Value(memTxKey{}).(*memTxState); ok {
-		m.mu.Lock()
+		state.mu.Lock()
 		state.depth++
-		m.mu.Unlock()
+		state.mu.Unlock()
 		return ctx, nil
 	}
 	state := &memTxState{depth: 1}
@@ -38,12 +39,15 @@ func (m *MemoryTransactionManager) Begin(ctx context.Context) (context.Context, 
 
 func (m *MemoryTransactionManager) Commit(ctx context.Context) error {
 	state, ok := ctx.Value(memTxKey{}).(*memTxState)
-	if !ok || state.depth <= 0 {
+	if !ok {
 		return fmt.Errorf("no transaction in context")
 	}
-	m.mu.Lock()
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.depth <= 0 {
+		return fmt.Errorf("no transaction in context")
+	}
 	state.depth--
-	m.mu.Unlock()
 
 	if state.depth > 0 {
 		if state.aborted {
@@ -59,13 +63,16 @@ func (m *MemoryTransactionManager) Commit(ctx context.Context) error {
 
 func (m *MemoryTransactionManager) Rollback(ctx context.Context) error {
 	state, ok := ctx.Value(memTxKey{}).(*memTxState)
-	if !ok || state.depth <= 0 {
+	if !ok {
 		return fmt.Errorf("no transaction in context")
 	}
-	m.mu.Lock()
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.depth <= 0 {
+		return fmt.Errorf("no transaction in context")
+	}
 	state.aborted = true
 	state.depth--
-	m.mu.Unlock()
 	return nil
 }
 
@@ -75,7 +82,7 @@ func NewMemoryBackend(opts ...BackendOption) *Backend {
 		WithJobStore(jobmemory.NewJobStore()),
 		WithTraceStore(trace.NewInMemoryTraceStore()),
 		WithMessageStore(builtin.NewNopMessageStore()),
-		WithMigrate(func() error { return nil }),
+		WithMigrator(NopMigrator{}),
 	}
 	return NewBackend(append(defaults, opts...)...)
 }

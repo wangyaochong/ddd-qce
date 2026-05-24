@@ -23,21 +23,126 @@ type Job struct {
 	ID          string
 	Command     any
 	CommandType string
-	Status      JobStatus
-	Result      any
-	ResultType  string
-	Error       string
+	status      JobStatus
+	result      any
+	resultType  string
+	err         string
 	CreatedAt   time.Time
-	StartedAt   time.Time
-	CompletedAt time.Time
+	startedAt   time.Time
+	completedAt time.Time
 	Timeout     time.Duration
 	RetryCount  int
 	MaxRetries  int
 	done        chan struct{}
 }
 
-func (j *Job) Lock()   { j.mu.Lock() }
-func (j *Job) Unlock() { j.mu.Unlock() }
+func NewJob(id string, cmd any, opts ...JobOption) *Job {
+	job := &Job{
+		ID:        id,
+		Command:   cmd,
+		status:    JobStatusPending,
+		CreatedAt: time.Now(),
+	}
+	for _, opt := range opts {
+		opt(job)
+	}
+	return job
+}
+
+func (j *Job) GetStatus() JobStatus      { return j.status }
+func (j *Job) GetResult() any            { return j.result }
+func (j *Job) GetResultType() string     { return j.resultType }
+func (j *Job) GetError() string          { return j.err }
+func (j *Job) GetStartedAt() time.Time   { return j.startedAt }
+func (j *Job) GetCompletedAt() time.Time { return j.completedAt }
+
+// SetStatus sets the job status. Infrastructure-only: for constructing Job objects from persistence.
+func (j *Job) SetStatus(s JobStatus) { j.status = s }
+
+// SetResult sets the job result. Infrastructure-only: for constructing Job objects from persistence.
+func (j *Job) SetResult(r any) { j.result = r }
+
+// SetResultType sets the job result type. Infrastructure-only: for constructing Job objects from persistence.
+func (j *Job) SetResultType(rt string) { j.resultType = rt }
+
+// SetError sets the job error. Infrastructure-only: for constructing Job objects from persistence.
+func (j *Job) SetError(e string) { j.err = e }
+
+// SetStartedAt sets the job start time. Infrastructure-only: for constructing Job objects from persistence.
+func (j *Job) SetStartedAt(t time.Time) { j.startedAt = t }
+
+// SetCompletedAt sets the job completion time. Infrastructure-only: for constructing Job objects from persistence.
+func (j *Job) SetCompletedAt(t time.Time) { j.completedAt = t }
+
+// MarkRunning atomically sets the job status to running and records the start time.
+func (j *Job) MarkRunning() {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.status = JobStatusRunning
+	j.startedAt = time.Now()
+}
+
+// TryComplete atomically attempts to mark the job as completed with the given result.
+// Returns false if the job was already cancelled.
+func (j *Job) TryComplete(result any) bool {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.status == JobStatusCancelled {
+		return false
+	}
+	j.completedAt = time.Now()
+	j.status = JobStatusCompleted
+	j.result = result
+	return true
+}
+
+// TryFail atomically attempts to mark the job as failed with the given error message.
+// Returns cancelled=true if the job was already cancelled.
+// Returns shouldRetry=true if the job should be retried (retry count incremented).
+func (j *Job) TryFail(errStr string) (cancelled bool, shouldRetry bool) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.completedAt = time.Now()
+	if j.status == JobStatusCancelled {
+		return true, false
+	}
+	j.status = JobStatusFailed
+	j.err = errStr
+	if j.RetryCount < j.MaxRetries {
+		j.RetryCount++
+		return false, true
+	}
+	return false, false
+}
+
+// TryCancel atomically attempts to mark the job as cancelled.
+// Returns an error if the job is already completed or cancelled.
+func (j *Job) TryCancel() error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.status == JobStatusCompleted || j.status == JobStatusCancelled {
+		return fmt.Errorf("job %s cannot be cancelled (status: %s)", j.ID, j.status)
+	}
+	j.status = JobStatusCancelled
+	j.completedAt = time.Now()
+	return nil
+}
+
+// ResetForRetry atomically resets the job for retry if it is in a failed state.
+// Returns an error if the job is not in a failed state.
+func (j *Job) ResetForRetry() error {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.status != JobStatusFailed {
+		return fmt.Errorf("job %s is not in failed state", j.ID)
+	}
+	j.status = JobStatusPending
+	j.err = ""
+	j.result = nil
+	j.startedAt = time.Time{}
+	j.completedAt = time.Time{}
+	return nil
+}
 
 func (j *Job) Done() <-chan struct{} {
 	j.mu.Lock()
@@ -74,13 +179,13 @@ func (j *Job) Snapshot() *Job {
 		ID:          j.ID,
 		Command:     j.Command,
 		CommandType: j.CommandType,
-		Status:      j.Status,
-		Result:      j.Result,
-		ResultType:  j.ResultType,
-		Error:       j.Error,
+		status:      j.status,
+		result:      j.result,
+		resultType:  j.resultType,
+		err:         j.err,
 		CreatedAt:   j.CreatedAt,
-		StartedAt:   j.StartedAt,
-		CompletedAt: j.CompletedAt,
+		startedAt:   j.startedAt,
+		completedAt: j.completedAt,
 		Timeout:     j.Timeout,
 		RetryCount:  j.RetryCount,
 		MaxRetries:  j.MaxRetries,
@@ -133,6 +238,7 @@ type JobManager interface {
 	Retry(ctx context.Context, jobID string) error
 	Wait(ctx context.Context, jobID string, timeout time.Duration) (*Job, error)
 	ListByStatus(ctx context.Context, status JobStatus) ([]*Job, error)
+	Shutdown(ctx context.Context) error
 }
 
 type TypeRegistry struct {

@@ -61,16 +61,16 @@ func TestJobManager_SubmitAndWait(t *testing.T) {
 	if job.ID == "" {
 		t.Fatal("job ID should not be empty")
 	}
-	if job.Status != jobcore.JobStatusPending && job.Status != jobcore.JobStatusRunning {
-		t.Errorf("expected pending or running, got %s", job.Status)
+	if job.GetStatus() != jobcore.JobStatusPending && job.GetStatus() != jobcore.JobStatusRunning {
+		t.Errorf("expected pending or running, got %s", job.GetStatus())
 	}
 
 	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCompleted {
-		t.Errorf("expected completed, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCompleted {
+		t.Errorf("expected completed, got %s", result.GetStatus())
 	}
 }
 
@@ -96,8 +96,8 @@ func TestJobManager_Cancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCancelled {
-		t.Errorf("expected cancelled, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", result.GetStatus())
 	}
 }
 
@@ -118,8 +118,8 @@ func TestJobManager_Timeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusFailed {
-		t.Errorf("expected failed due to timeout, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusFailed {
+		t.Errorf("expected failed due to timeout, got %s", result.GetStatus())
 	}
 }
 
@@ -180,8 +180,8 @@ func TestJobManager_Retry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusFailed {
-		t.Fatalf("expected failed, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusFailed {
+		t.Fatalf("expected failed, got %s", result.GetStatus())
 	}
 
 	err = manager.Retry(ctx, job.ID)
@@ -193,11 +193,11 @@ func TestJobManager_Retry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get status failed: %v", err)
 	}
-	if status.Status != jobcore.JobStatusPending {
-		t.Errorf("expected pending after retry, got %s", status.Status)
+	if status.GetStatus() != jobcore.JobStatusPending {
+		t.Errorf("expected pending after retry, got %s", status.GetStatus())
 	}
-	if status.Error != "" {
-		t.Errorf("expected error cleared after retry, got %s", status.Error)
+	if status.GetError() != "" {
+		t.Errorf("expected error cleared after retry, got %s", status.GetError())
 	}
 }
 
@@ -279,8 +279,8 @@ func TestJobManager_SubmitWithOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCompleted {
-		t.Errorf("expected completed, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCompleted {
+		t.Errorf("expected completed, got %s", result.GetStatus())
 	}
 }
 
@@ -357,8 +357,8 @@ func TestJobManager_CancelRunningJob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get status failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCancelled {
-		t.Errorf("expected cancelled, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", result.GetStatus())
 	}
 }
 
@@ -482,8 +482,8 @@ func TestJobManager_ExecuteJob_SuccessAfterCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCompleted && result.Status != jobcore.JobStatusCancelled {
-		t.Errorf("expected completed or cancelled, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCompleted && result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Errorf("expected completed or cancelled, got %s", result.GetStatus())
 	}
 }
 
@@ -568,8 +568,8 @@ func TestJobManager_ExecuteJob_CancelledDuringRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCancelled {
-		t.Errorf("expected cancelled, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", result.GetStatus())
 	}
 }
 

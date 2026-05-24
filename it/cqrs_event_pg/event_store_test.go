@@ -3,14 +3,13 @@ package pg
 import (
 	"context"
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
 	cqevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/event"
 	pgevent "github.com/ddd-qce/core/cqrs/event/pg"
-	corepg "github.com/ddd-qce/core/pg"
+	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -28,31 +27,15 @@ func (e *testDomainEvent) EventType() string     { return e.EType }
 func (e *testDomainEvent) OccurredAt() time.Time { return e.EAt }
 
 func openTestDBForEventStore(t *testing.T) *sql.DB {
-	t.Helper()
-	dsn := os.Getenv("TEST_PG_DSN")
-	if dsn == "" {
-		dsn = "host=/var/run/postgresql dbname=ddd_qce_event_test user=root password=root sslmode=disable"
-	}
-	db, err := sql.Open("pgx", dsn)
-	if err != nil {
-		t.Fatalf("open db failed: %v", err)
-	}
-	if err := db.Ping(); err != nil {
-		t.Fatalf("ping db failed: %v", err)
-	}
-	t.Cleanup(func() {
-		corepg.DropAll(db)
-		db.Close()
-	})
-	if err := corepg.Migrate(db); err != nil {
-		t.Fatalf("migrate failed: %v", err)
-	}
-	return db
+	return testutil.OpenTestDB(t, "ddd_qce_event_test")
 }
 
 func TestPgEventStore_AppendAndLoad(t *testing.T) {
 	db := openTestDBForEventStore(t)
-	store := pgevent.NewEventStore[*testDomainEvent](db)
+	store, err := pgevent.NewEventStore[*testDomainEvent](db)
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events := []*testDomainEvent{
@@ -81,7 +64,10 @@ func TestPgEventStore_AppendAndLoad(t *testing.T) {
 
 func TestPgEventStore_LoadAfterVersion(t *testing.T) {
 	db := openTestDBForEventStore(t)
-	store := pgevent.NewEventStore[*testDomainEvent](db)
+	store, err := pgevent.NewEventStore[*testDomainEvent](db)
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events := []*testDomainEvent{
@@ -104,7 +90,10 @@ func TestPgEventStore_LoadAfterVersion(t *testing.T) {
 
 func TestPgEventStore_LoadNotFound(t *testing.T) {
 	db := openTestDBForEventStore(t)
-	store := pgevent.NewEventStore[*testDomainEvent](db)
+	store, err := pgevent.NewEventStore[*testDomainEvent](db)
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	loaded, err := store.Load(ctx, "nonexistent", 0)
@@ -118,9 +107,12 @@ func TestPgEventStore_LoadNotFound(t *testing.T) {
 
 func TestPgEventStore_WithFactory(t *testing.T) {
 	db := openTestDBForEventStore(t)
-	store := pgevent.NewEventStore[*testDomainEvent](db, pgevent.WithFactory[*testDomainEvent](func() *testDomainEvent {
+	store, err := pgevent.NewEventStore[*testDomainEvent](db, pgevent.WithFactory[*testDomainEvent](func() *testDomainEvent {
 		return &testDomainEvent{}
 	}))
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events := []*testDomainEvent{

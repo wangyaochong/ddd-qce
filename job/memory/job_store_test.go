@@ -3,7 +3,6 @@ package memory
 import (
 	"context"
 	"testing"
-	"time"
 
 	jobcore "github.com/ddd-qce/core/job/core"
 )
@@ -16,12 +15,7 @@ func TestJobStore_Create(t *testing.T) {
 	store := NewJobStore()
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID:        "job-1",
-		Command:   &testJobCommand{Name: "test"},
-		Status:    jobcore.JobStatusPending,
-		CreatedAt: time.Now(),
-	}
+	job := jobcore.NewJob("job-1", &testJobCommand{Name: "test"})
 
 	err := store.Create(ctx, job)
 	if err != nil {
@@ -33,12 +27,7 @@ func TestJobStore_CreateDuplicate(t *testing.T) {
 	store := NewJobStore()
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID:        "job-1",
-		Command:   &testJobCommand{Name: "test"},
-		Status:    jobcore.JobStatusPending,
-		CreatedAt: time.Now(),
-	}
+	job := jobcore.NewJob("job-1", &testJobCommand{Name: "test"})
 
 	err := store.Create(ctx, job)
 	if err != nil {
@@ -55,12 +44,7 @@ func TestJobStore_Get(t *testing.T) {
 	store := NewJobStore()
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID:        "job-1",
-		Command:   &testJobCommand{Name: "test"},
-		Status:    jobcore.JobStatusPending,
-		CreatedAt: time.Now(),
-	}
+	job := jobcore.NewJob("job-1", &testJobCommand{Name: "test"})
 
 	err := store.Create(ctx, job)
 	if err != nil {
@@ -93,19 +77,14 @@ func TestJobStore_Update(t *testing.T) {
 	store := NewJobStore()
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID:        "job-1",
-		Command:   &testJobCommand{Name: "test"},
-		Status:    jobcore.JobStatusPending,
-		CreatedAt: time.Now(),
-	}
+	job := jobcore.NewJob("job-1", &testJobCommand{Name: "test"})
 
 	err := store.Create(ctx, job)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	job.Status = jobcore.JobStatusRunning
+	job.SetStatus(jobcore.JobStatusRunning)
 
 	err = store.Update(ctx, job)
 	if err != nil {
@@ -116,8 +95,8 @@ func TestJobStore_Update(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if retrieved.Status != jobcore.JobStatusRunning {
-		t.Errorf("expected status 'running', got '%s'", retrieved.Status)
+	if retrieved.GetStatus() != jobcore.JobStatusRunning {
+		t.Errorf("expected status 'running', got '%s'", retrieved.GetStatus())
 	}
 }
 
@@ -126,9 +105,9 @@ func TestJobStore_UpdateNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	job := &jobcore.Job{
-		ID:     "nonexistent",
-		Status: jobcore.JobStatusRunning,
+		ID: "nonexistent",
 	}
+	job.SetStatus(jobcore.JobStatusRunning)
 
 	err := store.Update(ctx, job)
 	if err == nil {
@@ -140,12 +119,7 @@ func TestJobStore_Delete(t *testing.T) {
 	store := NewJobStore()
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID:        "job-1",
-		Command:   &testJobCommand{Name: "test"},
-		Status:    jobcore.JobStatusPending,
-		CreatedAt: time.Now(),
-	}
+	job := jobcore.NewJob("job-1", &testJobCommand{Name: "test"})
 
 	err := store.Create(ctx, job)
 	if err != nil {
@@ -178,11 +152,13 @@ func TestJobStore_List(t *testing.T) {
 	ctx := context.Background()
 
 	jobs := []*jobcore.Job{
-		{ID: "job-1", Status: jobcore.JobStatusPending, CreatedAt: time.Now()},
-		{ID: "job-2", Status: jobcore.JobStatusRunning, CreatedAt: time.Now()},
-		{ID: "job-3", Status: jobcore.JobStatusPending, CreatedAt: time.Now()},
-		{ID: "job-4", Status: jobcore.JobStatusCompleted, CreatedAt: time.Now()},
+		jobcore.NewJob("job-1", nil),
+		jobcore.NewJob("job-2", nil),
+		jobcore.NewJob("job-3", nil),
+		jobcore.NewJob("job-4", nil),
 	}
+	jobs[1].SetStatus(jobcore.JobStatusRunning)
+	jobs[3].SetStatus(jobcore.JobStatusCompleted)
 
 	for _, job := range jobs {
 		err := store.Create(ctx, job)
@@ -228,12 +204,7 @@ func TestJobStore_Concurrent(t *testing.T) {
 	store := NewJobStore()
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID:        "job-1",
-		Command:   &testJobCommand{Name: "test"},
-		Status:    jobcore.JobStatusPending,
-		CreatedAt: time.Now(),
-	}
+	job := jobcore.NewJob("job-1", &testJobCommand{Name: "test"})
 
 	err := store.Create(ctx, job)
 	if err != nil {

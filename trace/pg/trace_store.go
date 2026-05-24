@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	ddderror "github.com/ddd-qce/core/error"
 	corepg "github.com/ddd-qce/core/pg"
 	"github.com/ddd-qce/core/trace"
 )
@@ -64,7 +65,7 @@ func (s *PgTraceStore) GetTrace(ctx context.Context, traceID string) ([]*trace.S
 		return nil, fmt.Errorf("iterate spans: %w", err)
 	}
 	if len(spans) == 0 {
-		return nil, fmt.Errorf("trace %s not found", traceID)
+		return nil, fmt.Errorf("trace %s: %w", traceID, ddderror.ErrNotFound)
 	}
 	return spans, nil
 }

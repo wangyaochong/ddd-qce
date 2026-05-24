@@ -65,9 +65,9 @@ func RunExample(ctx context.Context, manager jobcore.JobManager) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Job completed: Status=%s\n", completedJob.Status)
-	if completedJob.Result != nil {
-		reportResult, ok := completedJob.Result.(*GenerateReportResult)
+	fmt.Printf("Job completed: Status=%s\n", completedJob.GetStatus())
+	if completedJob.GetResult() != nil {
+		reportResult, ok := completedJob.GetResult().(*GenerateReportResult)
 		if !ok {
 			fmt.Println("Result type mismatch")
 			return

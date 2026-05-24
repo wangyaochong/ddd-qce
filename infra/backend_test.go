@@ -24,8 +24,8 @@ func TestNewMemoryBackend(t *testing.T) {
 	if b.MessageStore == nil {
 		t.Error("expected MessageStore to be set")
 	}
-	if b.Migrate == nil {
-		t.Error("expected Migrate to be set")
+	if b.Migrator == nil {
+		t.Error("expected Migrator to be set")
 	}
 }
 
@@ -65,9 +65,10 @@ func TestMemoryBackend_JobStore(t *testing.T) {
 	ctx := context.Background()
 
 	job := &jobcore.Job{
-		ID: "j1", Command: "test", Status: jobcore.JobStatusPending,
+		ID: "j1", Command: "test",
 		CreatedAt: trace.Span{}.StartedAt, Timeout: 0, MaxRetries: 0,
 	}
+	job.SetStatus(jobcore.JobStatusPending)
 	if err := b.JobStore.Create(ctx, job); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -95,7 +96,7 @@ func TestMemoryBackend_MessageStore(t *testing.T) {
 
 func TestMemoryBackend_Migrate(t *testing.T) {
 	b := NewMemoryBackend()
-	if err := b.Migrate(); err != nil {
+	if err := b.Migrator.Migrate(context.Background()); err != nil {
 		t.Fatalf("Migrate failed: %v", err)
 	}
 }

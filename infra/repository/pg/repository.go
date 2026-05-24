@@ -9,6 +9,7 @@ import (
 	"time"
 
 	cqevent "github.com/ddd-qce/core/cqrs/event/pg"
+	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
 	"github.com/ddd-qce/core/domain/event"
 	corepg "github.com/ddd-qce/core/pg"
@@ -69,7 +70,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
 		 WHERE ddd_aggregate_snapshots.version < $4`,
-		root.ID, r.typeName, data, root.Version(), time.Now(),
+		root.GetID(), r.typeName, data, root.Version(), time.Now(),
 	)
 	if err != nil {
 		return err
@@ -79,7 +80,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &OptimisticLockError{AggregateID: root.ID, ExpectedVersion: root.Version()}
+		return &OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }
@@ -94,7 +95,7 @@ func (r *PgRepository[T]) FindByID(ctx context.Context, id string) (T, error) {
 	).Scan(&data, &version)
 	if err == sql.ErrNoRows {
 		var zero T
-		return zero, fmt.Errorf("aggregate %s not found", id)
+		return zero, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 	if err != nil {
 		var zero T
@@ -121,7 +122,7 @@ func (r *PgRepository[T]) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("aggregate %s not found", id)
+		return fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 	return nil
 }
@@ -180,7 +181,7 @@ func (r *PgEventSourcedRepository[T]) Save(ctx context.Context, agg T) error {
 	}
 	typedEvents := make([]event.DomainEvent, len(events))
 	copy(typedEvents, events)
-	if err := r.eventStore.Append(ctx, root.ID, root.Version()-len(events), typedEvents); err != nil {
+	if err := r.eventStore.Append(ctx, root.GetID(), root.Version()-len(events), typedEvents); err != nil {
 		return fmt.Errorf("append events: %w", err)
 	}
 	if r.snapshotEvery > 0 && root.Version()%r.snapshotEvery == 0 {
@@ -215,12 +216,14 @@ func (r *PgEventSourcedRepository[T]) Load(ctx context.Context, id string) (T, e
 	}
 
 	if len(events) == 0 && snapshotVersion < 0 {
-		return agg, fmt.Errorf("aggregate %s not found", id)
+		return agg, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 
 	typedEvents := make([]event.DomainEvent, len(events))
 	copy(typedEvents, events)
-	root.LoadFromHistory(typedEvents)
+	if err := root.LoadFromHistory(typedEvents); err != nil {
+		return agg, fmt.Errorf("load from history for aggregate %s: %w", id, err)
+	}
 	return agg, nil
 }
 
@@ -235,7 +238,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
 		 WHERE ddd_aggregate_snapshots.version < $4`,
-		root.ID, r.typeName, data, root.Version(), time.Now(),
+		root.GetID(), r.typeName, data, root.Version(), time.Now(),
 	)
 	if err != nil {
 		return err
@@ -245,7 +248,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &OptimisticLockError{AggregateID: root.ID, ExpectedVersion: root.Version()}
+		return &OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }
@@ -268,4 +271,8 @@ type OptimisticLockError struct {
 
 func (e *OptimisticLockError) Error() string {
 	return fmt.Sprintf("optimistic lock error: aggregate %s version %d was already updated by another transaction", e.AggregateID, e.ExpectedVersion)
+}
+
+func (e *OptimisticLockError) Unwrap() error {
+	return ddderror.ErrConcurrency
 }

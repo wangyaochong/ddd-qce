@@ -18,8 +18,8 @@ func (e *testDomainEvent) OccurredAt() time.Time { return e.occurredAt }
 
 func TestNewAggregateRoot(t *testing.T) {
 	agg := NewAggregateRoot("order-1")
-	if agg.ID != "order-1" {
-		t.Errorf("expected ID 'order-1', got '%s'", agg.ID)
+	if agg.GetID() != "order-1" {
+		t.Errorf("expected ID 'order-1', got '%s'", agg.GetID())
 	}
 	if agg.Version() != 0 {
 		t.Errorf("expected version 0, got %d", agg.Version())
@@ -30,7 +30,7 @@ func TestApply_SingleEvent(t *testing.T) {
 	agg := NewEventCollector("order-1")
 	evt := &testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()}
 
-	agg.Apply(evt)
+	_ = agg.Apply(evt)
 
 	if agg.Version() != 1 {
 		t.Errorf("expected version 1 after apply, got %d", agg.Version())
@@ -52,9 +52,9 @@ func TestApply_MultipleEvents(t *testing.T) {
 	evt2 := &testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()}
 	evt3 := &testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()}
 
-	agg.Apply(evt1)
-	agg.Apply(evt2)
-	agg.Apply(evt3)
+	_ = agg.Apply(evt1)
+	_ = agg.Apply(evt2)
+	_ = agg.Apply(evt3)
 
 	if agg.Version() != 3 {
 		t.Errorf("expected version 3 after 3 applies, got %d", agg.Version())
@@ -69,7 +69,7 @@ func TestApply_MultipleEvents(t *testing.T) {
 func TestUncommittedEvents_ReturnsCopy(t *testing.T) {
 	agg := NewEventCollector("order-1")
 	evt := &testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()}
-	agg.Apply(evt)
+	_ = agg.Apply(evt)
 
 	events1 := agg.UncommittedEvents()
 	events1[0] = nil
@@ -91,8 +91,8 @@ func TestUncommittedEvents_Empty(t *testing.T) {
 
 func TestMarkEventsAsCommitted(t *testing.T) {
 	agg := NewEventCollector("order-1")
-	agg.Apply(&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()})
-	agg.Apply(&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()})
+	_ = agg.Apply(&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()})
+	_ = agg.Apply(&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()})
 
 	if len(agg.UncommittedEvents()) != 2 {
 		t.Fatal("expected 2 uncommitted events before marking")
@@ -118,7 +118,7 @@ func TestMarkEventsAsCommitted_Empty(t *testing.T) {
 
 func TestLoadFromHistory_Empty(t *testing.T) {
 	agg := NewAggregateRoot("order-1")
-	agg.LoadFromHistory([]event.DomainEvent{})
+	_ = agg.LoadFromHistory([]event.DomainEvent{})
 
 	if agg.Version() != 0 {
 		t.Errorf("expected version 0 after loading empty history, got %d", agg.Version())
@@ -134,7 +134,7 @@ func TestLoadFromHistory_MultipleEvents(t *testing.T) {
 		&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()},
 	}
 
-	agg.LoadFromHistory(events)
+	_ = agg.LoadFromHistory(events)
 
 	if agg.Version() != 3 {
 		t.Errorf("expected version 3 after loading 3 events, got %d", agg.Version())
@@ -148,7 +148,7 @@ func TestLoadFromHistory_MultipleEvents(t *testing.T) {
 
 func TestValidate_Valid(t *testing.T) {
 	agg := NewEventCollector("order-1")
-	agg.Apply(&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()})
+	_ = agg.Apply(&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()})
 
 	err := agg.Validate()
 	if err != nil {
@@ -237,7 +237,7 @@ func (o *testOrder) When(evt event.DomainEvent) {
 func TestApply_NewEventMutatesState(t *testing.T) {
 	order := newTestOrder("ORD-001")
 
-	order.Apply(&orderCreatedEvent{aggregateID: "ORD-001", amount: 99.99, occurredAt: time.Now()})
+	_ = order.Apply(&orderCreatedEvent{aggregateID: "ORD-001", amount: 99.99, occurredAt: time.Now()})
 
 	if order.Status != "created" {
 		t.Errorf("expected status 'created', got '%s'", order.Status)
@@ -249,7 +249,7 @@ func TestApply_NewEventMutatesState(t *testing.T) {
 		t.Errorf("expected version 1, got %d", order.Version())
 	}
 
-	order.Apply(&orderConfirmedEvent{aggregateID: "ORD-001", occurredAt: time.Now()})
+	_ = order.Apply(&orderConfirmedEvent{aggregateID: "ORD-001", occurredAt: time.Now()})
 
 	if order.Status != "confirmed" {
 		t.Errorf("expected status 'confirmed', got '%s'", order.Status)
@@ -268,7 +268,7 @@ func TestLoadFromHistory_StateRebuild(t *testing.T) {
 		&orderCancelledEvent{aggregateID: "ORD-001", reason: "customer request", occurredAt: time.Now()},
 	}
 
-	order.LoadFromHistory(history)
+	_ = order.LoadFromHistory(history)
 
 	if order.Status != "cancelled" {
 		t.Errorf("expected status 'cancelled', got '%s'", order.Status)
@@ -290,7 +290,7 @@ func TestLoadFromHistory_StateRebuild(t *testing.T) {
 func TestApply_ThenLoadFromHistory(t *testing.T) {
 	order := newTestOrder("ORD-001")
 
-	order.Apply(&orderCreatedEvent{aggregateID: "ORD-001", amount: 100.00, occurredAt: time.Now()})
+	_ = order.Apply(&orderCreatedEvent{aggregateID: "ORD-001", amount: 100.00, occurredAt: time.Now()})
 
 	if order.Status != "created" {
 		t.Errorf("expected status 'created', got '%s'", order.Status)
@@ -300,7 +300,7 @@ func TestApply_ThenLoadFromHistory(t *testing.T) {
 	order.MarkEventsAsCommitted()
 
 	rebuilt := newTestOrder("ORD-001")
-	rebuilt.LoadFromHistory(uncommitted)
+	_ = rebuilt.LoadFromHistory(uncommitted)
 
 	if rebuilt.Status != "created" {
 		t.Errorf("expected rebuilt status 'created', got '%s'", rebuilt.Status)
@@ -314,7 +314,7 @@ func TestNewEventCollector(t *testing.T) {
 	agg := NewEventCollector("order-1")
 	evt := &testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()}
 
-	agg.Apply(evt)
+	_ = agg.Apply(evt)
 
 	if agg.Version() != 1 {
 		t.Errorf("expected version 1, got %d", agg.Version())
@@ -324,7 +324,7 @@ func TestNewEventCollector(t *testing.T) {
 		&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()},
 		&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()},
 	}
-	agg.LoadFromHistory(history)
+	_ = agg.LoadFromHistory(history)
 
 	if agg.Version() != 3 {
 		t.Errorf("expected version 3, got %d", agg.Version())
@@ -334,10 +334,10 @@ func TestNewEventCollector(t *testing.T) {
 func TestAggregateRoot_OrderLifecycle(t *testing.T) {
 	order := NewEventCollector("order-123")
 
-	order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
-	order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
-	order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
-	order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
+	_ = order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
+	_ = order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
+	_ = order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
+	_ = order.Apply(&testDomainEvent{aggregateID: "order-123", occurredAt: time.Now()})
 
 	if order.Version() != 4 {
 		t.Errorf("expected version 4, got %d", order.Version())
@@ -354,7 +354,7 @@ func TestAggregateRoot_OrderLifecycle(t *testing.T) {
 	}
 
 	rebuilt := NewEventCollector("order-123")
-	rebuilt.LoadFromHistory(uncommitted)
+	_ = rebuilt.LoadFromHistory(uncommitted)
 	if rebuilt.Version() != 4 {
 		t.Errorf("expected rebuilt version 4, got %d", rebuilt.Version())
 	}
@@ -365,47 +365,35 @@ func TestAggregateRoot_OrderLifecycle(t *testing.T) {
 	}
 }
 
-func TestApply_WithoutApplier_Panics(t *testing.T) {
+func TestApply_WithoutApplier_ReturnsError(t *testing.T) {
 	agg := NewAggregateRoot("order-1")
 	evt := &testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()}
 
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic when Apply is called without applier")
-		}
-		msg, ok := r.(string)
-		if !ok {
-			t.Fatalf("expected string panic, got %T: %v", r, r)
-		}
-		if msg != "AggregateRoot: applier not set, use NewAggregateRootWithApplier(id, self) or NewEventCollector(id)" {
-			t.Errorf("unexpected panic message: %s", msg)
-		}
-	}()
-
-	agg.Apply(evt)
+	err := agg.Apply(evt)
+	if err == nil {
+		t.Fatal("expected error when Apply is called without applier")
+	}
+	if err.Error() != "AggregateRoot: applier not set, use NewAggregateRootWithApplier(id, self) or NewEventCollector(id)" {
+		t.Errorf("unexpected error message: %s", err.Error())
+	}
 }
 
-func TestLoadFromHistory_WithoutApplier_Panics(t *testing.T) {
+func TestLoadFromHistory_WithoutApplier_ReturnsError(t *testing.T) {
 	agg := NewAggregateRoot("order-1")
 
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic when LoadFromHistory is called without applier")
-		}
-	}()
-
-	agg.LoadFromHistory([]event.DomainEvent{
+	err := agg.LoadFromHistory([]event.DomainEvent{
 		&testDomainEvent{aggregateID: "order-1", occurredAt: time.Now()},
 	})
+	if err == nil {
+		t.Fatal("expected error when LoadFromHistory is called without applier")
+	}
 }
 
 func TestNewAggregateRootWithApplier(t *testing.T) {
 	o := &testOrder{}
 	o.AggregateRoot = *NewAggregateRootWithApplier("ORD-001", o)
 
-	o.Apply(&orderCreatedEvent{aggregateID: "ORD-001", amount: 99.99, occurredAt: time.Now()})
+	_ = o.Apply(&orderCreatedEvent{aggregateID: "ORD-001", amount: 99.99, occurredAt: time.Now()})
 
 	if o.Status != "created" {
 		t.Errorf("expected status 'created', got '%s'", o.Status)
@@ -418,9 +406,9 @@ func TestNewAggregateRootWithApplier(t *testing.T) {
 func TestSetApplier_StillWorks(t *testing.T) {
 	o := &testOrder{}
 	o.AggregateRoot = *NewAggregateRoot("ORD-001")
-	o.SetApplier(o)
+	o.setApplier(o)
 
-	o.Apply(&orderCreatedEvent{aggregateID: "ORD-001", amount: 50.00, occurredAt: time.Now()})
+	_ = o.Apply(&orderCreatedEvent{aggregateID: "ORD-001", amount: 50.00, occurredAt: time.Now()})
 
 	if o.Status != "created" {
 		t.Errorf("expected status 'created', got '%s'", o.Status)

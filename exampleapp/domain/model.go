@@ -63,20 +63,21 @@ func NewOrder(id, userID string, items []*OrderItem) (*Order, error) {
 		return nil, err
 	}
 	o.TotalAmount = o.calculateTotal()
-	o.Apply(&OrderPlacedEvent{
-		OrderID:     o.ID,
+	if err := o.Apply(&OrderPlacedEvent{
+		OrderID:     o.GetID(),
 		UserID:      o.UserID,
 		TotalAmount: o.TotalAmount,
 		Items:       o.ItemNames(),
 		Time:        time.Now(),
-	})
+	}); err != nil {
+		return nil, err
+	}
 	return o, nil
 }
 
 func NewOrderForReplay(id string) *Order {
 	o := &Order{}
-	o.AggregateRoot = *aggregate.NewAggregateRoot(id)
-	o.SetApplier(o)
+	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier(id, o)
 	return o
 }
 
@@ -106,38 +107,44 @@ func (o *Order) When(evt event.DomainEvent) {
 
 func (o *Order) ConfirmPayment() error {
 	if o.Status != OrderStatusPending {
-		return fmt.Errorf("order %s cannot be confirmed payment (status: %s)", o.ID, o.Status)
+		return fmt.Errorf("order %s cannot be confirmed payment (status: %s)", o.GetID(), o.Status)
 	}
-	o.Apply(&PaymentConfirmedEvent{
-		OrderID: o.ID,
+	if err := o.Apply(&PaymentConfirmedEvent{
+		OrderID: o.GetID(),
 		Time:    time.Now(),
-	})
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (o *Order) Ship() error {
 	if o.Status != OrderStatusPaid {
-		return fmt.Errorf("order %s cannot be shipped (status: %s)", o.ID, o.Status)
+		return fmt.Errorf("order %s cannot be shipped (status: %s)", o.GetID(), o.Status)
 	}
-	o.Apply(&OrderShippedEvent{
-		OrderID: o.ID,
+	if err := o.Apply(&OrderShippedEvent{
+		OrderID: o.GetID(),
 		Time:    time.Now(),
-	})
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (o *Order) Cancel(reason string) error {
 	if o.Status == OrderStatusCancelled {
-		return fmt.Errorf("order %s already cancelled", o.ID)
+		return fmt.Errorf("order %s already cancelled", o.GetID())
 	}
 	if o.Status == OrderStatusShipped {
-		return fmt.Errorf("order %s already shipped, cannot cancel", o.ID)
+		return fmt.Errorf("order %s already shipped, cannot cancel", o.GetID())
 	}
-	o.Apply(&OrderCancelledEvent{
-		OrderID: o.ID,
+	if err := o.Apply(&OrderCancelledEvent{
+		OrderID: o.GetID(),
 		Reason:  reason,
 		Time:    time.Now(),
-	})
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -21,7 +21,10 @@ func (e *testStoreEvent) EventType() string     { return event.EventTypeOf(e) }
 func (e *testStoreEvent) OccurredAt() time.Time { return time.Now() }
 
 func TestEventStore_AppendAndLoad(t *testing.T) {
-	store := NewEventStore[*testStoreEvent]()
+	store, err := NewEventStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
@@ -30,7 +33,7 @@ func TestEventStore_AppendAndLoad(t *testing.T) {
 		{AggID: "agg-1", Data: "event3"},
 	}
 
-	err := store.Append(ctx, "agg-1", 0, events)
+	err = store.Append(ctx, "agg-1", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -46,7 +49,10 @@ func TestEventStore_AppendAndLoad(t *testing.T) {
 }
 
 func TestEventStore_LoadAfterVersion(t *testing.T) {
-	store := NewEventStore[*testStoreEvent]()
+	store, err := NewEventStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
@@ -56,7 +62,7 @@ func TestEventStore_LoadAfterVersion(t *testing.T) {
 		{AggID: "agg-1", Data: "v3"},
 	}
 
-	err := store.Append(ctx, "agg-1", 0, events)
+	err = store.Append(ctx, "agg-1", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -78,7 +84,10 @@ func TestEventStore_LoadAfterVersion(t *testing.T) {
 }
 
 func TestEventStore_LoadNonExistentAggregate(t *testing.T) {
-	store := NewEventStore[*testStoreEvent]()
+	store, err := NewEventStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	loaded, err := store.Load(ctx, "nonexistent", 0)
@@ -91,7 +100,10 @@ func TestEventStore_LoadNonExistentAggregate(t *testing.T) {
 }
 
 func TestEventStore_AppendMultipleEvents(t *testing.T) {
-	store := NewEventStore[*testStoreEvent]()
+	store, err := NewEventStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events1 := []*testStoreEvent{
@@ -102,7 +114,7 @@ func TestEventStore_AppendMultipleEvents(t *testing.T) {
 		{AggID: "agg-1", Data: "e3"},
 	}
 
-	err := store.Append(ctx, "agg-1", 0, events1)
+	err = store.Append(ctx, "agg-1", 0, events1)
 	if err != nil {
 		t.Fatalf("first append failed: %v", err)
 	}
@@ -123,10 +135,13 @@ func TestEventStore_AppendMultipleEvents(t *testing.T) {
 }
 
 func TestEventStore_ConcurrencyConflict(t *testing.T) {
-	store := NewEventStore[*testStoreEvent]()
+	store, err := NewEventStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
-	err := store.Append(ctx, "agg-1", 0, []*testStoreEvent{{AggID: "agg-1", Data: "e1"}})
+	err = store.Append(ctx, "agg-1", 0, []*testStoreEvent{{AggID: "agg-1", Data: "e1"}})
 	if err != nil {
 		t.Fatalf("first append failed: %v", err)
 	}
@@ -138,10 +153,13 @@ func TestEventStore_ConcurrencyConflict(t *testing.T) {
 }
 
 func TestEventStore_MultipleAggregates(t *testing.T) {
-	store := NewEventStore[*testStoreEvent]()
+	store, err := NewEventStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
-	err := store.Append(ctx, "agg-1", 0, []*testStoreEvent{
+	err = store.Append(ctx, "agg-1", 0, []*testStoreEvent{
 		{AggID: "agg-1", Data: "a1-e1"},
 		{AggID: "agg-1", Data: "a1-e2"},
 	})
@@ -175,7 +193,10 @@ func TestEventStore_MultipleAggregates(t *testing.T) {
 }
 
 func TestEventStore_ConcurrentAppend(t *testing.T) {
-	store := NewEventStore[*testStoreEvent]()
+	store, err := NewEventStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	for i := 0; i < 100; i++ {
@@ -196,14 +217,17 @@ func TestEventStore_ConcurrentAppend(t *testing.T) {
 }
 
 func TestEventStore_LoadReturnsCopy(t *testing.T) {
-	store := NewEventStore[*testStoreEvent]()
+	store, err := NewEventStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
 		{AggID: "agg-1", Data: "original"},
 	}
 
-	err := store.Append(ctx, "agg-1", 0, events)
+	err = store.Append(ctx, "agg-1", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -226,14 +250,17 @@ func TestEventStore_LoadReturnsCopy(t *testing.T) {
 }
 
 func TestEventStore_LoadAfterVersionBeyondRange(t *testing.T) {
-	store := NewEventStore[*testStoreEvent]()
+	store, err := NewEventStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
 		{AggID: "agg-1", Data: "e1"},
 	}
 
-	err := store.Append(ctx, "agg-1", 0, events)
+	err = store.Append(ctx, "agg-1", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -256,22 +283,20 @@ func (e testValueEvent) AggregateID() string   { return e.AggID }
 func (e testValueEvent) EventType() string     { return event.EventTypeOf(e) }
 func (e testValueEvent) OccurredAt() time.Time { return time.Now() }
 
-func TestEventStore_NonPointerTypePanics(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic for non-pointer type T")
-		}
-	}()
-
-	store := NewEventStore[testValueEvent]()
-	store.Append(context.Background(), "agg", 0, []testValueEvent{})
+func TestEventStore_NonPointerTypeReturnsError(t *testing.T) {
+	_, err := NewEventStore[testValueEvent]()
+	if err == nil {
+		t.Fatal("expected error for non-pointer type T")
+	}
 }
 
 func TestEventStore_WithFactory(t *testing.T) {
-	store := NewEventStore[*testStoreEvent](WithFactory[*testStoreEvent](func() *testStoreEvent {
+	store, err := NewEventStore[*testStoreEvent](WithFactory[*testStoreEvent](func() *testStoreEvent {
 		return &testStoreEvent{}
 	}))
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
@@ -279,7 +304,7 @@ func TestEventStore_WithFactory(t *testing.T) {
 		{AggID: "agg-1", Data: "event2"},
 	}
 
-	err := store.Append(ctx, "agg-1", 0, events)
+	err = store.Append(ctx, "agg-1", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -301,16 +326,19 @@ func TestEventStore_WithFactory(t *testing.T) {
 }
 
 func TestEventStore_WithFactory_LoadReturnsCopy(t *testing.T) {
-	store := NewEventStore[*testStoreEvent](WithFactory[*testStoreEvent](func() *testStoreEvent {
+	store, err := NewEventStore[*testStoreEvent](WithFactory[*testStoreEvent](func() *testStoreEvent {
 		return &testStoreEvent{}
 	}))
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
 		{AggID: "agg-1", Data: "original"},
 	}
 
-	err := store.Append(ctx, "agg-1", 0, events)
+	err = store.Append(ctx, "agg-1", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}

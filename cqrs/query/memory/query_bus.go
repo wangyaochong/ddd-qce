@@ -33,15 +33,16 @@ func NewQueryBus(opts ...QueryBusOption) *QueryBus {
 	return b
 }
 
-func RegisterQuery[T query.Query, R any](bus *QueryBus, handler query.QueryHandler[T, R]) {
+func RegisterQuery[T query.Query, R any](bus *QueryBus, handler query.QueryHandler[T, R]) error {
 	bus.mu.Lock()
 	defer bus.mu.Unlock()
 	var zero T
 	queryType := reflect.TypeOf(zero)
-	if _, exists := bus.handlers[queryType]; exists {
-		panic(fmt.Sprintf("handler already registered for query type: %s", queryType))
+	if existing, exists := bus.handlers[queryType]; exists {
+		return fmt.Errorf("handler already registered for query type %T (existing: %T, new: %T)", zero, existing, handler)
 	}
 	bus.handlers[queryType] = handler
+	return nil
 }
 
 func Dispatch[T query.Query, R any](ctx context.Context, bus *QueryBus, q T) (R, error) {

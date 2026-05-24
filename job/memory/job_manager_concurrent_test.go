@@ -90,8 +90,8 @@ func TestJobManager_ConcurrentSubmitAndCancel(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		if result.Status != jobcore.JobStatusCompleted && result.Status != jobcore.JobStatusCancelled && result.Status != jobcore.JobStatusFailed {
-			t.Errorf("job %s has unexpected status: %s", job.ID, result.Status)
+		if result.GetStatus() != jobcore.JobStatusCompleted && result.GetStatus() != jobcore.JobStatusCancelled && result.GetStatus() != jobcore.JobStatusFailed {
+			t.Errorf("job %s has unexpected status: %s", job.ID, result.GetStatus())
 		}
 	}
 }
@@ -127,8 +127,8 @@ func TestJobManager_CancelDuringExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCancelled {
-		t.Errorf("expected cancelled, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", result.GetStatus())
 	}
 }
 
@@ -176,8 +176,8 @@ func TestJobManager_ConcurrentCancelSameJob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
-	if result.Status != jobcore.JobStatusCancelled && result.Status != jobcore.JobStatusFailed {
-		t.Errorf("expected cancelled or failed, got %s", result.Status)
+	if result.GetStatus() != jobcore.JobStatusCancelled && result.GetStatus() != jobcore.JobStatusFailed {
+		t.Errorf("expected cancelled or failed, got %s", result.GetStatus())
 	}
 }
 
@@ -229,7 +229,7 @@ func TestJobManager_RetryDuringCancel(t *testing.T) {
 		t.Fatalf("wait failed: %v", err)
 	}
 
-	if result.Status == jobcore.JobStatusFailed {
+	if result.GetStatus() == jobcore.JobStatusFailed {
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
