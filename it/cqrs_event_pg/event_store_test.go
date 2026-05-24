@@ -6,25 +6,21 @@ import (
 	"testing"
 	"time"
 
-	cqevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/event"
 	pgevent "github.com/ddd-qce/core/cqrs/event/pg"
 	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-var _ cqevent.EventStore[*testDomainEvent] = (*pgevent.EventStore[*testDomainEvent])(nil)
+var _ event.EventStore[*testDomainEvent] = (*pgevent.EventStore[*testDomainEvent])(nil)
 
 type testDomainEvent struct {
-	AggID string
-	EType string
-	EAt   time.Time
+	event.BaseEvent
 	EData string
 }
 
-func (e *testDomainEvent) AggregateID() string   { return e.AggID }
-func (e *testDomainEvent) EventType() string     { return e.EType }
-func (e *testDomainEvent) OccurredAt() time.Time { return e.EAt }
+func (e *testDomainEvent) AggregateID() string   { return e.BaseEvent.AggregateID() }
+func (e *testDomainEvent) OccurredAt() time.Time { return e.BaseEvent.OccurredAt() }
 
 func openTestDBForEventStore(t *testing.T) *sql.DB {
 	return testutil.OpenTestDB(t, "ddd_qce_event_test")
@@ -39,8 +35,8 @@ func TestPgEventStore_AppendAndLoad(t *testing.T) {
 	ctx := context.Background()
 
 	events := []*testDomainEvent{
-		{AggID: "agg-1", EType: "Created", EAt: time.Now()},
-		{AggID: "agg-1", EType: "Updated", EAt: time.Now()},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now())},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now())},
 	}
 
 	if err := store.Append(ctx, "agg-1", 0, events); err != nil {
@@ -54,11 +50,11 @@ func TestPgEventStore_AppendAndLoad(t *testing.T) {
 	if len(loaded) != 2 {
 		t.Fatalf("expected 2 events, got %d", len(loaded))
 	}
-	if loaded[0].EType != "Created" {
-		t.Errorf("expected first event type 'Created', got %s", loaded[0].EType)
+	if event.EventTypeOf(loaded[0]) != "testDomainEvent" {
+		t.Errorf("expected first event type 'testDomainEvent', got %s", event.EventTypeOf(loaded[0]))
 	}
-	if loaded[1].EType != "Updated" {
-		t.Errorf("expected second event type 'Updated', got %s", loaded[1].EType)
+	if event.EventTypeOf(loaded[1]) != "testDomainEvent" {
+		t.Errorf("expected second event type 'testDomainEvent', got %s", event.EventTypeOf(loaded[1]))
 	}
 }
 
@@ -71,9 +67,9 @@ func TestPgEventStore_LoadAfterVersion(t *testing.T) {
 	ctx := context.Background()
 
 	events := []*testDomainEvent{
-		{AggID: "agg-2", EType: "Created", EAt: time.Now()},
-		{AggID: "agg-2", EType: "Updated", EAt: time.Now()},
-		{AggID: "agg-2", EType: "Deleted", EAt: time.Now()},
+		{BaseEvent: event.NewBaseEvent("agg-2", time.Now())},
+		{BaseEvent: event.NewBaseEvent("agg-2", time.Now())},
+		{BaseEvent: event.NewBaseEvent("agg-2", time.Now())},
 	}
 	if err := store.Append(ctx, "agg-2", 0, events); err != nil {
 		t.Fatalf("Append failed: %v", err)
@@ -116,7 +112,7 @@ func TestPgEventStore_WithFactory(t *testing.T) {
 	ctx := context.Background()
 
 	events := []*testDomainEvent{
-		{AggID: "agg-3", EType: "Created", EAt: time.Now()},
+		{BaseEvent: event.NewBaseEvent("agg-3", time.Now())},
 	}
 	if err := store.Append(ctx, "agg-3", 0, events); err != nil {
 		t.Fatalf("Append failed: %v", err)

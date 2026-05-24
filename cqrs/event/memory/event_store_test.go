@@ -5,20 +5,15 @@ import (
 	"testing"
 	"time"
 
-	cqevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/event"
 )
 
-var _ cqevent.EventStore[*testStoreEvent] = (*EventStore[*testStoreEvent])(nil)
+var _ event.EventStore[*testStoreEvent] = (*EventStore[*testStoreEvent])(nil)
 
 type testStoreEvent struct {
-	AggID string
-	Data  string
+	event.BaseEvent
+	Data string
 }
-
-func (e *testStoreEvent) AggregateID() string   { return e.AggID }
-func (e *testStoreEvent) EventType() string     { return event.EventTypeOf(e) }
-func (e *testStoreEvent) OccurredAt() time.Time { return time.Now() }
 
 func TestEventStore_AppendAndLoad(t *testing.T) {
 	store, err := NewEventStore[*testStoreEvent]()
@@ -28,9 +23,9 @@ func TestEventStore_AppendAndLoad(t *testing.T) {
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
-		{AggID: "agg-1", Data: "event1"},
-		{AggID: "agg-1", Data: "event2"},
-		{AggID: "agg-1", Data: "event3"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "event1"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "event2"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "event3"},
 	}
 
 	err = store.Append(ctx, "agg-1", 0, events)
@@ -56,10 +51,10 @@ func TestEventStore_LoadAfterVersion(t *testing.T) {
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
-		{AggID: "agg-1", Data: "v0"},
-		{AggID: "agg-1", Data: "v1"},
-		{AggID: "agg-1", Data: "v2"},
-		{AggID: "agg-1", Data: "v3"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "v0"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "v1"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "v2"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "v3"},
 	}
 
 	err = store.Append(ctx, "agg-1", 0, events)
@@ -107,11 +102,11 @@ func TestEventStore_AppendMultipleEvents(t *testing.T) {
 	ctx := context.Background()
 
 	events1 := []*testStoreEvent{
-		{AggID: "agg-1", Data: "e1"},
-		{AggID: "agg-1", Data: "e2"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e1"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e2"},
 	}
 	events2 := []*testStoreEvent{
-		{AggID: "agg-1", Data: "e3"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e3"},
 	}
 
 	err = store.Append(ctx, "agg-1", 0, events1)
@@ -141,12 +136,12 @@ func TestEventStore_ConcurrencyConflict(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	err = store.Append(ctx, "agg-1", 0, []*testStoreEvent{{AggID: "agg-1", Data: "e1"}})
+	err = store.Append(ctx, "agg-1", 0, []*testStoreEvent{{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e1"}})
 	if err != nil {
 		t.Fatalf("first append failed: %v", err)
 	}
 
-	err = store.Append(ctx, "agg-1", 0, []*testStoreEvent{{AggID: "agg-1", Data: "e2"}})
+	err = store.Append(ctx, "agg-1", 0, []*testStoreEvent{{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e2"}})
 	if err == nil {
 		t.Fatal("expected concurrency conflict error")
 	}
@@ -160,16 +155,16 @@ func TestEventStore_MultipleAggregates(t *testing.T) {
 	ctx := context.Background()
 
 	err = store.Append(ctx, "agg-1", 0, []*testStoreEvent{
-		{AggID: "agg-1", Data: "a1-e1"},
-		{AggID: "agg-1", Data: "a1-e2"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "a1-e1"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "a1-e2"},
 	})
 	if err != nil {
 		t.Fatalf("append agg-1 failed: %v", err)
 	}
 
 	err = store.Append(ctx, "agg-2", 0, []*testStoreEvent{
-		{AggID: "agg-2", Data: "a2-e1"},
-		{AggID: "agg-2", Data: "a2-e2"},
+		{BaseEvent: event.NewBaseEvent("agg-2", time.Now()), Data: "a2-e1"},
+		{BaseEvent: event.NewBaseEvent("agg-2", time.Now()), Data: "a2-e2"},
 	})
 	if err != nil {
 		t.Fatalf("append agg-2 failed: %v", err)
@@ -200,7 +195,7 @@ func TestEventStore_ConcurrentAppend(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 100; i++ {
-		evt := &testStoreEvent{AggID: "agg-1", Data: string(rune(i))}
+		evt := &testStoreEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: string(rune(i))}
 		if err := store.Append(ctx, "agg-1", i, []*testStoreEvent{evt}); err != nil {
 			t.Fatalf("append at version %d failed: %v", i, err)
 		}
@@ -224,7 +219,7 @@ func TestEventStore_LoadReturnsCopy(t *testing.T) {
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
-		{AggID: "agg-1", Data: "original"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "original"},
 	}
 
 	err = store.Append(ctx, "agg-1", 0, events)
@@ -257,7 +252,7 @@ func TestEventStore_LoadAfterVersionBeyondRange(t *testing.T) {
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
-		{AggID: "agg-1", Data: "e1"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e1"},
 	}
 
 	err = store.Append(ctx, "agg-1", 0, events)
@@ -276,12 +271,8 @@ func TestEventStore_LoadAfterVersionBeyondRange(t *testing.T) {
 }
 
 type testValueEvent struct {
-	AggID string
+	event.BaseEvent
 }
-
-func (e testValueEvent) AggregateID() string   { return e.AggID }
-func (e testValueEvent) EventType() string     { return event.EventTypeOf(e) }
-func (e testValueEvent) OccurredAt() time.Time { return time.Now() }
 
 func TestEventStore_NonPointerTypeReturnsError(t *testing.T) {
 	_, err := NewEventStore[testValueEvent]()
@@ -300,8 +291,8 @@ func TestEventStore_WithFactory(t *testing.T) {
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
-		{AggID: "agg-1", Data: "event1"},
-		{AggID: "agg-1", Data: "event2"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "event1"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "event2"},
 	}
 
 	err = store.Append(ctx, "agg-1", 0, events)
@@ -335,7 +326,7 @@ func TestEventStore_WithFactory_LoadReturnsCopy(t *testing.T) {
 	ctx := context.Background()
 
 	events := []*testStoreEvent{
-		{AggID: "agg-1", Data: "original"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "original"},
 	}
 
 	err = store.Append(ctx, "agg-1", 0, events)
