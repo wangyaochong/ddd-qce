@@ -81,7 +81,7 @@ func NewMemoryBackend(opts ...BackendOption) *Backend {
 		WithTransactionManager(NewMemoryTransactionManager()),
 		WithJobStore(jobmemory.NewJobStore()),
 		WithTraceStore(trace.NewInMemoryTraceStore()),
-		WithMessageStore(builtin.NewNopMessageStore()),
+		WithMessageStore(builtin.NewInMemoryMessageStore()),
 		WithMigrator(NopMigrator{}),
 	}
 	return NewBackend(append(defaults, opts...)...)

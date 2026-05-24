@@ -2,12 +2,14 @@ package infrastructure
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/infra"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
@@ -25,7 +27,7 @@ type AppContext struct {
 
 	OrderRepo        *application.OrderRepository
 	EventSourcedRepo *application.OrderEventSourcedRepository
-	DomainEventStore *eventmemory.DomainEventStore
+	EventStore       domainevent.EventStore[domainevent.DomainEvent]
 	Inventory        *domain.Inventory
 
 	MetricsRecorder *AppMetricsRecorder
@@ -51,8 +53,11 @@ func WireApp() *AppContext {
 
 	inventory := domain.NewInventory()
 	orderRepo := application.NewOrderRepository()
-	domainEventStore := eventmemory.NewDomainEventStore()
-	eventSourcedRepo := application.NewOrderEventSourcedRepository(domainEventStore, orderRepo)
+	eventStore, err := eventmemory.NewEventStore[domainevent.DomainEvent]()
+	if err != nil {
+		panic(fmt.Sprintf("create event store: %v", err))
+	}
+	eventSourcedRepo := application.NewOrderEventSourcedRepository(eventStore, orderRepo)
 
 	commandmemory.RegisterCommand(cmdBus, application.NewPlaceOrderHandler(orderRepo, eventBus))
 	commandmemory.RegisterCommand(cmdBus, application.NewConfirmPaymentHandler(orderRepo, eventBus))
@@ -83,7 +88,7 @@ func WireApp() *AppContext {
 		JobManager:       jobManager,
 		OrderRepo:        orderRepo,
 		EventSourcedRepo: eventSourcedRepo,
-		DomainEventStore: domainEventStore,
+		EventStore:       eventStore,
 		Inventory:        inventory,
 		MetricsRecorder:  metricsRecorder,
 		TxManager:        txManager,

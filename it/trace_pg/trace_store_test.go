@@ -9,6 +9,7 @@ import (
 
 	pgtrace "github.com/ddd-qce/core/trace/pg"
 	"github.com/ddd-qce/core/trace"
+	"github.com/ddd-qce/core/trace/tracetest"
 	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -112,6 +113,13 @@ func TestPgTraceStore_ListTraces(t *testing.T) {
 	if len(ids) != 3 {
 		t.Errorf("expected 3 traces, got %d", len(ids))
 	}
+}
+
+func TestPgTraceStore_Contract(t *testing.T) {
+	db := openTestDBForTrace(t)
+	tracetest.TestTraceStoreContract(t, func() trace.TraceStore {
+		return pgtrace.NewTraceStore(db)
+	})
 }
 
 func TestPgTraceStore_ListTracesByName(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/trace"
 )
 
@@ -17,13 +18,8 @@ type tracingTestQuery struct {
 }
 
 type tracingTestEvent struct {
-	aggregateID string
-	occurredAt  time.Time
+	event.BaseEvent
 }
-
-func (e *tracingTestEvent) AggregateID() string   { return e.aggregateID }
-func (e *tracingTestEvent) EventType() string     { return "TracingTestEvent" }
-func (e *tracingTestEvent) OccurredAt() time.Time { return e.occurredAt }
 
 func TestTracingAspect_NameAndOrder(t *testing.T) {
 	aspect := &TracingAspect{Store: trace.NewInMemoryTraceStore()}
@@ -208,7 +204,7 @@ func TestTracingAspect_BeforePublish_CreatesSpan(t *testing.T) {
 	aspect := &TracingAspect{Store: store}
 
 	ctx := context.Background()
-	evt := &tracingTestEvent{aggregateID: "agg-1", occurredAt: time.Now()}
+	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
 
 	newCtx, err := aspect.BeforePublish(ctx, evt)
 	if err != nil {
@@ -231,7 +227,7 @@ func TestTracingAspect_AfterPublish_Success(t *testing.T) {
 	aspect := &TracingAspect{Store: store}
 
 	ctx := context.Background()
-	evt := &tracingTestEvent{aggregateID: "agg-1", occurredAt: time.Now()}
+	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
 
 	newCtx, _ := aspect.BeforePublish(ctx, evt)
 	err := aspect.AfterPublish(newCtx, evt, nil, 20*time.Millisecond)
@@ -255,7 +251,7 @@ func TestTracingAspect_AfterPublish_Error(t *testing.T) {
 	aspect := &TracingAspect{Store: store}
 
 	ctx := context.Background()
-	evt := &tracingTestEvent{aggregateID: "agg-1", occurredAt: time.Now()}
+	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
 
 	newCtx, _ := aspect.BeforePublish(ctx, evt)
 	testErr := &testTracingError{"publish failed"}
@@ -333,7 +329,7 @@ func TestLoggingAspect_BeforePublish(t *testing.T) {
 	aspect := &LoggingAspect{Logger: logger}
 
 	ctx := context.Background()
-	evt := &tracingTestEvent{aggregateID: "agg-1", occurredAt: time.Now()}
+	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
 
 	newCtx, err := aspect.BeforePublish(ctx, evt)
 	if err != nil {
@@ -393,7 +389,7 @@ func TestMetricsAspect_BeforePublish_NoOp(t *testing.T) {
 	aspect := &MetricsAspect{Recorder: recorder}
 
 	ctx := context.Background()
-	evt := &tracingTestEvent{aggregateID: "agg-1", occurredAt: time.Now()}
+	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
 
 	newCtx, err := aspect.BeforePublish(ctx, evt)
 	if err != nil {

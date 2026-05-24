@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ddd-qce/core/domain/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
@@ -203,7 +204,7 @@ func (h *Handler) DeleteOrder(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	events, err := h.app.DomainEventStore.Load(ctx, orderID, 0)
+	events, err := h.app.EventStore.Load(ctx, orderID, 0)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -222,21 +223,21 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 	views := make([]EventView, len(events))
 	for i, e := range events {
 		view := EventView{
-			EventType:  e.EventType(),
+			EventType:  event.EventTypeOf(e),
 			OccurredAt: e.OccurredAt().Format(time.RFC3339),
 		}
 		switch evt := e.(type) {
 		case *domain.OrderPlacedEvent:
-			view.OrderID = evt.OrderID
+			view.OrderID = evt.AggregateID()
 			view.Details = fmt.Sprintf("UserID: %s, Amount: %.2f", evt.UserID, evt.TotalAmount)
 		case *domain.PaymentConfirmedEvent:
-			view.OrderID = evt.OrderID
+			view.OrderID = evt.AggregateID()
 			view.Details = "Payment confirmed"
 		case *domain.OrderShippedEvent:
-			view.OrderID = evt.OrderID
+			view.OrderID = evt.AggregateID()
 			view.Details = "Order shipped"
 		case *domain.OrderCancelledEvent:
-			view.OrderID = evt.OrderID
+			view.OrderID = evt.AggregateID()
 			view.Details = fmt.Sprintf("Cancelled: %s", evt.Reason)
 		default:
 			view.OrderID = e.AggregateID()

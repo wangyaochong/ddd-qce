@@ -10,31 +10,19 @@ import (
 )
 
 type orderCreated struct {
-	OrderID string
-	UserID  string
-	Amount  float64
+	event.BaseEvent
+	UserID string
+	Amount float64
 }
-
-func (e *orderCreated) AggregateID() string   { return e.OrderID }
-func (e *orderCreated) EventType() string     { return event.EventTypeOf(e) }
-func (e *orderCreated) OccurredAt() time.Time { return time.Now() }
 
 type orderConfirmed struct {
-	OrderID string
+	event.BaseEvent
 }
-
-func (e *orderConfirmed) AggregateID() string   { return e.OrderID }
-func (e *orderConfirmed) EventType() string     { return event.EventTypeOf(e) }
-func (e *orderConfirmed) OccurredAt() time.Time { return time.Now() }
 
 type orderCancelled struct {
-	OrderID string
-	Reason  string
+	event.BaseEvent
+	Reason string
 }
-
-func (e *orderCancelled) AggregateID() string   { return e.OrderID }
-func (e *orderCancelled) EventType() string     { return event.EventTypeOf(e) }
-func (e *orderCancelled) OccurredAt() time.Time { return time.Now() }
 
 type OrderState struct {
 	ID     string
@@ -44,7 +32,7 @@ type OrderState struct {
 }
 
 func (s *OrderState) ApplyCreated(event *orderCreated) {
-	s.ID = event.OrderID
+	s.ID = event.AggregateID()
 	s.UserID = event.UserID
 	s.Amount = event.Amount
 	s.Status = "created"
@@ -71,15 +59,15 @@ func TestEventSourcing_CreateApplySaveLoadReplay(t *testing.T) {
 	}
 
 	createdEvents := []*orderCreated{
-		{OrderID: "ORD-001", UserID: "user-001", Amount: 99.99},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), UserID: "user-001", Amount: 99.99},
 	}
-	err := createdStore.Append(ctx, "ORD-001", 0, createdEvents)
+	err = createdStore.Append(ctx, "ORD-001", 0, createdEvents)
 	if err != nil {
 		t.Fatalf("append created failed: %v", err)
 	}
 
 	confirmedEvents := []*orderConfirmed{
-		{OrderID: "ORD-001"},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now())},
 	}
 	err = confirmedStore.Append(ctx, "ORD-001", 0, confirmedEvents)
 	if err != nil {
@@ -126,13 +114,13 @@ func TestEventSourcing_MultipleAggregates(t *testing.T) {
 	}
 
 	events := []*orderCreated{
-		{OrderID: "ORD-001", UserID: "user-001", Amount: 100.00},
-		{OrderID: "ORD-002", UserID: "user-002", Amount: 200.00},
-		{OrderID: "ORD-001", UserID: "user-001", Amount: 150.00},
-		{OrderID: "ORD-002", UserID: "user-002", Amount: 250.00},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), UserID: "user-001", Amount: 100.00},
+		{BaseEvent: event.NewBaseEvent("ORD-002", time.Now()), UserID: "user-002", Amount: 200.00},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), UserID: "user-001", Amount: 150.00},
+		{BaseEvent: event.NewBaseEvent("ORD-002", time.Now()), UserID: "user-002", Amount: 250.00},
 	}
 
-	err := store.Append(ctx, "ORD-001", 0, events)
+	err = store.Append(ctx, "ORD-001", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -162,12 +150,12 @@ func TestEventSourcing_Versioning(t *testing.T) {
 	}
 
 	events := []*orderCreated{
-		{OrderID: "ORD-001", UserID: "user-001", Amount: 100.00},
-		{OrderID: "ORD-001", UserID: "user-001", Amount: 200.00},
-		{OrderID: "ORD-001", UserID: "user-001", Amount: 300.00},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), UserID: "user-001", Amount: 100.00},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), UserID: "user-001", Amount: 200.00},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), UserID: "user-001", Amount: 300.00},
 	}
 
-	err := store.Append(ctx, "ORD-001", 0, events)
+	err = store.Append(ctx, "ORD-001", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -213,13 +201,13 @@ func TestEventSourcing_FullReplay(t *testing.T) {
 	}
 
 	createdStore.Append(ctx, "ORD-001", 0, []*orderCreated{
-		{OrderID: "ORD-001", UserID: "user-001", Amount: 500.00},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), UserID: "user-001", Amount: 500.00},
 	})
 	confirmedStore.Append(ctx, "ORD-001", 0, []*orderConfirmed{
-		{OrderID: "ORD-001"},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now())},
 	})
 	cancelledStore.Append(ctx, "ORD-001", 0, []*orderCancelled{
-		{OrderID: "ORD-001", Reason: "customer request"},
+		{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), Reason: "customer request"},
 	})
 
 	state := &OrderState{}

@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"time"
 
-	cqevent "github.com/ddd-qce/core/cqrs/event/pg"
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
 	"github.com/ddd-qce/core/domain/event"
@@ -132,7 +131,7 @@ type AggregateReconstructor[T aggregate.AggregateRef] func(id string) T
 
 type PgEventSourcedRepository[T aggregate.AggregateRef] struct {
 	db            *sql.DB
-	eventStore    *cqevent.EventStore[event.DomainEvent]
+	eventStore    event.EventStore[event.DomainEvent]
 	reconstructor AggregateReconstructor[T]
 	serializer    SnapshotSerializer[T]
 	typeName      string
@@ -141,7 +140,7 @@ type PgEventSourcedRepository[T aggregate.AggregateRef] struct {
 
 func NewEventSourcedRepository[T aggregate.AggregateRef](
 	db *sql.DB,
-	eventStore *cqevent.EventStore[event.DomainEvent],
+	eventStore event.EventStore[event.DomainEvent],
 	reconstructor AggregateReconstructor[T],
 	opts ...EventSourcedRepoOption[T],
 ) *PgEventSourcedRepository[T] {
@@ -180,9 +179,7 @@ func (r *PgEventSourcedRepository[T]) Save(ctx context.Context, agg T) error {
 	if len(events) == 0 {
 		return nil
 	}
-	typedEvents := make([]event.DomainEvent, len(events))
-	copy(typedEvents, events)
-	if err := r.eventStore.Append(ctx, root.GetID(), root.Version()-len(events), typedEvents); err != nil {
+	if err := r.eventStore.Append(ctx, root.GetID(), root.Version()-len(events), events); err != nil {
 		return fmt.Errorf("append events: %w", err)
 	}
 	if r.snapshotEvery > 0 && root.Version()%r.snapshotEvery == 0 {
@@ -220,9 +217,7 @@ func (r *PgEventSourcedRepository[T]) Load(ctx context.Context, id string) (T, e
 		return agg, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 
-	typedEvents := make([]event.DomainEvent, len(events))
-	copy(typedEvents, events)
-	if err := root.LoadFromHistory(typedEvents); err != nil {
+	if err := root.LoadFromHistory(events); err != nil {
 		return agg, fmt.Errorf("load from history for aggregate %s: %w", id, err)
 	}
 	return agg, nil

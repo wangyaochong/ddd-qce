@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+	"github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/domain/repository"
 	"github.com/ddd-qce/exampleapp/domain"
 )
@@ -59,12 +59,12 @@ func (r *OrderRepository) FindAll() []*domain.Order {
 var _ repository.Repository[*domain.Order] = (*OrderRepository)(nil)
 
 type OrderEventSourcedRepository struct {
-	eventStore *eventmemory.DomainEventStore
+	eventStore event.EventStore[event.DomainEvent]
 	orderRepo  *OrderRepository
 }
 
 func NewOrderEventSourcedRepository(
-	eventStore *eventmemory.DomainEventStore,
+	eventStore event.EventStore[event.DomainEvent],
 	orderRepo *OrderRepository,
 ) *OrderEventSourcedRepository {
 	return &OrderEventSourcedRepository{

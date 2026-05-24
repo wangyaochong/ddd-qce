@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event/eventtest"
 )
 
 var _ event.EventStore[*testStoreEvent] = (*EventStore[*testStoreEvent])(nil)
@@ -314,6 +315,16 @@ func TestEventStore_WithFactory(t *testing.T) {
 	if loaded[1].Data != "event2" {
 		t.Errorf("expected 'event2', got '%s'", loaded[1].Data)
 	}
+}
+
+func TestEventStore_Contract(t *testing.T) {
+	eventtest.TestEventStoreContract(t, func() event.EventStore[*eventtest.TestEvent] {
+		store, err := NewEventStore[*eventtest.TestEvent]()
+		if err != nil {
+			t.Fatalf("create event store: %v", err)
+		}
+		return store
+	})
 }
 
 func TestEventStore_WithFactory_LoadReturnsCopy(t *testing.T) {

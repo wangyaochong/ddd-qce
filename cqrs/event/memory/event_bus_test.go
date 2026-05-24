@@ -12,20 +12,12 @@ import (
 )
 
 type testUserEvent struct {
-	aggregateID string
+	event.BaseEvent
 }
-
-func (e *testUserEvent) AggregateID() string   { return e.aggregateID }
-func (e *testUserEvent) EventType() string     { return event.EventTypeOf(e) }
-func (e *testUserEvent) OccurredAt() time.Time { return time.Now() }
 
 type testOrderEvent struct {
-	aggregateID string
+	event.BaseEvent
 }
-
-func (e *testOrderEvent) AggregateID() string   { return e.aggregateID }
-func (e *testOrderEvent) EventType() string     { return event.EventTypeOf(e) }
-func (e *testOrderEvent) OccurredAt() time.Time { return time.Now() }
 
 type testUserEventHandler struct {
 	called    bool
@@ -71,7 +63,7 @@ func TestEventBus_SubscribeAndPublish(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -85,7 +77,7 @@ func TestEventBus_MultipleHandlers(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, sub2)
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -102,7 +94,7 @@ func TestEventBus_HandlerError(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, &testErrorEventHandler{})
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err == nil {
 		t.Fatal("expected error from handler")
@@ -125,7 +117,7 @@ func TestEventBus_Concurrent(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			if err := bus.Publish(ctx, &testUserEvent{aggregateID: string(rune(id))}); err != nil {
+			if err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent(string(rune(id)), time.Now())}); err != nil {
 				errs <- err
 			}
 		}(i)
@@ -146,7 +138,7 @@ func TestEventBus_NilChain(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -164,7 +156,7 @@ func TestEventBus_WithAspects(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -187,9 +179,9 @@ func TestEventBus_MultipleEventTypes(t *testing.T) {
 
 	ctx := context.Background()
 
-	Dispatch[*testUserEvent](ctx, bus, &testUserEvent{aggregateID: "u1"})
-	Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{aggregateID: "o1"})
-	Dispatch[*testUserEvent](ctx, bus, &testUserEvent{aggregateID: "u2"})
+	Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("u1", time.Now())})
+	Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{BaseEvent: event.NewBaseEvent("o1", time.Now())})
+	Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("u2", time.Now())})
 
 	if userHandler.callCount != 2 {
 		t.Errorf("expected userHandler called 2 times, got %d", userHandler.callCount)
@@ -205,7 +197,7 @@ func TestEventBus_DifferentEventTypesIsolated(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, handler)
 
 	ctx := context.Background()
-	err := Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{aggregateID: "1"})
+	err := Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -225,7 +217,7 @@ func TestEventBus_PublishRoutesCorrectly(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := Dispatch[*testUserEvent](ctx, bus, &testUserEvent{aggregateID: "1"})
+	err := Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -236,7 +228,7 @@ func TestEventBus_PublishRoutesCorrectly(t *testing.T) {
 		t.Error("orderHandler should not have been called")
 	}
 
-	err = Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{aggregateID: "1"})
+	err = Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -263,7 +255,7 @@ func TestEventBus_NilChainGroup(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
-	err := Dispatch[*testUserEvent](ctx, bus, &testUserEvent{aggregateID: "1"})
+	err := Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -297,7 +289,7 @@ func TestEventBus_MultipleHandlerErrors(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, &testErrorEventHandlerV2{})
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err == nil {
 		t.Fatal("expected error from handlers")
@@ -317,7 +309,7 @@ func TestEventBus_SingleErrorNotMultiError(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, &testErrorEventHandler{})
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err == nil {
 		t.Fatal("expected error from handler")
@@ -342,7 +334,7 @@ func TestEventBus_AllHandlersCalledConcurrently(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, h3)
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -382,7 +374,7 @@ func TestEventBus_ConcurrentHandlersFaster(t *testing.T) {
 
 	ctx := context.Background()
 	start := time.Now()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -408,7 +400,7 @@ func TestEventBus_WithAspects_MultipleHandlers(t *testing.T) {
 	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -429,7 +421,7 @@ func TestEventBus_NoHandlers(t *testing.T) {
 	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testUserEvent{aggregateID: "1"})
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err != nil {
 		t.Fatalf("expected nil error with no handlers, got %v", err)

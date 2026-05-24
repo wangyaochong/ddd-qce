@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	jobcore "github.com/ddd-qce/core/job/core"
+	"github.com/ddd-qce/core/job/core/jobtest"
 )
 
 type testJobCommand struct {
@@ -198,6 +199,10 @@ func TestJobStore_List(t *testing.T) {
 	if len(failed) != 0 {
 		t.Errorf("expected 0 failed jobs, got %d", len(failed))
 	}
+}
+
+func TestJobStore_Contract(t *testing.T) {
+	jobtest.TestJobStoreContract(t, func() jobcore.JobStore { return NewJobStore() })
 }
 
 func TestJobStore_Concurrent(t *testing.T) {

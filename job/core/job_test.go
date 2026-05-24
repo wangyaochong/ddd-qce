@@ -74,6 +74,7 @@ func TestJob_MarkRunning_Concurrent(t *testing.T) {
 
 func TestJob_TryComplete(t *testing.T) {
 	job := NewJob("job-1", nil)
+	job.MarkRunning()
 	if !job.TryComplete("result") {
 		t.Error("expected TryComplete to succeed")
 	}
@@ -99,8 +100,22 @@ func TestJob_TryComplete_Cancelled(t *testing.T) {
 	}
 }
 
+func TestJob_TryComplete_Pending(t *testing.T) {
+	job := NewJob("job-1", nil, WithMaxRetries(1))
+	job.MarkRunning()
+	job.TryFail("fail")
+	_ = job.ResetForRetry()
+	if job.TryComplete("result") {
+		t.Error("expected TryComplete to fail for pending job")
+	}
+	if job.GetStatus() != JobStatusPending {
+		t.Errorf("expected pending, got %s", job.GetStatus())
+	}
+}
+
 func TestJob_TryFail(t *testing.T) {
 	job := NewJob("job-1", nil)
+	job.MarkRunning()
 	cancelled, shouldRetry := job.TryFail("something went wrong")
 	if cancelled {
 		t.Error("expected not cancelled")
@@ -118,6 +133,7 @@ func TestJob_TryFail(t *testing.T) {
 
 func TestJob_TryFail_WithRetry(t *testing.T) {
 	job := NewJob("job-1", nil, WithMaxRetries(2))
+	job.MarkRunning()
 	cancelled, shouldRetry := job.TryFail("fail")
 	if cancelled {
 		t.Error("expected not cancelled")
@@ -142,6 +158,20 @@ func TestJob_TryFail_Cancelled(t *testing.T) {
 	}
 }
 
+func TestJob_TryFail_Pending(t *testing.T) {
+	job := NewJob("job-1", nil, WithMaxRetries(1))
+	job.MarkRunning()
+	job.TryFail("fail")
+	_ = job.ResetForRetry()
+	cancelled, shouldRetry := job.TryFail("fail again")
+	if cancelled {
+		t.Error("expected not cancelled for pending job")
+	}
+	if shouldRetry {
+		t.Error("expected no retry for pending job")
+	}
+}
+
 func TestJob_TryCancel(t *testing.T) {
 	job := NewJob("job-1", nil)
 	job.MarkRunning()
@@ -158,6 +188,7 @@ func TestJob_TryCancel(t *testing.T) {
 
 func TestJob_TryCancel_AlreadyCompleted(t *testing.T) {
 	job := NewJob("job-1", nil)
+	job.MarkRunning()
 	job.TryComplete("result")
 	if err := job.TryCancel(); err == nil {
 		t.Error("expected error when cancelling completed job")
@@ -285,6 +316,32 @@ func TestJob_Snapshot_IncludesCommandType(t *testing.T) {
 	}
 	if snap.GetResultType() != "core.testSampleResult" {
 		t.Errorf("expected ResultType preserved, got %q", snap.GetResultType())
+	}
+}
+
+func TestJob_Snapshot_DoneChannelIndependence(t *testing.T) {
+	job := NewJob("job-1", nil)
+	snap := job.Snapshot()
+
+	job.MarkDone()
+
+	select {
+	case <-snap.Done():
+		t.Error("snapshot done channel should not be closed when original is marked done")
+	default:
+	}
+}
+
+func TestJob_Snapshot_DoneChannelClosedForCompletedJob(t *testing.T) {
+	job := NewJob("job-1", nil)
+	job.MarkRunning()
+	job.TryComplete("result")
+
+	snap := job.Snapshot()
+	select {
+	case <-snap.Done():
+	default:
+		t.Error("snapshot done channel should be closed for completed job")
 	}
 }
 

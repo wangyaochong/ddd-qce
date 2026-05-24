@@ -87,7 +87,7 @@ func (j *Job) MarkRunning() {
 func (j *Job) TryComplete(result any) bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	if j.status == JobStatusCancelled {
+	if j.status == JobStatusCancelled || j.status == JobStatusPending {
 		return false
 	}
 	j.completedAt = time.Now()
@@ -102,10 +102,10 @@ func (j *Job) TryComplete(result any) bool {
 func (j *Job) TryFail(errStr string) (cancelled bool, shouldRetry bool) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	j.completedAt = time.Now()
-	if j.status == JobStatusCancelled {
-		return true, false
+	if j.status == JobStatusCancelled || j.status == JobStatusPending {
+		return j.status == JobStatusCancelled, false
 	}
+	j.completedAt = time.Now()
 	j.status = JobStatusFailed
 	j.err = errStr
 	if j.RetryCount < j.MaxRetries {
@@ -175,6 +175,10 @@ func (j *Job) ResetDone() {
 func (j *Job) Snapshot() *Job {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	done := make(chan struct{})
+	if j.status == JobStatusCompleted || j.status == JobStatusFailed || j.status == JobStatusCancelled {
+		close(done)
+	}
 	return &Job{
 		ID:          j.ID,
 		Command:     j.Command,
@@ -189,7 +193,7 @@ func (j *Job) Snapshot() *Job {
 		Timeout:     j.Timeout,
 		RetryCount:  j.RetryCount,
 		MaxRetries:  j.MaxRetries,
-		done:        j.done,
+		done:        done,
 	}
 }
 

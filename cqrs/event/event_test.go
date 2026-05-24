@@ -11,12 +11,8 @@ import (
 )
 
 type testEvent struct {
-	AggID string
+	domainevent.BaseEvent
 }
-
-func (e *testEvent) AggregateID() string   { return e.AggID }
-func (e *testEvent) EventType() string     { return domainevent.EventTypeOf(e) }
-func (e *testEvent) OccurredAt() time.Time { return time.Now() }
 
 type testEventHandler struct {
 	called bool
@@ -41,7 +37,7 @@ func TestEventBus_SubscribeAndPublish(t *testing.T) {
 	eventmemory.RegisterHandler[*testEvent](bus, handler)
 
 	ctx := context.Background()
-	err := eventmemory.Dispatch[*testEvent](ctx, bus, &testEvent{AggID: "agg-1"})
+	err := eventmemory.Dispatch[*testEvent](ctx, bus, &testEvent{BaseEvent: domainevent.NewBaseEvent("agg-1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

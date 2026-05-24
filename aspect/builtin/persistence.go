@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/trace"
 )
 
@@ -198,11 +199,6 @@ func extractEventMeta(evt any) (aggregateID, eventType string) {
 	if de, ok := evt.(interface{ AggregateID() string }); ok {
 		aggregateID = de.AggregateID()
 	}
-	if de, ok := evt.(interface{ EventType() string }); ok {
-		eventType = de.EventType()
-	}
-	if eventType == "" {
-		eventType = typeName(evt)
-	}
+	eventType = event.EventTypeOf(evt)
 	return
 }

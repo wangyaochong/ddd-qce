@@ -33,38 +33,32 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 	orderID := "ORD-" + time.Now().Format("20060102150405")
 
 	eventmemory.Dispatch[*OrderPlacedEvent](ctx, h.eventBus, &OrderPlacedEvent{
-		OrderID: orderID,
-		UserID:  cmd.UserID,
-		Product: cmd.Product,
-		Amount:  cmd.Amount,
-		Time:    time.Now(),
+		BaseEvent: event.NewBaseEvent(orderID, time.Now()),
+		UserID:          cmd.UserID,
+		Product:         cmd.Product,
+		Amount:          cmd.Amount,
 	})
 
 	return &PlaceOrderResult{OrderID: orderID}, nil
 }
 
 type OrderPlacedEvent struct {
-	OrderID string
+	event.BaseEvent
 	UserID  string
 	Product string
 	Amount  float64
-	Time    time.Time
 }
-
-func (e *OrderPlacedEvent) AggregateID() string   { return e.OrderID }
-func (e *OrderPlacedEvent) EventType() string     { return event.EventTypeOf(e) }
-func (e *OrderPlacedEvent) OccurredAt() time.Time { return e.Time }
 
 type OrderPlacedEventHandler struct {
 	cmdBus *commandmemory.CommandBus
 }
 
 func (h *OrderPlacedEventHandler) Handle(ctx context.Context, event *OrderPlacedEvent) error {
-	fmt.Printf("  [EventHandler] Processing OrderPlaced for order %s\n", event.OrderID)
+	fmt.Printf("  [EventHandler] Processing OrderPlaced for order %s\n", event.AggregateID())
 
 	commandmemory.Dispatch[*SendNotificationCommand, *SendNotificationResult](ctx, h.cmdBus, &SendNotificationCommand{
 		UserID:  event.UserID,
-		Message: fmt.Sprintf("Order %s placed: %s ($%.2f)", event.OrderID, event.Product, event.Amount),
+		Message: fmt.Sprintf("Order %s placed: %s ($%.2f)", event.AggregateID(), event.Product, event.Amount),
 	})
 
 	commandmemory.Dispatch[*UpdateInventoryCommand, *UpdateInventoryResult](ctx, h.cmdBus, &UpdateInventoryCommand{

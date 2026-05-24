@@ -10,10 +10,12 @@ import (
 type txKey struct{}
 
 type txState struct {
-	tx      *sql.Tx
-	depth   int
-	aborted bool
-	mu      sync.Mutex
+	tx        *sql.Tx
+	depth     int
+	aborted   bool
+	mu        sync.Mutex
+	nextSpSeq int
+	parentSp  []int
 }
 
 type PgTransactionManager struct {
@@ -29,9 +31,14 @@ func (m *PgTransactionManager) Begin(ctx context.Context) (context.Context, erro
 		state.mu.Lock()
 		defer state.mu.Unlock()
 		state.depth++
-		spName := fmt.Sprintf("sp_%d", state.depth)
+		state.nextSpSeq++
+		spSeq := state.nextSpSeq
+		state.parentSp = append(state.parentSp, spSeq)
+		spName := fmt.Sprintf("sp_%d", spSeq)
 		if _, err := state.tx.ExecContext(ctx, "SAVEPOINT "+spName); err != nil {
 			state.depth--
+			state.nextSpSeq--
+			state.parentSp = state.parentSp[:len(state.parentSp)-1]
 			return nil, fmt.Errorf("create savepoint: %w", err)
 		}
 		return ctx, nil
@@ -41,7 +48,7 @@ func (m *PgTransactionManager) Begin(ctx context.Context) (context.Context, erro
 	if err != nil {
 		return nil, err
 	}
-	state := &txState{tx: tx, depth: 1}
+	state := &txState{tx: tx, depth: 1, nextSpSeq: 1, parentSp: []int{1}}
 	return context.WithValue(ctx, txKey{}, state), nil
 }
 
@@ -57,7 +64,9 @@ func (m *PgTransactionManager) Commit(ctx context.Context) error {
 		return fmt.Errorf("no transaction in context")
 	}
 
-	spName := fmt.Sprintf("sp_%d", state.depth)
+	spSeq := state.parentSp[len(state.parentSp)-1]
+	state.parentSp = state.parentSp[:len(state.parentSp)-1]
+	spName := fmt.Sprintf("sp_%d", spSeq)
 	state.depth--
 
 	if state.depth > 0 {
@@ -90,7 +99,9 @@ func (m *PgTransactionManager) Rollback(ctx context.Context) error {
 	}
 
 	state.aborted = true
-	spName := fmt.Sprintf("sp_%d", state.depth)
+	spSeq := state.parentSp[len(state.parentSp)-1]
+	state.parentSp = state.parentSp[:len(state.parentSp)-1]
+	spName := fmt.Sprintf("sp_%d", spSeq)
 	state.depth--
 
 	if state.depth > 0 {

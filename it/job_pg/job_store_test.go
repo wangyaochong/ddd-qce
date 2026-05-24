@@ -8,6 +8,7 @@ import (
 	"time"
 
 	jobcore "github.com/ddd-qce/core/job/core"
+	"github.com/ddd-qce/core/job/core/jobtest"
 	pgjob "github.com/ddd-qce/core/job/pg"
 	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -15,6 +16,11 @@ import (
 
 func openTestDBForJob(t *testing.T) *sql.DB {
 	return testutil.OpenTestDB(t, "ddd_qce_job_test")
+}
+
+func TestPgJobStore_Contract(t *testing.T) {
+	db := openTestDBForJob(t)
+	jobtest.TestJobStoreContract(t, func() jobcore.JobStore { return pgjob.NewJobStore(db) })
 }
 
 func TestPgJobStore_CreateAndGet(t *testing.T) {

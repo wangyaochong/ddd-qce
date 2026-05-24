@@ -9,6 +9,7 @@ import (
 
 	"github.com/ddd-qce/core/cqrs/command"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+	"github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/exampleapp/domain"
 )
 
@@ -38,11 +39,10 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 	}
 
 	eventmemory.Dispatch[*domain.OrderPlacedEvent](ctx, h.eventBus, &domain.OrderPlacedEvent{
-		OrderID:     order.GetID(),
-		UserID:      order.UserID,
-		TotalAmount: order.TotalAmount,
-		Items:       order.ItemNames(),
-		Time:        time.Now(),
+		BaseEvent: event.NewBaseEvent(order.GetID(), time.Now()),
+		UserID:          order.UserID,
+		TotalAmount:     order.TotalAmount,
+		Items:           order.ItemNames(),
 	})
 
 	return &PlaceOrderResult{OrderID: order.GetID(), TotalAmount: order.TotalAmount}, nil
@@ -116,9 +116,8 @@ func (h *CancelOrderHandler) Handle(ctx context.Context, cmd *CancelOrderCommand
 	}
 
 	eventmemory.Dispatch[*domain.OrderCancelledEvent](ctx, h.eventBus, &domain.OrderCancelledEvent{
-		OrderID: order.GetID(),
-		Reason:  cmd.Reason,
-		Time:    time.Now(),
+		BaseEvent: event.NewBaseEvent(order.GetID(), time.Now()),
+		Reason:          cmd.Reason,
 	})
 
 	return &CancelOrderResult{Success: true}, nil
@@ -139,10 +138,9 @@ func (h *ReserveInventoryHandler) Handle(ctx context.Context, cmd *ReserveInvent
 	}
 
 	eventmemory.Dispatch[*domain.InventoryReservedEvent](ctx, h.eventBus, &domain.InventoryReservedEvent{
-		OrderID:   cmd.OrderID,
-		ProductID: cmd.ProductID,
-		Quantity:  cmd.Quantity,
-		Time:      time.Now(),
+		BaseEvent: event.NewBaseEvent(cmd.OrderID, time.Now()),
+		ProductID:       cmd.ProductID,
+		Quantity:        cmd.Quantity,
 	})
 
 	return &ReserveInventoryResult{Success: true}, nil
@@ -163,10 +161,9 @@ func (h *ReleaseInventoryHandler) Handle(ctx context.Context, cmd *ReleaseInvent
 	}
 
 	eventmemory.Dispatch[*domain.InventoryReleasedEvent](ctx, h.eventBus, &domain.InventoryReleasedEvent{
-		OrderID:   cmd.OrderID,
-		ProductID: cmd.ProductID,
-		Quantity:  cmd.Quantity,
-		Time:      time.Now(),
+		BaseEvent: event.NewBaseEvent(cmd.OrderID, time.Now()),
+		ProductID:       cmd.ProductID,
+		Quantity:        cmd.Quantity,
 	})
 
 	return &ReleaseInventoryResult{Success: true}, nil

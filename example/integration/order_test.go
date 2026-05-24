@@ -140,18 +140,14 @@ func (h *testConfirmOrderHandler) Handle(ctx context.Context, cmd *testConfirmOr
 		return nil, err
 	}
 	eventmemory.Dispatch[*testOrderConfirmedEvent](ctx, h.eventBus, &testOrderConfirmedEvent{
-		OrderID: order.ID,
+		BaseEvent: event.NewBaseEvent(order.ID, time.Now()),
 	})
 	return &testConfirmOrderResult{Success: true}, nil
 }
 
 type testOrderConfirmedEvent struct {
-	OrderID string
+	event.BaseEvent
 }
-
-func (e *testOrderConfirmedEvent) AggregateID() string   { return e.OrderID }
-func (e *testOrderConfirmedEvent) EventType() string     { return event.EventTypeOf(e) }
-func (e *testOrderConfirmedEvent) OccurredAt() time.Time { return time.Now() }
 
 type testOrderConfirmedEventHandler struct {
 	called bool

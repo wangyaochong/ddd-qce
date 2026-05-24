@@ -64,11 +64,10 @@ func NewOrder(id, userID string, items []*OrderItem) (*Order, error) {
 	}
 	o.TotalAmount = o.calculateTotal()
 	if err := o.Apply(&OrderPlacedEvent{
-		OrderID:     o.GetID(),
-		UserID:      o.UserID,
-		TotalAmount: o.TotalAmount,
-		Items:       o.ItemNames(),
-		Time:        time.Now(),
+		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
+		UserID:          o.UserID,
+		TotalAmount:     o.TotalAmount,
+		Items:           o.ItemNames(),
 	}); err != nil {
 		return nil, err
 	}
@@ -91,16 +90,16 @@ func (o *Order) When(evt event.DomainEvent) {
 		o.UserID = e.UserID
 		o.TotalAmount = e.TotalAmount
 		o.Status = OrderStatusPending
-		o.CreatedAt = e.Time
+		o.CreatedAt = e.OccurredAt()
 	case *PaymentConfirmedEvent:
 		o.Status = OrderStatusPaid
-		o.PaidAt = e.Time
+		o.PaidAt = e.OccurredAt()
 	case *OrderShippedEvent:
 		o.Status = OrderStatusShipped
-		o.ShippedAt = e.Time
+		o.ShippedAt = e.OccurredAt()
 	case *OrderCancelledEvent:
 		o.Status = OrderStatusCancelled
-		o.CancelledAt = e.Time
+		o.CancelledAt = e.OccurredAt()
 		o.CancelReason = e.Reason
 	}
 }
@@ -110,8 +109,7 @@ func (o *Order) ConfirmPayment() error {
 		return fmt.Errorf("order %s cannot be confirmed payment (status: %s)", o.GetID(), o.Status)
 	}
 	if err := o.Apply(&PaymentConfirmedEvent{
-		OrderID: o.GetID(),
-		Time:    time.Now(),
+		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
 	}); err != nil {
 		return err
 	}
@@ -123,8 +121,7 @@ func (o *Order) Ship() error {
 		return fmt.Errorf("order %s cannot be shipped (status: %s)", o.GetID(), o.Status)
 	}
 	if err := o.Apply(&OrderShippedEvent{
-		OrderID: o.GetID(),
-		Time:    time.Now(),
+		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
 	}); err != nil {
 		return err
 	}
@@ -139,9 +136,8 @@ func (o *Order) Cancel(reason string) error {
 		return fmt.Errorf("order %s already shipped, cannot cancel", o.GetID())
 	}
 	if err := o.Apply(&OrderCancelledEvent{
-		OrderID: o.GetID(),
-		Reason:  reason,
-		Time:    time.Now(),
+		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
+		Reason:          reason,
 	}); err != nil {
 		return err
 	}

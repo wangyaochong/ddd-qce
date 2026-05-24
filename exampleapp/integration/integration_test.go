@@ -12,6 +12,7 @@ import (
 	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
 	"github.com/ddd-qce/core/trace"
@@ -87,7 +88,7 @@ func TestEventSourcingFullCycle(t *testing.T) {
 		t.Errorf("expected user-001, got %s", loaded.UserID)
 	}
 
-	events, _ := app.DomainEventStore.Load(ctx, "ORD-ES-FULL", 0)
+	events, _ := app.EventStore.Load(ctx, "ORD-ES-FULL", 0)
 	if len(events) != 1 {
 		t.Errorf("expected 1 event, got %d", len(events))
 	}
@@ -163,7 +164,7 @@ func TestConcurrentEventHandlers_MultiError(t *testing.T) {
 	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](eventBus, &failEventHandler{})
 	ctx := context.Background()
 	err := eventmemory.Dispatch[*domain.OrderPlacedEvent](ctx, eventBus, &domain.OrderPlacedEvent{
-		OrderID: "O1", UserID: "u1", TotalAmount: 100, Time: time.Now(),
+		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), UserID: "u1", TotalAmount: 100,
 	})
 	time.Sleep(100 * time.Millisecond)
 	if err == nil {

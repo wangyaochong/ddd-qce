@@ -27,14 +27,8 @@ func NewTestAggregate(id, name string) *TestAggregate {
 }
 
 type TestEvent struct {
-	AggregateIDValue string
-	EventTypeValue   string
-	OccurredAtValue  time.Time
+	event.BaseEvent
 }
-
-func (e *TestEvent) AggregateID() string   { return e.AggregateIDValue }
-func (e *TestEvent) EventType() string     { return e.EventTypeValue }
-func (e *TestEvent) OccurredAt() time.Time { return e.OccurredAtValue }
 
 type InMemoryRepository struct {
 	mu         sync.Mutex
@@ -160,9 +154,7 @@ func TestEventSourcingRepository_SaveAndLoad(t *testing.T) {
 
 	agg := NewTestAggregate("agg-003", "Event Sourced")
 	agg.Apply(&TestEvent{
-		AggregateIDValue: "agg-003",
-		EventTypeValue:   "TestCreated",
-		OccurredAtValue:  time.Now(),
+		BaseEvent: event.NewBaseEvent("agg-003", time.Now()),
 	})
 
 	err := repo.Save(ctx, agg)

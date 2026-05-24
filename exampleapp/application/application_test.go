@@ -11,6 +11,7 @@ import (
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/exampleapp/domain"
 )
 
@@ -213,7 +214,10 @@ func TestOrderRepository_CRUD(t *testing.T) {
 func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 	_ = aspect.NewAspectChain()
 	repo := NewOrderRepository()
-	eventStore := eventmemory.NewDomainEventStore()
+	eventStore, err := eventmemory.NewEventStore[domainevent.DomainEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	esRepo := NewOrderEventSourcedRepository(eventStore, repo)
 	ctx := context.Background()
 
@@ -239,7 +243,10 @@ func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 func TestEventSourcedRepo_LoadFromHistory(t *testing.T) {
 	_ = aspect.NewAspectChain()
 	repo := NewOrderRepository()
-	eventStore := eventmemory.NewDomainEventStore()
+	eventStore, err := eventmemory.NewEventStore[domainevent.DomainEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	esRepo := NewOrderEventSourcedRepository(eventStore, repo)
 	ctx := context.Background()
 
@@ -259,7 +266,10 @@ func TestEventSourcedRepo_LoadFromHistory(t *testing.T) {
 
 func TestEventSourcedRepo_MultipleEventTypes(t *testing.T) {
 	repo := NewOrderRepository()
-	eventStore := eventmemory.NewDomainEventStore()
+	eventStore, err := eventmemory.NewEventStore[domainevent.DomainEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
 	esRepo := NewOrderEventSourcedRepository(eventStore, repo)
 	ctx := context.Background()
 
@@ -329,7 +339,7 @@ func TestOrderPlacedEventHandler(t *testing.T) {
 	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](eventBus, NewOrderPlacedInventoryHandler(cmdBus))
 
 	eventmemory.Dispatch[*domain.OrderPlacedEvent](ctx, eventBus, &domain.OrderPlacedEvent{
-		OrderID: "O1", UserID: "u1", TotalAmount: 100, Time: time.Now(),
+		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), UserID: "u1", TotalAmount: 100,
 	})
 	time.Sleep(100 * time.Millisecond)
 }
@@ -340,7 +350,7 @@ func TestOrderCancelledEventHandler(t *testing.T) {
 	eventmemory.RegisterHandler[*domain.OrderCancelledEvent](eventBus, NewOrderCancelledInventoryHandler(cmdBus))
 
 	eventmemory.Dispatch[*domain.OrderCancelledEvent](ctx, eventBus, &domain.OrderCancelledEvent{
-		OrderID: "O1", Reason: "test", Time: time.Now(),
+		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), Reason: "test",
 	})
 	time.Sleep(100 * time.Millisecond)
 }
@@ -352,7 +362,7 @@ func TestMultiEventHandler_ConcurrentPublish(t *testing.T) {
 	eventmemory.RegisterHandler[*domain.OrderPlacedEvent](freshBus, &loggingNotificationHandler{})
 	ctx := context.Background()
 	eventmemory.Dispatch[*domain.OrderPlacedEvent](ctx, freshBus, &domain.OrderPlacedEvent{
-		OrderID: "O1", UserID: "u1", TotalAmount: 100, Time: time.Now(),
+		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), UserID: "u1", TotalAmount: 100,
 	})
 	time.Sleep(100 * time.Millisecond)
 }

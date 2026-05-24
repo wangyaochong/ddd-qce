@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/ddd-qce/core/aspect/builtin/builtintest"
 	corepg "github.com/ddd-qce/core/pg"
 	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -155,4 +156,45 @@ func TestPgTransactionManager_NoTransaction(t *testing.T) {
 	if err := m.Rollback(ctx); err == nil {
 		t.Error("expected error when Rollback without transaction")
 	}
+}
+
+func TestPgTransactionManager_RollbackThenBeginAgain(t *testing.T) {
+	db := openTestDBForTx(t)
+	m := corepg.NewTransactionManager(db)
+	ctx := context.Background()
+
+	txCtx, err := m.Begin(ctx)
+	if err != nil {
+		t.Fatalf("outer Begin failed: %v", err)
+	}
+
+	innerCtx, err := m.Begin(txCtx)
+	if err != nil {
+		t.Fatalf("inner Begin failed: %v", err)
+	}
+
+	if err := m.Rollback(innerCtx); err != nil {
+		t.Fatalf("inner Rollback failed: %v", err)
+	}
+
+	innerCtx2, err := m.Begin(txCtx)
+	if err != nil {
+		t.Fatalf("second inner Begin after rollback failed: %v", err)
+	}
+
+	if err := m.Commit(innerCtx2); err != nil {
+		t.Fatalf("second inner Commit failed: %v", err)
+	}
+
+	if err := m.Commit(txCtx); err != nil {
+		t.Fatalf("outer Commit failed: %v", err)
+	}
+}
+
+func TestPgTransactionManager_Contract(t *testing.T) {
+	db := openTestDBForTx(t)
+	m := corepg.NewTransactionManager(db)
+	builtintest.TestTransactionManagerContract(t, m, func() context.Context {
+		return context.Background()
+	})
 }

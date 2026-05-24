@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/ddd-qce/core/domain/event"
 )
 
 type testQuery struct {
@@ -24,12 +26,8 @@ type testCommandResult struct {
 }
 
 type testEvent struct {
-	id string
+	event.BaseEvent
 }
-
-func (e *testEvent) AggregateID() string   { return e.id }
-func (e *testEvent) EventType() string     { return "TestEvent" }
-func (e *testEvent) OccurredAt() time.Time { return time.Now() }
 
 type testQueryAspect struct {
 	beforeCalled bool
@@ -132,7 +130,7 @@ func TestAspectChain_EventAspects(t *testing.T) {
 	aspect := &testEventAspect{}
 	chain.RegisterEventAspect(aspect)
 
-	event := &testEvent{id: "1"}
+	event := &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}
 	err := chain.ExecuteWithEventAspects(context.Background(), event, func(ctx context.Context) error {
 		return nil
 	})
@@ -424,7 +422,7 @@ func TestAspectChain_RegisterEventAspect(t *testing.T) {
 	chain.RegisterEventAspect(aspect1)
 
 	ctx := context.Background()
-	err := chain.ExecuteWithEventAspects(ctx, &testEvent{id: "1"}, func(ctx context.Context) error {
+	err := chain.ExecuteWithEventAspects(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, func(ctx context.Context) error {
 		return nil
 	})
 
@@ -474,7 +472,7 @@ func TestAspectChain_EventAspectBeforeError(t *testing.T) {
 	chain.RegisterEventAspect(&eventAspectErrorBefore{})
 
 	ctx := context.Background()
-	err := chain.ExecuteWithEventAspects(ctx, &testEvent{id: "1"}, func(ctx context.Context) error {
+	err := chain.ExecuteWithEventAspects(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, func(ctx context.Context) error {
 		return nil
 	})
 
@@ -512,7 +510,7 @@ func TestAspectChain_RegisterAspect_ImplementsAll(t *testing.T) {
 		return &testQueryResult{Value: "ok"}, nil
 	})
 
-	evt := &testEvent{id: "1"}
+	evt := &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}
 	_ = chain.ExecuteWithEventAspects(context.Background(), evt, func(ctx context.Context) error {
 		return nil
 	})
@@ -623,7 +621,7 @@ func TestAspectChain_EventAspectAfterError(t *testing.T) {
 	chain.RegisterEventAspect(&eventAspectAfterError{})
 
 	ctx := context.Background()
-	err := chain.ExecuteWithEventAspects(ctx, &testEvent{id: "1"}, func(ctx context.Context) error {
+	err := chain.ExecuteWithEventAspects(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, func(ctx context.Context) error {
 		return nil
 	})
 

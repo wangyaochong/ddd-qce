@@ -38,14 +38,10 @@ func (h *testCreateOrderHandler) Handle(ctx context.Context, cmd *testCreateOrde
 }
 
 type testOrderCreatedEvent struct {
-	OrderID string
-	UserID  string
-	Amount  float64
+	event.BaseEvent
+	UserID string
+	Amount float64
 }
-
-func (e *testOrderCreatedEvent) AggregateID() string   { return e.OrderID }
-func (e *testOrderCreatedEvent) EventType() string     { return event.EventTypeOf(e) }
-func (e *testOrderCreatedEvent) OccurredAt() time.Time { return time.Now() }
 
 type testOrderCreatedEventHandler struct {
 	called bool
@@ -113,9 +109,9 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 	}
 
 	err = eventmemory.Dispatch[*testOrderCreatedEvent](ctx, eventBus, &testOrderCreatedEvent{
-		OrderID: result.OrderID,
-		UserID:  "user-001",
-		Amount:  99.99,
+		BaseEvent: event.NewBaseEvent(result.OrderID, time.Now()),
+		UserID:          "user-001",
+		Amount:          99.99,
 	})
 	if err != nil {
 		t.Fatalf("event publish failed: %v", err)

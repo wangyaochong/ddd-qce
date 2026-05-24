@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect/builtin"
+	"github.com/ddd-qce/core/aspect/builtin/builtintest"
 	pgmsg "github.com/ddd-qce/core/aspect/builtin/pg"
 	corepg "github.com/ddd-qce/core/pg"
 	"github.com/ddd-qce/it/testutil"
@@ -205,4 +206,10 @@ func TestPgMessageStore_WithContextTransaction(t *testing.T) {
 	if count != 1 {
 		t.Errorf("expected 1 row after commit, got %d", count)
 	}
+}
+
+func TestPgMessageStore_Contract(t *testing.T) {
+	db := openTestDB(t)
+	store := pgmsg.NewMessageStore(db)
+	builtintest.TestMessageStoreContract(t, store)
 }

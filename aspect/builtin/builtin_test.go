@@ -5,17 +5,17 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/ddd-qce/core/domain/event"
 )
 
 type testQuery struct{}
 
 type testCommand struct{}
 
-type testEvent struct{}
-
-func (e *testEvent) AggregateID() string   { return "1" }
-func (e *testEvent) EventType() string     { return "TestEvent" }
-func (e *testEvent) OccurredAt() time.Time { return time.Now() }
+type testEvent struct {
+	event.BaseEvent
+}
 
 type mockMetricsRecorder struct {
 	durations map[string]time.Duration
@@ -102,7 +102,7 @@ func TestMetricsAspect_Event(t *testing.T) {
 	aspect := &MetricsAspect{Recorder: recorder}
 
 	ctx := context.Background()
-	_ = aspect.AfterPublish(ctx, &testEvent{}, nil, 50*time.Millisecond)
+	_ = aspect.AfterPublish(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, nil, 50*time.Millisecond)
 
 	name := "Event/*builtin.testEvent"
 	if _, ok := recorder.durations[name]; !ok {
@@ -151,7 +151,7 @@ func TestLoggingAspect_Event(t *testing.T) {
 	aspect := &LoggingAspect{Logger: logger}
 
 	ctx := context.Background()
-	_ = aspect.AfterPublish(ctx, &testEvent{}, nil, 100*time.Millisecond)
+	_ = aspect.AfterPublish(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, nil, 100*time.Millisecond)
 
 	if len(logger.debugCalls) == 0 {
 		t.Error("expected debug log for successful event")
@@ -282,7 +282,7 @@ func TestLoggingAspect_AfterPublish_Error(t *testing.T) {
 	aspect := &LoggingAspect{Logger: logger}
 
 	ctx := context.Background()
-	_ = aspect.AfterPublish(ctx, &testEvent{}, errors.New("error"), 100*time.Millisecond)
+	_ = aspect.AfterPublish(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, errors.New("error"), 100*time.Millisecond)
 
 	if len(logger.errorCalls) == 0 {
 		t.Error("expected error log for failed event")
@@ -307,7 +307,7 @@ func TestMetricsAspect_AfterPublish_Error(t *testing.T) {
 	aspect := &MetricsAspect{Recorder: recorder}
 
 	ctx := context.Background()
-	_ = aspect.AfterPublish(ctx, &testEvent{}, errors.New("error"), 100*time.Millisecond)
+	_ = aspect.AfterPublish(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, errors.New("error"), 100*time.Millisecond)
 
 	name := "Event/*builtin.testEvent"
 	if _, ok := recorder.errors[name]; !ok {

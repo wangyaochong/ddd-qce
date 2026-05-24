@@ -14,6 +14,7 @@ import (
 	"github.com/ddd-qce/core/domain/aggregate"
 	"github.com/ddd-qce/core/domain/event"
 	pgrepo "github.com/ddd-qce/core/infra/repository/pg"
+	"github.com/ddd-qce/core/domain/repository/repositorytest"
 	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -58,14 +59,11 @@ func (o *testOrder) UnmarshalJSON(data []byte) error {
 }
 
 type testOrderEvent struct {
-	AggID string    `json:"agg_id"`
-	EType string    `json:"e_type"`
-	EAt   time.Time `json:"e_at"`
+	event.BaseEvent
 }
 
-func (e *testOrderEvent) AggregateID() string   { return e.AggID }
-func (e *testOrderEvent) EventType() string     { return e.EType }
-func (e *testOrderEvent) OccurredAt() time.Time { return e.EAt }
+func (e *testOrderEvent) AggregateID() string   { return e.BaseEvent.AggregateID() }
+func (e *testOrderEvent) OccurredAt() time.Time { return e.BaseEvent.OccurredAt() }
 
 func newEventStore(db *sql.DB) *pgevent.EventStore[event.DomainEvent] {
 	store, err := pgevent.NewEventStore[event.DomainEvent](
@@ -78,6 +76,31 @@ func newEventStore(db *sql.DB) *pgevent.EventStore[event.DomainEvent] {
 		panic(fmt.Sprintf("create event store: %v", err))
 	}
 	return store
+}
+
+func TestPgRepository_Contract(t *testing.T) {
+	db := testutil.OpenTestDB(t, "ddd_qce_repo_test")
+	repo := pgrepo.NewRepository[*testOrder](db)
+	repositorytest.TestRepositoryContract(t, repo,
+		func(id string) *testOrder { return newTestOrder(id) },
+		func(agg *testOrder) { agg.Name = "contract-name"; agg.Amount = 42 },
+	)
+}
+
+func TestPgEventSourcedRepository_Contract(t *testing.T) {
+	db := testutil.OpenTestDB(t, "ddd_qce_repo_test")
+	eventStore := newEventStore(db)
+	repo := pgrepo.NewEventSourcedRepository[*testOrder](
+		db,
+		eventStore,
+		func(id string) *testOrder { return newTestOrder(id) },
+	)
+	repositorytest.TestEventSourcingRepositoryContract(t, repo,
+		func(id string) *testOrder { return newTestOrder(id) },
+		func(agg *testOrder) {
+			agg.Apply(&testOrderEvent{BaseEvent: event.NewBaseEvent(agg.GetID(), time.Now())})
+		},
+	)
 }
 
 func TestPgRepository_SaveAndFindByID(t *testing.T) {
@@ -237,7 +260,7 @@ func TestPgEventSourcedRepository_SaveAndLoad(t *testing.T) {
 	ctx := context.Background()
 
 	order := newTestOrder("order-es-1")
-	order.Apply(&testOrderEvent{AggID: "order-es-1", EType: "OrderCreated", EAt: time.Now()})
+	order.Apply(&testOrderEvent{BaseEvent: event.NewBaseEvent("order-es-1", time.Now())})
 	order.Name = "created order"
 
 	if err := repo.Save(ctx, order); err != nil {
@@ -288,7 +311,7 @@ func TestPgEventSourcedRepository_Snapshot(t *testing.T) {
 
 	order := newTestOrder("order-snap")
 	for i := 0; i < 6; i++ {
-		order.Apply(&testOrderEvent{AggID: "order-snap", EType: "OrderUpdated", EAt: time.Now()})
+		order.Apply(&testOrderEvent{BaseEvent: event.NewBaseEvent("order-snap", time.Now())})
 	}
 
 	if err := repo.Save(ctx, order); err != nil {

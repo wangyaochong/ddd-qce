@@ -76,8 +76,11 @@ func (a *AggregateRoot) SetSnapshotVersion(v int) {
 
 
 func (a *AggregateRoot) Apply(evt event.DomainEvent) error {
+	if err := a.applyEvent(evt); err != nil {
+		return err
+	}
 	a.uncommittedEvents = append(a.uncommittedEvents, evt)
-	return a.applyEvent(evt)
+	return nil
 }
 
 func (a *AggregateRoot) UncommittedEvents() []event.DomainEvent {

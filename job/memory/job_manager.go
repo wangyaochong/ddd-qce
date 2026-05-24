@@ -194,6 +194,12 @@ func (m *JobManager) Retry(ctx context.Context, jobID string) error {
 	m.mu.Unlock()
 
 	if liveExists {
+		select {
+		case <-liveJob.Done():
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
 		if err := liveJob.ResetForRetry(); err != nil {
 			return err
 		}

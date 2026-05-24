@@ -20,8 +20,8 @@ func TestOrderAggregate_Place(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("expected 1 uncommitted event, got %d", len(events))
 	}
-	if events[0].EventType() != "OrderPlacedEvent" {
-		t.Errorf("expected OrderPlacedEvent, got %s", events[0].EventType())
+	if event.EventTypeOf(events[0]) != "OrderPlacedEvent" {
+		t.Errorf("expected OrderPlacedEvent, got %s", event.EventTypeOf(events[0]))
 	}
 }
 
@@ -38,8 +38,8 @@ func TestOrderAggregate_ConfirmPayment(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(events))
 	}
-	if events[0].EventType() != "PaymentConfirmedEvent" {
-		t.Errorf("expected PaymentConfirmedEvent, got %s", events[0].EventType())
+	if event.EventTypeOf(events[0]) != "PaymentConfirmedEvent" {
+		t.Errorf("expected PaymentConfirmedEvent, got %s", event.EventTypeOf(events[0]))
 	}
 }
 
@@ -80,7 +80,7 @@ func TestOrderAggregate_WithApplier(t *testing.T) {
 func TestOrderAggregate_SetApplier(t *testing.T) {
 	o := &Order{UserID: "u1", Status: OrderStatusPending}
 	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier("ORD-SET", o)
-	_ = o.Apply(&OrderPlacedEvent{OrderID: "ORD-SET", UserID: "u1", TotalAmount: 100, Time: time.Now()})
+	_ = o.Apply(&OrderPlacedEvent{BaseEvent: event.NewBaseEvent("ORD-SET", time.Now()), UserID: "u1", TotalAmount: 100})
 	if o.UserID != "u1" {
 		t.Errorf("When not applied via SetApplier, got UserID=%s", o.UserID)
 	}
@@ -91,7 +91,7 @@ func TestOrderAggregate_SetApplier(t *testing.T) {
 
 func TestEventCollector_EventsOnly(t *testing.T) {
 	ar := NewOrderEventCollector("COLLECT-001")
-	_ = ar.Apply(&OrderPlacedEvent{OrderID: "COLLECT-001", UserID: "u1", TotalAmount: 50, Time: time.Now()})
+	_ = ar.Apply(&OrderPlacedEvent{BaseEvent: event.NewBaseEvent("COLLECT-001", time.Now()), UserID: "u1", TotalAmount: 50})
 	if len(ar.UncommittedEvents()) != 1 {
 		t.Errorf("expected 1 event, got %d", len(ar.UncommittedEvents()))
 	}
@@ -131,8 +131,8 @@ func TestOrderAggregate_When(t *testing.T) {
 	o := &Order{}
 	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier("ORD-WHEN", o)
 	_ = o.LoadFromHistory([]event.DomainEvent{
-		&OrderPlacedEvent{OrderID: "ORD-WHEN", UserID: "u1", TotalAmount: 200, Time: time.Now()},
-		&PaymentConfirmedEvent{OrderID: "ORD-WHEN", Time: time.Now()},
+		&OrderPlacedEvent{BaseEvent: event.NewBaseEvent("ORD-WHEN", time.Now()), UserID: "u1", TotalAmount: 200},
+		&PaymentConfirmedEvent{BaseEvent: event.NewBaseEvent("ORD-WHEN", time.Now())},
 	})
 	if o.Status != OrderStatusPaid {
 		t.Errorf("expected paid after When replay, got %s", o.Status)
@@ -178,19 +178,19 @@ func TestOrderItem_IsEmpty(t *testing.T) {
 func TestDomainEvent_Interface(t *testing.T) {
 	now := time.Now()
 	events := []event.DomainEvent{
-		&OrderPlacedEvent{OrderID: "O1", Time: now},
-		&PaymentConfirmedEvent{OrderID: "O1", Time: now},
-		&OrderShippedEvent{OrderID: "O1", Time: now},
-		&OrderCancelledEvent{OrderID: "O1", Time: now},
-		&InventoryReservedEvent{OrderID: "O1", Time: now},
-		&InventoryReleasedEvent{OrderID: "O1", Time: now},
+		&OrderPlacedEvent{BaseEvent: event.NewBaseEvent("O1", now)},
+		&PaymentConfirmedEvent{BaseEvent: event.NewBaseEvent("O1", now)},
+		&OrderShippedEvent{BaseEvent: event.NewBaseEvent("O1", now)},
+		&OrderCancelledEvent{BaseEvent: event.NewBaseEvent("O1", now)},
+		&InventoryReservedEvent{BaseEvent: event.NewBaseEvent("O1", now)},
+		&InventoryReleasedEvent{BaseEvent: event.NewBaseEvent("O1", now)},
 	}
 	for _, e := range events {
 		if e.AggregateID() == "" {
 			t.Errorf("%T: AggregateID() is empty", e)
 		}
-		if e.EventType() == "" {
-			t.Errorf("%T: EventType() is empty", e)
+		if event.EventTypeOf(e) == "" {
+			t.Errorf("%T: EventTypeOf() is empty", e)
 		}
 		if e.OccurredAt().IsZero() {
 			t.Errorf("%T: OccurredAt() is zero", e)
@@ -199,9 +199,9 @@ func TestDomainEvent_Interface(t *testing.T) {
 }
 
 func TestDomainEvent_EventTypeOf(t *testing.T) {
-	e := &OrderPlacedEvent{OrderID: "O1", Time: time.Now()}
-	if e.EventType() != "OrderPlacedEvent" {
-		t.Errorf("expected OrderPlacedEvent, got %s", e.EventType())
+	e := &OrderPlacedEvent{BaseEvent: event.NewBaseEvent("O1", time.Now())}
+	if event.EventTypeOf(e) != "OrderPlacedEvent" {
+		t.Errorf("expected OrderPlacedEvent, got %s", event.EventTypeOf(e))
 	}
 	if event.EventTypeOf(e) != "OrderPlacedEvent" {
 		t.Errorf("EventTypeOf mismatch, got %s", event.EventTypeOf(e))

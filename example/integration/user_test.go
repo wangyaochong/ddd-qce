@@ -126,8 +126,8 @@ func (h *testCreateUserHandler) Handle(ctx context.Context, cmd *testCreateUserC
 		return nil, err
 	}
 	eventmemory.Dispatch[*testUserCreatedEvent](ctx, h.eventBus, &testUserCreatedEvent{
-		UserID: user.ID,
-		Name:   user.Name,
+		BaseEvent: event.NewBaseEvent(user.ID, time.Now()),
+		Name:            user.Name,
 	})
 	return &testCreateUserResult{UserID: user.ID}, nil
 }
@@ -137,13 +137,9 @@ func (h *testCreateUserHandler) SetEventBus(bus *eventmemory.EventBus) {
 }
 
 type testUserCreatedEvent struct {
-	UserID string
-	Name   string
+	event.BaseEvent
+	Name string
 }
-
-func (e *testUserCreatedEvent) AggregateID() string   { return e.UserID }
-func (e *testUserCreatedEvent) EventType() string     { return event.EventTypeOf(e) }
-func (e *testUserCreatedEvent) OccurredAt() time.Time { return time.Now() }
 
 type testUserCreatedEventHandler struct {
 	called bool

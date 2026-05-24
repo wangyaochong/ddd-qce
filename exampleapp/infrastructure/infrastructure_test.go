@@ -152,7 +152,7 @@ func TestNewEventBus_Direct(t *testing.T) {
 	handler := &testEventHandler{}
 	eventmemory.RegisterHandler[*testDomainEvent](bus, handler)
 	ctx := context.Background()
-	bus.Publish(ctx, &testDomainEvent{ID: "A1", Time: time.Now()})
+	bus.Publish(ctx, &testDomainEvent{BaseEvent: event.NewBaseEvent("A1", time.Now())})
 	time.Sleep(50 * time.Millisecond)
 	if !handler.called {
 		t.Error("expected handler to be called")
@@ -160,13 +160,8 @@ func TestNewEventBus_Direct(t *testing.T) {
 }
 
 type testDomainEvent struct {
-	ID   string
-	Time time.Time
+	event.BaseEvent
 }
-
-func (e *testDomainEvent) AggregateID() string   { return e.ID }
-func (e *testDomainEvent) EventType() string     { return event.EventTypeOf(e) }
-func (e *testDomainEvent) OccurredAt() time.Time { return e.Time }
 
 type testEventHandler struct{ called bool }
 
@@ -181,7 +176,7 @@ func TestEventStore_Reflect(t *testing.T) {
 		t.Fatalf("create event store: %v", err)
 	}
 	ctx := context.Background()
-	err := store.Append(ctx, "A1", 0, []*testDomainEvent{{ID: "A1", Time: time.Now()}})
+	err = store.Append(ctx, "A1", 0, []*testDomainEvent{{BaseEvent: event.NewBaseEvent("A1", time.Now())}})
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -202,7 +197,7 @@ func TestEventStoreWithFactory(t *testing.T) {
 		t.Fatalf("create event store: %v", err)
 	}
 	ctx := context.Background()
-	store.Append(ctx, "A1", 0, []*testDomainEvent{{ID: "A1", Time: time.Now()}})
+	store.Append(ctx, "A1", 0, []*testDomainEvent{{BaseEvent: event.NewBaseEvent("A1", time.Now())}})
 	events, _ := store.Load(ctx, "A1", 0)
 	if len(events) != 1 {
 		t.Errorf("expected 1 event, got %d", len(events))
@@ -216,9 +211,9 @@ func TestEventStore_Versioning(t *testing.T) {
 	}
 	ctx := context.Background()
 	store.Append(ctx, "A1", 0, []*testDomainEvent{
-		{ID: "A1", Time: time.Now()},
-		{ID: "A1", Time: time.Now()},
-		{ID: "A1", Time: time.Now()},
+		{BaseEvent: event.NewBaseEvent("A1", time.Now())},
+		{BaseEvent: event.NewBaseEvent("A1", time.Now())},
+		{BaseEvent: event.NewBaseEvent("A1", time.Now())},
 	})
 	all, _ := store.Load(ctx, "A1", 0)
 	if len(all) != 3 {
