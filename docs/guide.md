@@ -46,7 +46,7 @@ entity.SetIDGenerator(func() string {
 ```go
 p := NewProduct("prod-1", "Product A", 100.0)
 
-p.GetID()         // "prod-1"
+p.ID()         // "prod-1"
 p.Equals(other)   // 基于 ID 判断相等性
 p.IsEmpty()       // ID 为空时返回 true
 p.Validate()      // 返回 ID 为空的错误（可由子类覆写）

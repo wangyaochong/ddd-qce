@@ -259,9 +259,9 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 
 | 组件 | 包路径 | 说明 |
 |------|--------|------|
-| Entity | `domain/entity` | 实体基类，提供 ID、GetID()、Equals()、IsEmpty()、Validate() |
-| AuditableEntity | `domain/entity` | 审计实体，嵌入 Entity + CreatedAt/UpdatedAt + Touch() |
-| SoftDeletableEntity | `domain/entity` | 软删除实体，嵌入 AuditableEntity + DeletedAt + SoftDelete()/Restore()/IsDeleted() |
+| Entity | `domain/entity` | 实体基类，提供 id (私有)、ID()、Equals()、IsEmpty()、Validate()、MarshalJSON/UnmarshalJSON |
+| AuditableEntity | `domain/entity` | 审计实体，嵌入 Entity + createdAt/updatedAt (私有) + CreatedAt()/UpdatedAt() + Touch() + FromData 构造器 |
+| SoftDeletableEntity | `domain/entity` | 软删除实体，嵌入 AuditableEntity + deletedAt (私有) + DeletedAt() + SoftDelete()/Restore()/IsDeleted() + FromData 构造器 |
 | IDGenerator | `domain/entity` | ID 生成器类型，DefaultIDGenerator (UUID)，NewEntityWithID()，SetIDGenerator() |
 | AggregateRoot | `domain/aggregate` | 聚合根，嵌入 Entity + Version + 事件收集/回溯 + EventApplier |
 | ValueObject[T] | `domain/valueobject` | 泛型值对象，New[T]() / MustNew[T]() / Value() / Equals() / Validate() / DeepEquals() |
@@ -277,10 +277,10 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 |------|--------|------|
 | Command | `cqrs/command` | 命令接口 + BaseCommand 结构体 |
 | CommandHandler[T,R] | `cqrs/command` | 命令处理器接口 |
-| CommandBus | `cqrs/command/memory` | 内存命令总线，RegisterCommand[T,R](bus, handler) / Dispatch[T,R](bus, ctx, cmd) |
+| CommandBus | `cqrs/command/memory` | 内存命令总线，RegisterCommand[T,R](bus, handler) / Dispatch[T,R](ctx, bus, cmd) |
 | Query | `cqrs/query` | 查询接口 + BaseQuery 结构体 |
 | QueryHandler[T,R] | `cqrs/query` | 查询处理器接口 |
-| QueryBus | `cqrs/query/memory` | 内存查询总线，RegisterQuery[T,R](bus, handler) / Dispatch[T,R](bus, ctx, q) |
+| QueryBus | `cqrs/query/memory` | 内存查询总线，RegisterQuery[T,R](bus, handler) / Dispatch[T,R](ctx, bus, q) |
 | EventBus | `cqrs/event` | 事件总线接口，Publish(ctx, evt) error |
 | AppendOnlyStore[T] | `cqrs/event` | 追加存储接口，Append(ctx, aggregateID, expectedVersion, events) / Load(...) |
 | EventBus (实现) | `cqrs/event/memory` | 非泛型内存事件总线，RegisterHandler[T] / Dispatch[T] 类型安全辅助 |
@@ -360,9 +360,9 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | 决策 | 原因 |
 |------|------|
 | Entity ID 类型为 `string` | 简单灵活，通过 IDGenerator 抽象生成逻辑 |
-| AggregateRoot 嵌入 Entity | Go embedding 使 `a.ID` 仍可直接访问，零破坏性 |
+| AggregateRoot 嵌入 Entity | Go embedding 使 `a.ID()` 仍可直接访问，零破坏性 |
 | EventBus 非泛型统一 | 1 个实例处理所有事件类型，RegisterHandler[T]/Dispatch[T] 保留类型安全 |
-| Dispatch 参数顺序：bus 在 ctx 前 | bus 是方法接收者角色，ctx 是请求上下文 |
+| Dispatch 参数顺序：ctx 在 bus 前 | ctx 是请求上下文，bus 是总线实例，遵循 Go 惯例 |
 | AppendOnlyStore 4 参数签名 | Append(ctx, aggregateID, expectedVersion, events) 支持乐观锁 |
 | pgx 依赖隔离到 it/ 模块 | `go mod tidy` 忽略 build tags，只有独立模块才能真正移除依赖 |
 | Backend 全局统一配置 | 所有基础设施组件共享同一后端，避免配置碎片化 |
