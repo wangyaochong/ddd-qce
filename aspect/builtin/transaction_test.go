@@ -76,11 +76,11 @@ func TestTransactionAspect_Success_Commits(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	chain.RegisterCommandAspect(txAspect)
 
-	bus := commandmemory.NewCommandBus(chain)
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*testTxCommand, *testTxResult](bus, ctx, &testTxCommand{})
+	_, err := commandmemory.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err != nil {
 		t.Fatalf("dispatch failed: %v", err)
 	}
@@ -104,11 +104,11 @@ func TestTransactionAspect_Error_Rollbacks(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	chain.RegisterCommandAspect(txAspect)
 
-	bus := commandmemory.NewCommandBus(chain)
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &testTxHandler{fail: true})
 
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*testTxCommand, *testTxResult](bus, ctx, &testTxCommand{})
+	_, err := commandmemory.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error from handler")
 	}
@@ -134,11 +134,11 @@ func TestTransactionAspect_RollbackError_ReturnsBothErrors(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	chain.RegisterCommandAspect(txAspect)
 
-	bus := commandmemory.NewCommandBus(chain)
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &testTxHandler{fail: true})
 
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*testTxCommand, *testTxResult](bus, ctx, &testTxCommand{})
+	_, err := commandmemory.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -209,11 +209,11 @@ func TestTransactionAspect_BeginError(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	chain.RegisterCommandAspect(txAspect)
 
-	bus := commandmemory.NewCommandBus(chain)
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*testTxCommand, *testTxResult](bus, ctx, &testTxCommand{})
+	_, err := commandmemory.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error from Begin")
 	}

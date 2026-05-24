@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ddd-qce/core/domain/event"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+	"github.com/ddd-qce/core/domain/event"
 )
 
 type UserCreatedEvent struct {
@@ -60,15 +60,15 @@ func (h *OrderCancelledEventHandler) Handle(ctx context.Context, event *OrderCan
 	return nil
 }
 
-func RegisterHandlers(group *eventmemory.EventBusGroup) {
-	eventmemory.EventGroupBus[*UserCreatedEvent](group).Subscribe(&UserCreatedEventHandler{})
-	eventmemory.EventGroupBus[*UserUpdatedEvent](group).Subscribe(&UserUpdatedEventHandler{})
-	eventmemory.EventGroupBus[*OrderCancelledEvent](group).Subscribe(&OrderCancelledEventHandler{})
+func RegisterHandlers(bus *eventmemory.EventBus) {
+	eventmemory.RegisterHandler[*UserCreatedEvent](bus, &UserCreatedEventHandler{})
+	eventmemory.RegisterHandler[*UserUpdatedEvent](bus, &UserUpdatedEventHandler{})
+	eventmemory.RegisterHandler[*OrderCancelledEvent](bus, &OrderCancelledEventHandler{})
 }
 
-func RunExample(ctx context.Context, group *eventmemory.EventBusGroup) {
+func RunExample(ctx context.Context, bus *eventmemory.EventBus) {
 	fmt.Println("=== Event: UserCreated ===")
-	err := eventmemory.EventGroupPublish[*UserCreatedEvent](group, ctx, &UserCreatedEvent{
+	err := eventmemory.Dispatch[*UserCreatedEvent](ctx, bus, &UserCreatedEvent{
 		UserID: "user-001",
 		Name:   "李四",
 		Time:   time.Now(),
@@ -78,7 +78,7 @@ func RunExample(ctx context.Context, group *eventmemory.EventBusGroup) {
 	}
 
 	fmt.Println("\n=== Event: UserUpdated ===")
-	err = eventmemory.EventGroupPublish[*UserUpdatedEvent](group, ctx, &UserUpdatedEvent{
+	err = eventmemory.Dispatch[*UserUpdatedEvent](ctx, bus, &UserUpdatedEvent{
 		UserID: "1",
 		Name:   "张三更新",
 		Time:   time.Now(),
@@ -88,7 +88,7 @@ func RunExample(ctx context.Context, group *eventmemory.EventBusGroup) {
 	}
 
 	fmt.Println("\n=== Event: OrderCancelled ===")
-	err = eventmemory.EventGroupPublish[*OrderCancelledEvent](group, ctx, &OrderCancelledEvent{
+	err = eventmemory.Dispatch[*OrderCancelledEvent](ctx, bus, &OrderCancelledEvent{
 		OrderID: "ORD-001",
 		Reason:  "用户取消",
 		Time:    time.Now(),

@@ -1,0 +1,45 @@
+{{define "traces"}}{{template "header" .}}
+
+<h1 style="margin-bottom:1.5rem;">Distributed Traces</h1>
+
+<div class="card">
+    <h2>Filter</h2>
+    <form method="GET" action="/traces" style="display:flex;gap:1rem;align-items:end;">
+        <div class="form-group" style="margin:0;">
+            <label>Type</label>
+            <select name="type">
+                <option value="">All</option>
+                <option value="command" {{if eq .FilterType "command"}}selected{{end}}>Command</option>
+                <option value="query" {{if eq .FilterType "query"}}selected{{end}}>Query</option>
+                <option value="event" {{if eq .FilterType "event"}}selected{{end}}>Event</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+            <label>Status</label>
+            <select name="status">
+                <option value="">All</option>
+                <option value="success" {{if eq .FilterStatus "success"}}selected{{end}}>Success</option>
+                <option value="error" {{if eq .FilterStatus "error"}}selected{{end}}>Error</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+</div>
+
+{{range .Traces}}
+<div class="card">
+    <h2>Trace: {{printf "%.8s" .TraceID}}... ({{len .Spans}} spans)</h2>
+    <div class="trace-tree">
+        {{range .Spans}}
+        <div class="span-item">
+            [{{.Type}}] {{.Name}} {{if eq .Status "success"}}<span class="ok">OK</span>{{else}}<span class="err">ERR</span>{{end}} ({{.Duration}})
+            {{if .Error}}<span class="err">{{.Error}}</span>{{end}}
+        </div>
+        {{end}}
+    </div>
+</div>
+{{else}}
+<div class="card"><div class="empty">No traces found. Try placing an order first!</div></div>
+{{end}}
+
+{{template "footer" .}}{{end}}

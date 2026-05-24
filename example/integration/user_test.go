@@ -117,7 +117,7 @@ type testCreateUserResult struct {
 
 type testCreateUserHandler struct {
 	repo       *UserRepository
-	eventGroup *eventmemory.EventBusGroup
+	eventBus *eventmemory.EventBus
 }
 
 func (h *testCreateUserHandler) Handle(ctx context.Context, cmd *testCreateUserCommand) (*testCreateUserResult, error) {
@@ -125,15 +125,15 @@ func (h *testCreateUserHandler) Handle(ctx context.Context, cmd *testCreateUserC
 	if err := h.repo.Save(user); err != nil {
 		return nil, err
 	}
-	eventmemory.EventGroupPublish[*testUserCreatedEvent](h.eventGroup, ctx, &testUserCreatedEvent{
+	eventmemory.Dispatch[*testUserCreatedEvent](ctx, h.eventBus, &testUserCreatedEvent{
 		UserID: user.ID,
 		Name:   user.Name,
 	})
 	return &testCreateUserResult{UserID: user.ID}, nil
 }
 
-func (h *testCreateUserHandler) SetEventGroup(group *eventmemory.EventBusGroup) {
-	h.eventGroup = group
+func (h *testCreateUserHandler) SetEventBus(bus *eventmemory.EventBus) {
+	h.eventBus = bus
 }
 
 type testUserCreatedEvent struct {
@@ -220,23 +220,23 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 	ctx := context.Background()
 	chain := aspect.NewAspectChain()
 
-	cmdBus := commandmemory.NewCommandBus(chain)
-	eventGroup := eventmemory.NewEventBusGroup(chain)
-	qBus := querymemory.NewQueryBus(chain)
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	qBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
 	repo := NewUserRepository()
 
 	eventHandler := &testUserCreatedEventHandler{}
 	createHandler := &testCreateUserHandler{repo: repo}
-	createHandler.SetEventGroup(eventGroup)
+	createHandler.SetEventBus(eventBus)
 	updateHandler := &testUpdateUserHandler{repo: repo}
 	getHandler := &testGetUserHandler{repo: repo}
 
 	commandmemory.RegisterCommand(cmdBus, createHandler)
 	commandmemory.RegisterCommand(cmdBus, updateHandler)
-	eventmemory.EventGroupBus[*testUserCreatedEvent](eventGroup).Subscribe(eventHandler)
+	eventmemory.RegisterHandler[*testUserCreatedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, getHandler)
 
-	result, err := commandmemory.Dispatch[*testCreateUserCommand, *testCreateUserResult](cmdBus, ctx, &testCreateUserCommand{
+	result, err := commandmemory.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, cmdBus, &testCreateUserCommand{
 		UserID: "user-001",
 		Name:   "张三",
 		Email:  "zhangsan@example.com",
@@ -248,7 +248,7 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 		t.Error("user created event handler was not called")
 	}
 
-	_, err = commandmemory.Dispatch[*testUpdateUserCommand, *testUpdateUserResult](cmdBus, ctx, &testUpdateUserCommand{
+	_, err = commandmemory.Dispatch[*testUpdateUserCommand, *testUpdateUserResult](ctx, cmdBus, &testUpdateUserCommand{
 		UserID: result.UserID,
 		Name:   "张三更新",
 	})
@@ -256,7 +256,7 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 		t.Fatalf("update user failed: %v", err)
 	}
 
-	qResult, err := querymemory.Ask[*testGetUserQuery, *testGetUserResult](qBus, ctx, &testGetUserQuery{
+	qResult, err := querymemory.Dispatch[*testGetUserQuery, *testGetUserResult](ctx, qBus, &testGetUserQuery{
 		UserID: result.UserID,
 	})
 	if err != nil {

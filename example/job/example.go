@@ -44,7 +44,7 @@ func RegisterHandlers(bus *commandmemory.CommandBus) {
 }
 
 func NewJobManager(store jobcore.JobStore, chain *aspect.AspectChain) *jobmemory.JobManager {
-	cmdBus := commandmemory.NewCommandBus(chain)
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	RegisterHandlers(cmdBus)
 	return jobmemory.NewJobManager(store, cmdBus)
 }
@@ -67,7 +67,11 @@ func RunExample(ctx context.Context, manager jobcore.JobManager) {
 	}
 	fmt.Printf("Job completed: Status=%s\n", completedJob.Status)
 	if completedJob.Result != nil {
-		reportResult := completedJob.Result.(*GenerateReportResult)
+		reportResult, ok := completedJob.Result.(*GenerateReportResult)
+		if !ok {
+			fmt.Println("Result type mismatch")
+			return
+		}
 		fmt.Printf("Report file: %s\n", reportResult.File)
 	}
 }

@@ -24,7 +24,7 @@ type level1Result struct {
 type level1Handler struct{}
 
 func (h *level1Handler) Handle(ctx context.Context, cmd *level1Command) (*level1Result, error) {
-	eventmemory.EventGroupPublish[*level2Event](testEventGroup, ctx, &level2Event{})
+	eventmemory.Dispatch[*level2Event](ctx, testEventBus, &level2Event{})
 	return &level1Result{Message: "level1 done"}, nil
 }
 
@@ -37,12 +37,12 @@ func (e *level2Event) OccurredAt() time.Time { return time.Now() }
 type level2Handler struct{}
 
 func (h *level2Handler) Handle(ctx context.Context, event *level2Event) error {
-	commandmemory.Dispatch[*level3Command, *level3Result](testCmdBus, ctx, &level3Command{})
+	commandmemory.Dispatch[*level3Command, *level3Result](ctx, testCmdBus, &level3Command{})
 	return nil
 }
 
 var testCmdBus *commandmemory.CommandBus
-var testEventGroup *eventmemory.EventBusGroup
+var testEventBus *eventmemory.EventBus
 
 type level3Command struct {
 	command.BaseCommand
@@ -55,7 +55,7 @@ type level3Result struct {
 type level3Handler struct{}
 
 func (h *level3Handler) Handle(ctx context.Context, cmd *level3Command) (*level3Result, error) {
-	eventmemory.EventGroupPublish[*level4Event](testEventGroup, ctx, &level4Event{})
+	eventmemory.Dispatch[*level4Event](ctx, testEventBus, &level4Event{})
 	return &level3Result{Message: "level3 done"}, nil
 }
 
@@ -68,7 +68,7 @@ func (e *level4Event) OccurredAt() time.Time { return time.Now() }
 type level4Handler struct{}
 
 func (h *level4Handler) Handle(ctx context.Context, event *level4Event) error {
-	commandmemory.Dispatch[*level5Command, *level5Result](testCmdBus, ctx, &level5Command{})
+	commandmemory.Dispatch[*level5Command, *level5Result](ctx, testCmdBus, &level5Command{})
 	return nil
 }
 
@@ -98,35 +98,35 @@ type testError struct {
 
 func (e *testError) Error() string { return e.msg }
 
-func setupFiveLevelChain(t *testing.T) (*commandmemory.CommandBus, *eventmemory.EventBusGroup, *trace.InMemoryTraceStore) {
+func setupFiveLevelChain(t *testing.T) (*commandmemory.CommandBus, *eventmemory.EventBus, *trace.InMemoryTraceStore) {
 	t.Helper()
 
 	store := trace.NewInMemoryTraceStore()
 	chain := aspect.NewAspectChain()
-	chain.RegisterCommandAspect(&builtin.TracingAspect{Store: store})
-	chain.RegisterEventAspect(&builtin.TracingAspect{Store: store})
+	chain.RegisterCommandAspect(builtin.NewTracingAspect(store))
+	chain.RegisterEventAspect(builtin.NewTracingAspect(store))
 
-	cmdBus := commandmemory.NewCommandBus(chain)
-	eventGroup := eventmemory.NewEventBusGroup(chain)
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
 	testCmdBus = cmdBus
-	testEventGroup = eventGroup
+	testEventBus = eventBus
 
 	commandmemory.RegisterCommand(cmdBus, &level1Handler{})
 	commandmemory.RegisterCommand(cmdBus, &level3Handler{})
 	commandmemory.RegisterCommand(cmdBus, &level5Handler{})
 
-	eventmemory.EventGroupBus[*level2Event](eventGroup).Subscribe(&level2Handler{})
-	eventmemory.EventGroupBus[*level4Event](eventGroup).Subscribe(&level4Handler{})
+	eventmemory.RegisterHandler[*level2Event](eventBus, &level2Handler{})
+	eventmemory.RegisterHandler[*level4Event](eventBus, &level4Handler{})
 
-	return cmdBus, eventGroup, store
+	return cmdBus, eventBus, store
 }
 
 func TestTrace_FiveLevelCallChain(t *testing.T) {
 	cmdBus, _, store := setupFiveLevelChain(t)
 
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*level1Command, *level1Result](cmdBus, ctx, &level1Command{})
+	_, err := commandmemory.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestTrace_FiveLevelCallChain_SameTraceID(t *testing.T) {
 	cmdBus, _, store := setupFiveLevelChain(t)
 
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*level1Command, *level1Result](cmdBus, ctx, &level1Command{})
+	_, err := commandmemory.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestTrace_FiveLevelCallChain_ParentChildRelationship(t *testing.T) {
 	cmdBus, _, store := setupFiveLevelChain(t)
 
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*level1Command, *level1Result](cmdBus, ctx, &level1Command{})
+	_, err := commandmemory.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestTrace_FiveLevelCallChain_SpanTypes(t *testing.T) {
 	cmdBus, _, store := setupFiveLevelChain(t)
 
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*level1Command, *level1Result](cmdBus, ctx, &level1Command{})
+	_, err := commandmemory.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestTrace_FiveLevelCallChain_AllSpansRecorded(t *testing.T) {
 	cmdBus, _, store := setupFiveLevelChain(t)
 
 	ctx := context.Background()
-	_, err := commandmemory.Dispatch[*level1Command, *level1Result](cmdBus, ctx, &level1Command{})
+	_, err := commandmemory.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -281,24 +281,24 @@ func TestTrace_FiveLevelCallChain_AllSpansRecorded(t *testing.T) {
 func TestTrace_FiveLevelCallChain_ErrorPropagation(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
 	chain := aspect.NewAspectChain()
-	chain.RegisterCommandAspect(&builtin.TracingAspect{Store: store})
-	chain.RegisterEventAspect(&builtin.TracingAspect{Store: store})
+	chain.RegisterCommandAspect(builtin.NewTracingAspect(store))
+	chain.RegisterEventAspect(builtin.NewTracingAspect(store))
 
-	cmdBus := commandmemory.NewCommandBus(chain)
-	eventGroup := eventmemory.NewEventBusGroup(chain)
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
 	testCmdBus = cmdBus
-	testEventGroup = eventGroup
+	testEventBus = eventBus
 
 	commandmemory.RegisterCommand(cmdBus, &level1Handler{})
 	commandmemory.RegisterCommand(cmdBus, &level3Handler{})
 	commandmemory.RegisterCommand(cmdBus, &failingLevel5Handler{})
 
-	eventmemory.EventGroupBus[*level2Event](eventGroup).Subscribe(&level2Handler{})
-	eventmemory.EventGroupBus[*level4Event](eventGroup).Subscribe(&level4Handler{})
+	eventmemory.RegisterHandler[*level2Event](eventBus, &level2Handler{})
+	eventmemory.RegisterHandler[*level4Event](eventBus, &level4Handler{})
 
 	ctx := context.Background()
-	_, _ = commandmemory.Dispatch[*level1Command, *level1Result](cmdBus, ctx, &level1Command{})
+	_, _ = commandmemory.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
 
 	traceIDs, _ := store.ListTraces(ctx, trace.TraceFilter{})
 	spans, _ := store.GetTrace(ctx, traceIDs[0])

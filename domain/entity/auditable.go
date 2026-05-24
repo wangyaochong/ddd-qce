@@ -1,11 +1,14 @@
 package entity
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type AuditableEntity struct {
 	Entity
-	createdAt time.Time `json:"createdAt"`
-	updatedAt time.Time `json:"updatedAt"`
+	createdAt time.Time
+	updatedAt time.Time
 }
 
 func NewAuditableEntity(id string) *AuditableEntity {
@@ -35,4 +38,29 @@ func (e *AuditableEntity) UpdatedAt() time.Time {
 
 func (e *AuditableEntity) Touch() {
 	e.updatedAt = time.Now()
+}
+
+type auditableJSON struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func (e *AuditableEntity) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&auditableJSON{
+		ID:        e.id,
+		CreatedAt: e.createdAt,
+		UpdatedAt: e.updatedAt,
+	})
+}
+
+func (e *AuditableEntity) UnmarshalJSON(data []byte) error {
+	var v auditableJSON
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	e.id = v.ID
+	e.createdAt = v.CreatedAt
+	e.updatedAt = v.UpdatedAt
+	return nil
 }

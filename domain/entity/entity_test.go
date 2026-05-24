@@ -1,6 +1,9 @@
 package entity
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestNewEntity(t *testing.T) {
 	e := NewEntity("user-1")
@@ -88,5 +91,20 @@ func TestValidate_EmptyID(t *testing.T) {
 	e := NewEntity("")
 	if err := e.Validate(); err == nil {
 		t.Fatal("expected error for empty ID")
+	}
+}
+
+func TestEntity_JSONRoundTrip(t *testing.T) {
+	e := NewEntity("user-1")
+	data, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	var e2 Entity
+	if err := json.Unmarshal(data, &e2); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if e2.ID() != "user-1" {
+		t.Errorf("expected ID 'user-1' after round trip, got '%s'", e2.ID())
 	}
 }

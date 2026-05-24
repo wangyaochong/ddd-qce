@@ -16,6 +16,10 @@ type TransactionAspect struct {
 	TxManager TransactionManager
 }
 
+func NewTransactionAspect(txManager TransactionManager) *TransactionAspect {
+	return &TransactionAspect{TxManager: txManager}
+}
+
 func (t *TransactionAspect) Name() string {
 	return "transaction"
 }

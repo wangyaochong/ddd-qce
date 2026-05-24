@@ -1,0 +1,23 @@
+{{define "orders"}}{{template "header" .}}
+
+<h1 style="margin-bottom:1.5rem;">Orders <a href="/orders/new" class="btn btn-primary" style="font-size:0.85rem;">+ New Order</a></h1>
+
+<div class="card">
+{{if .Orders}}
+<table>
+    <tr><th>Order ID</th><th>User</th><th>Total</th><th>Status</th><th>Created</th><th>Actions</th></tr>
+    {{range .Orders}}
+    <tr>
+        <td><a href="/orders/{{.OrderID}}">{{printf "%.8s" .OrderID}}...</a></td>
+        <td>{{.UserID}}</td>
+        <td>${{printf "%.2f" .TotalAmount}}</td>
+        <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+        <td>{{.CreatedAt}}</td>
+        <td><a href="/orders/{{.OrderID}}" class="btn btn-sm btn-primary">Detail</a></td>
+    </tr>
+    {{end}}
+</table>
+{{else}}<div class="empty">No orders yet. <a href="/orders/new">Place one now</a>!</div>{{end}}
+</div>
+
+{{template "footer" .}}{{end}}

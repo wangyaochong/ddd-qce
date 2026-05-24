@@ -253,10 +253,12 @@ package order
 
 import (
     "context"
+    "errors"
     "time"
 
-    "github.com/yourproject/actor"
-    "github.com/yourproject/event"
+    "github.com/ddd-qce/core/domain/aggregate"
+    "github.com/ddd-qce/core/domain/event"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 )
 
 type OrderStatus string
@@ -271,91 +273,84 @@ const (
 )
 
 var (
-    ErrInvalidOrderStatus     = errors.New("invalid order status")
+    ErrInvalidOrderStatus       = errors.New("invalid order status")
     ErrCannotCancelShippedOrder = errors.New("cannot cancel shipped order")
 )
 
+// Order 聚合根，嵌入框架的 AggregateRoot
 type Order struct {
-    *actor.BaseActor
-    ID         string
+    aggregate.AggregateRoot
     UserID     string
     Items      []OrderItem
     TotalPrice float64
     Status     OrderStatus
     CreatedAt  time.Time
-    eventBus   event.Bus
+    eventBus   *eventmemory.EventBus
 }
 
-func NewOrder(id string, userID string, items []OrderItem, totalPrice float64, eventBus event.Bus) *Order {
-    return &Order{
-        BaseActor:  actor.NewBaseActor(id),
-        ID:         id,
-        UserID:     userID,
-        Items:      items,
-        TotalPrice: totalPrice,
-        Status:     OrderStatusNew,
-        CreatedAt:  time.Now(),
-        eventBus:   eventBus,
+func (o *Order) When(evt event.DomainEvent) {
+    switch e := evt.(type) {
+    case OrderConfirmedEvent:
+        o.Status = OrderStatusConfirmed
+    case OrderPaidEvent:
+        o.Status = OrderStatusPaid
+    case OrderCancelledEvent:
+        o.Status = OrderStatusCancelled
     }
 }
 
-func (o *Order) Receive(ctx context.Context, msg any) error {
-    switch m := msg.(type) {
-    case ConfirmOrderCommand:
-        return o.handleConfirmOrder(ctx, m)
-    case PayOrderCommand:
-        return o.handlePayOrder(ctx, m)
-    case CancelOrderCommand:
-        return o.handleCancelOrder(ctx, m)
-    default:
-        return nil
+func NewOrder(id, userID string, items []OrderItem, totalPrice float64, eventBus *eventmemory.EventBus) *Order {
+    o := &Order{
+        AggregateRoot: *aggregate.NewAggregateRootWithApplier(id, nil),
+        UserID:        userID,
+        Items:         items,
+        TotalPrice:    totalPrice,
+        Status:        OrderStatusNew,
+        CreatedAt:     time.Now(),
+        eventBus:      eventBus,
     }
+    o.SetApplier(o)
+    return o
 }
 
-func (o *Order) handleConfirmOrder(ctx context.Context, cmd ConfirmOrderCommand) error {
+func (o *Order) Confirm(ctx context.Context) error {
     if o.Status != OrderStatusNew {
         return ErrInvalidOrderStatus
     }
 
     o.Status = OrderStatusConfirmed
 
-    o.eventBus.Publish(ctx, OrderConfirmedEvent{
-        OrderID: o.ID,
-        UserID:  o.UserID,
-    })
+    evt := OrderConfirmedEvent{OrderID: o.ID, UserID: o.UserID}
+    o.Apply(evt)
+    o.eventBus.Publish(ctx, evt)
 
     return nil
 }
 
-func (o *Order) handlePayOrder(ctx context.Context, cmd PayOrderCommand) error {
+func (o *Order) Pay(ctx context.Context, paymentID string, amount float64) error {
     if o.Status != OrderStatusConfirmed {
         return ErrInvalidOrderStatus
     }
 
     o.Status = OrderStatusPaid
 
-    o.eventBus.Publish(ctx, OrderPaidEvent{
-        OrderID:    o.ID,
-        UserID:     o.UserID,
-        PaymentID:  cmd.PaymentID,
-        PaidAmount: cmd.Amount,
-    })
+    evt := OrderPaidEvent{OrderID: o.ID, UserID: o.UserID, PaymentID: paymentID, PaidAmount: amount}
+    o.Apply(evt)
+    o.eventBus.Publish(ctx, evt)
 
     return nil
 }
 
-func (o *Order) handleCancelOrder(ctx context.Context, cmd CancelOrderCommand) error {
+func (o *Order) Cancel(ctx context.Context, reason string) error {
     if o.Status == OrderStatusShipped || o.Status == OrderStatusCompleted {
         return ErrCannotCancelShippedOrder
     }
 
     o.Status = OrderStatusCancelled
 
-    o.eventBus.Publish(ctx, OrderCancelledEvent{
-        OrderID: o.ID,
-        UserID:  o.UserID,
-        Reason:  cmd.Reason,
-    })
+    evt := OrderCancelledEvent{OrderID: o.ID, UserID: o.UserID, Reason: reason}
+    o.Apply(evt)
+    o.eventBus.Publish(ctx, evt)
 
     return nil
 }
@@ -372,29 +367,26 @@ import (
     "reflect"
     "sync"
 
-    "github.com/yourproject/actor"
+    "github.com/ddd-qce/core/cqrs/command"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 )
 
-type Bus interface {
-    Execute(ctx context.Context, cmd any) error
-    RegisterActor(actorID string, actor actor.Actor)
-}
-
-type InMemoryBus struct {
-    actors map[string]actor.Actor
+// ActorCommandBus 将 Command 路由到对应 Actor
+type ActorCommandBus struct {
+    actors map[string]Actor
     mu     sync.RWMutex
 }
 
-func NewInMemoryBus() *InMemoryBus {
-    return &InMemoryBus{
-        actors: make(map[string]actor.Actor),
+func NewActorCommandBus() *ActorCommandBus {
+    return &ActorCommandBus{
+        actors: make(map[string]Actor),
     }
 }
 
-func (b *InMemoryBus) Execute(ctx context.Context, cmd any) error {
+func (b *ActorCommandBus) Execute(ctx context.Context, cmd any) (any, error) {
     actorID, err := extractActorID(cmd)
     if err != nil {
-        return err
+        return nil, err
     }
 
     b.mu.RLock()
@@ -402,14 +394,14 @@ func (b *InMemoryBus) Execute(ctx context.Context, cmd any) error {
     b.mu.RUnlock()
 
     if !exists {
-        return fmt.Errorf("actor %s not found", actorID)
+        return nil, fmt.Errorf("actor %s not found", actorID)
     }
 
     actor.Send(cmd)
-    return nil
+    return nil, nil
 }
 
-func (b *InMemoryBus) RegisterActor(actorID string, actor actor.Actor) {
+func (b *ActorCommandBus) RegisterActor(actorID string, actor Actor) {
     b.mu.Lock()
     defer b.mu.Unlock()
     b.actors[actorID] = actor
@@ -454,8 +446,9 @@ import (
 
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/aspect/builtin"
-    commandmemory "github.com/ddd-qce/core/command/memory"
-    eventmemory "github.com/ddd-qce/core/event/memory"
+    "github.com/ddd-qce/core/cqrs/command"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
     "github.com/ddd-qce/core/trace"
 )
 
@@ -477,11 +470,9 @@ func (a *OrderActor) Receive(ctx context.Context, msg any) error {
 }
 
 func (a *OrderActor) handleCreateOrder(ctx context.Context, cmd CreateOrderCommand) error {
-    // 业务规则验证
     order := NewOrder(cmd.UserID, cmd.Items)
     a.order = order
 
-    // 发布领域事件
     a.eventBus.Publish(ctx, OrderCreatedEvent{
         OrderID: order.ID,
         UserID:  order.UserID,
@@ -493,27 +484,24 @@ func (a *OrderActor) handleCreateOrder(ctx context.Context, cmd CreateOrderComma
 func main() {
     ctx := context.Background()
 
-    // 1. 创建 DDD-QCE 基础设施
     traceStore := trace.NewInMemoryTraceStore()
     chain := aspect.NewAspectChain()
     chain.RegisterCommandAspect(&builtin.TracingAspect{Store: traceStore})
     chain.RegisterEventAspect(&builtin.TracingAspect{Store: traceStore})
 
     cBus := commandmemory.NewCommandBus(chain)
-    eBus := eventmemory.NewEventBus(chain)
+    eBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
-    // 2. 创建 Actor
     orderActor := &OrderActor{
         BaseActor: actor.NewBaseActor("order-123"),
         eventBus:  eBus,
     }
     orderActor.Start(orderActor)
 
-    // 3. 注册到 Command Bus
-    commandmemory.RegisterCommand(cBus, &CreateOrderHandler{actor: orderActor})
+    commandmemory.RegisterCommand[CreateOrderCommand, string](cBus, &CreateOrderHandler{actor: orderActor})
 
-    // 4. 执行 Command → Actor 接收消息 → 发布 Event
-    cBus.Dispatch[CreateOrderCommand, string](ctx, CreateOrderCommand{
+    // 注意：bus 在 ctx 前面
+    commandmemory.Dispatch[CreateOrderCommand, string](cBus, ctx, CreateOrderCommand{
         UserID: "user-456",
         Items:  []OrderItem{{ProductID: "prod-1", Quantity: 2}},
     })

@@ -16,6 +16,10 @@ type LoggingAspect struct {
 	Logger Logger
 }
 
+func NewLoggingAspect(logger Logger) *LoggingAspect {
+	return &LoggingAspect{Logger: logger}
+}
+
 func (l *LoggingAspect) Name() string {
 	return "logging"
 }

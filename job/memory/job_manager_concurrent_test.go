@@ -36,7 +36,7 @@ func (h *testConcurrentHandler) Handle(ctx context.Context, cmd *testConcurrentC
 
 func newTestConcurrentCommandBus(duration time.Duration) *commandmemory.CommandBus {
 	chain := aspect.NewAspectChain()
-	bus := commandmemory.NewCommandBus(chain)
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &testConcurrentHandler{Duration: duration})
 	return bus
 }

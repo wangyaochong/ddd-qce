@@ -1,0 +1,29 @@
+{{define "order_events"}}{{template "header" .}}
+
+<h1 style="margin-bottom:1.5rem;">Event Sourcing: Order {{printf "%.8s" .OrderID}}...</h1>
+
+<div class="card">
+    <h2>Order Status: {{with .Order}}<span class="badge badge-{{.Status}}">{{.Status}}</span>{{end}}</h2>
+    <p style="margin-top:0.5rem;"><a href="/orders/{{.OrderID}}">Back to Order Detail</a></p>
+</div>
+
+<div class="card">
+    <h2>Event Stream (from EventStore.Load)</h2>
+    {{if .Events}}
+    <table>
+        <tr><th>#</th><th>Event Type</th><th>Order ID</th><th>User ID</th><th>Amount</th><th>Occurred At</th></tr>
+        {{range $i, $e := .Events}}
+        <tr>
+            <td>{{add $i 1}}</td>
+            <td><strong>{{$e.EventType}}</strong></td>
+            <td>{{$e.OrderID}}</td>
+            <td>{{$e.UserID}}</td>
+            <td>${{printf "%.2f" $e.Amount}}</td>
+            <td>{{$e.OccurredAt}}</td>
+        </tr>
+        {{end}}
+    </table>
+    {{else}}<div class="empty">No events found for this order.</div>{{end}}
+</div>
+
+{{template "footer" .}}{{end}}

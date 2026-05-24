@@ -1,0 +1,46 @@
+{{define "jobs"}}{{template "header" .}}
+
+<h1 style="margin-bottom:1.5rem;">Async Jobs</h1>
+
+<div class="card">
+    <h2>Submit Report Job</h2>
+    <form method="POST" action="/jobs">
+        <div class="form-group">
+            <label>Order ID</label>
+            <input type="text" name="order_id" placeholder="optional" style="width:300px;">
+        </div>
+        <div class="form-group">
+            <label>Timeout (ms, 0=none)</label>
+            <input type="number" name="timeout" value="0" style="width:100px;">
+        </div>
+        <div class="form-group">
+            <label>Max Retries</label>
+            <input type="number" name="retries" value="0" style="width:100px;">
+        </div>
+        <button type="submit" class="btn btn-success">Submit Job</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Job List</h2>
+    {{if .Jobs}}
+    <table>
+        <tr><th>Job ID</th><th>Command</th><th>Status</th><th>Error</th><th>Created</th><th>Actions</th></tr>
+        {{range .Jobs}}
+        <tr>
+            <td>{{printf "%.8s" .ID}}...</td>
+            <td>{{printf "%T" .Command}}</td>
+            <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+            <td>{{if .Error}}<span style="color:#c62828;">{{.Error}}</span>{{end}}</td>
+            <td>{{.CreatedAt.Format "15:04:05"}}</td>
+            <td class="actions">
+                {{if eq .Status "running"}}<form method="POST" action="/jobs/{{.ID}}/cancel"><button class="btn btn-sm btn-danger">Cancel</button></form>{{end}}
+                {{if eq .Status "failed"}}<form method="POST" action="/jobs/{{.ID}}/retry"><button class="btn btn-sm btn-warning">Retry</button></form>{{end}}
+            </td>
+        </tr>
+        {{end}}
+    </table>
+    {{else}}<div class="empty">No jobs yet. Submit one above!</div>{{end}}
+</div>
+
+{{template "footer" .}}{{end}}

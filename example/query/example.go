@@ -74,14 +74,14 @@ func RegisterHandlers(bus *querymemory.QueryBus) {
 
 func RunExample(ctx context.Context, bus *querymemory.QueryBus) {
 	fmt.Println("=== Query: GetUser ===")
-	result, err := querymemory.Ask[*GetUserQuery, *GetUserResult](bus, ctx, &GetUserQuery{UserID: "123"})
+	result, err := querymemory.Dispatch[*GetUserQuery, *GetUserResult](ctx, bus, &GetUserQuery{UserID: "123"})
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("User: ID=%s, Name=%s, Email=%s\n", result.ID, result.Name, result.Email)
 
 	fmt.Println("\n=== Query: ListUsers ===")
-	listResult, err := querymemory.Ask[*ListUsersQuery, *ListUsersResult](bus, ctx, &ListUsersQuery{Page: 1, PageSize: 10})
+	listResult, err := querymemory.Dispatch[*ListUsersQuery, *ListUsersResult](ctx, bus, &ListUsersQuery{Page: 1, PageSize: 10})
 	if err != nil {
 		panic(err)
 	}
@@ -91,7 +91,7 @@ func RunExample(ctx context.Context, bus *querymemory.QueryBus) {
 	}
 
 	fmt.Println("\n=== Query: GetOrder ===")
-	orderResult, err := querymemory.Ask[*GetOrderQuery, *GetOrderResult](bus, ctx, &GetOrderQuery{OrderID: "ORD-001"})
+	orderResult, err := querymemory.Dispatch[*GetOrderQuery, *GetOrderResult](ctx, bus, &GetOrderQuery{OrderID: "ORD-001"})
 	if err != nil {
 		panic(err)
 	}

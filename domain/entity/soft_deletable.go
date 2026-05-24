@@ -1,10 +1,13 @@
 package entity
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type SoftDeletableEntity struct {
 	AuditableEntity
-	deletedAt *time.Time `json:"deletedAt,omitempty"`
+	deletedAt *time.Time
 }
 
 func NewSoftDeletableEntity(id string) *SoftDeletableEntity {
@@ -37,4 +40,32 @@ func (e *SoftDeletableEntity) SoftDelete() {
 func (e *SoftDeletableEntity) Restore() {
 	e.deletedAt = nil
 	e.Touch()
+}
+
+type softDeletableJSON struct {
+	ID        string     `json:"id"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+}
+
+func (e *SoftDeletableEntity) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&softDeletableJSON{
+		ID:        e.id,
+		CreatedAt: e.createdAt,
+		UpdatedAt: e.updatedAt,
+		DeletedAt: e.deletedAt,
+	})
+}
+
+func (e *SoftDeletableEntity) UnmarshalJSON(data []byte) error {
+	var v softDeletableJSON
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	e.id = v.ID
+	e.createdAt = v.CreatedAt
+	e.updatedAt = v.UpdatedAt
+	e.deletedAt = v.DeletedAt
+	return nil
 }

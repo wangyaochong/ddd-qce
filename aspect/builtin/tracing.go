@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"context"
+	"log"
 	"reflect"
 	"time"
 
@@ -10,6 +11,10 @@ import (
 
 type TracingAspect struct {
 	Store trace.TraceStore
+}
+
+func NewTracingAspect(store trace.TraceStore) *TracingAspect {
+	return &TracingAspect{Store: store}
 }
 
 func (a *TracingAspect) Name() string {
@@ -55,7 +60,9 @@ func (a *TracingAspect) AfterCommand(ctx context.Context, cmd any, result any, e
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
-		a.Store.RecordSpan(ctx, span)
+		if err := a.Store.RecordSpan(ctx, span); err != nil {
+			log.Printf("[TracingAspect] RecordSpan failed: %v", err)
+		}
 	}
 	return nil
 }
@@ -95,7 +102,9 @@ func (a *TracingAspect) AfterQuery(ctx context.Context, query any, result any, e
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
-		a.Store.RecordSpan(ctx, span)
+		if err := a.Store.RecordSpan(ctx, span); err != nil {
+			log.Printf("[TracingAspect] RecordSpan failed: %v", err)
+		}
 	}
 	return nil
 }
@@ -135,7 +144,9 @@ func (a *TracingAspect) AfterPublish(ctx context.Context, event any, err error, 
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
-		a.Store.RecordSpan(ctx, span)
+		if err := a.Store.RecordSpan(ctx, span); err != nil {
+			log.Printf("[TracingAspect] RecordSpan failed: %v", err)
+		}
 	}
 	return nil
 }

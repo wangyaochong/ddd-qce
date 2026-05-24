@@ -82,19 +82,19 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 	ctx := context.Background()
 	chain := aspect.NewAspectChain()
 
-	cmdBus := commandmemory.NewCommandBus(chain)
-	eventGroup := eventmemory.NewEventBusGroup(chain)
-	qBus := querymemory.NewQueryBus(chain)
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	qBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
 
 	orders := make(map[string]*testOrder)
 	eventHandler := &testOrderCreatedEventHandler{}
 	queryHandler := &testGetOrderHandler{orders: orders}
 
 	commandmemory.RegisterCommand(cmdBus, &testCreateOrderHandler{})
-	eventmemory.EventGroupBus[*testOrderCreatedEvent](eventGroup).Subscribe(eventHandler)
+	eventmemory.RegisterHandler[*testOrderCreatedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, queryHandler)
 
-	result, err := commandmemory.Dispatch[*testCreateOrderCommand, *testCreateOrderResult](cmdBus, ctx, &testCreateOrderCommand{
+	result, err := commandmemory.Dispatch[*testCreateOrderCommand, *testCreateOrderResult](ctx, cmdBus, &testCreateOrderCommand{
 		UserID: "user-001",
 		Amount: 99.99,
 	})
@@ -112,7 +112,7 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 		Status: "created",
 	}
 
-	err = eventmemory.EventGroupPublish[*testOrderCreatedEvent](eventGroup, ctx, &testOrderCreatedEvent{
+	err = eventmemory.Dispatch[*testOrderCreatedEvent](ctx, eventBus, &testOrderCreatedEvent{
 		OrderID: result.OrderID,
 		UserID:  "user-001",
 		Amount:  99.99,
@@ -124,7 +124,7 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 		t.Error("event handler was not called")
 	}
 
-	qResult, err := querymemory.Ask[*testGetOrderQuery, *testGetOrderResult](qBus, ctx, &testGetOrderQuery{
+	qResult, err := querymemory.Dispatch[*testGetOrderQuery, *testGetOrderResult](ctx, qBus, &testGetOrderQuery{
 		OrderID: result.OrderID,
 	})
 	if err != nil {

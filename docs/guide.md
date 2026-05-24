@@ -1,19 +1,158 @@
 # 实战指南
 
-## 一、Aggregate Root 使用指南
+## 一、Entity 使用指南
+
+### 1. 基础实体
+
+```go
+package domain
+
+import "github.com/ddd-qce/core/domain/entity"
+
+type Product struct {
+    entity.Entity
+    Name        string
+    Price       float64
+    Description string
+}
+
+func NewProduct(id, name string, price float64) *Product {
+    return &Product{
+        Entity: *entity.NewEntity(id),
+        Name:   name,
+        Price:  price,
+    }
+}
+```
+
+### 2. 自动生成 ID
+
+```go
+// 使用 DefaultIDGenerator（UUID v4）
+product := &Product{
+    Entity: *entity.NewEntityWithID(),
+    Name:   name,
+    Price:  price,
+}
+
+// 自定义 ID 生成器
+entity.SetIDGenerator(func() string {
+    return "prod-" + uuid.New().String()
+})
+```
+
+### 3. 实体方法
+
+```go
+p := NewProduct("prod-1", "Product A", 100.0)
+
+p.GetID()         // "prod-1"
+p.Equals(other)   // 基于 ID 判断相等性
+p.IsEmpty()       // ID 为空时返回 true
+p.Validate()      // 返回 ID 为空的错误（可由子类覆写）
+```
+
+### 4. AuditableEntity（审计实体）
+
+```go
+type Document struct {
+    entity.AuditableEntity
+    Title string
+}
+
+func NewDocument(id, title string) *Document {
+    doc := &Document{
+        AuditableEntity: *entity.NewAuditableEntity(id),
+        Title:           title,
+    }
+    return doc
+}
+
+// 更新时自动刷新时间戳
+doc.Touch()  // doc.UpdatedAt = time.Now()
+```
+
+### 5. SoftDeletableEntity（软删除实体）
+
+```go
+type Article struct {
+    entity.SoftDeletableEntity
+    Title string
+}
+
+func NewArticle(id, title string) *Article {
+    return &Article{
+        SoftDeletableEntity: *entity.NewSoftDeletableEntity(id),
+        Title:               title,
+    }
+}
+
+article.SoftDelete()  // article.DeletedAt = &now, article.IsDeleted() == true
+article.Restore()     // article.DeletedAt = nil, article.IsDeleted() == false
+```
+
+---
+
+## 二、ValueObject 使用指南
+
+### 1. 定义值对象
+
+```go
+package domain
+
+import (
+    "errors"
+    "github.com/ddd-qce/core/domain/valueobject"
+)
+
+email, err := valueobject.New("user@example.com", func(v string) error {
+    if !strings.Contains(v, "@") {
+        return errors.New("invalid email")
+    }
+    return nil
+})
+```
+
+### 2. 使用值对象
+
+```go
+email.Value()            // "user@example.com"
+email.Validate()         // nil
+email.Equals(otherEmail) // 基于值比较
+email.String()           // "user@example.com"
+
+// 强制版本（panic on error）
+email := valueobject.MustNew("user@example.com", validateFunc)
+```
+
+### 3. DeepEquals 深度比较
+
+```go
+import "github.com/ddd-qce/core/domain/valueobject"
+
+// 比较任意两个值（递归比较结构体字段）
+valueobject.DeepEquals(addr1, addr2)
+```
+
+---
+
+## 三、AggregateRoot 使用指南
 
 ### 1. 定义聚合根
 
 ```go
 package domain
 
-import "github.com/ddd-qce/core/core"
+import (
+    "github.com/ddd-qce/core/domain/aggregate"
+    "github.com/ddd-qce/core/domain/event"
+)
 
 type Order struct {
-    core.AggregateRoot
-    Items   []OrderItem
-    Status  OrderStatus
-    Total   float64
+    aggregate.AggregateRoot
+    Items  []OrderItem
+    Status OrderStatus
+    Total  float64
 }
 
 type OrderItem struct {
@@ -32,24 +171,35 @@ const (
 )
 ```
 
-### 2. 聚合根工厂方法
+### 2. 实现 EventApplier（推荐方式）
 
 ```go
+func (o *Order) When(evt event.DomainEvent) {
+    switch e := evt.(type) {
+    case OrderCreatedEvent:
+        o.Items = e.Items
+        o.Total = e.Total
+        o.Status = OrderStatusPending
+    case OrderConfirmedEvent:
+        o.Status = OrderStatusConfirmed
+    case OrderCancelledEvent:
+        o.Status = OrderStatusCancelled
+    }
+}
+
 func NewOrder(orderID string, items []OrderItem) *Order {
     order := &Order{
-        AggregateRoot: *core.NewAggregateRoot(orderID),
+        AggregateRoot: *aggregate.NewAggregateRootWithApplier(orderID, order),
         Items:         items,
         Status:        OrderStatusPending,
     }
 
-    // 计算总价
     var total float64
     for _, item := range items {
         total += item.Price * float64(item.Quantity)
     }
     order.Total = total
 
-    // 产生领域事件
     order.Apply(OrderCreatedEvent{
         OrderID: orderID,
         Items:   items,
@@ -86,7 +236,7 @@ func (o *Order) Cancel() error {
     o.Status = OrderStatusCancelled
 
     o.Apply(OrderCancelledEvent{
-        OrderID:  o.ID,
+        OrderID:   o.ID,
         OldStatus: oldStatus,
     })
 
@@ -94,125 +244,30 @@ func (o *Order) Cancel() error {
 }
 ```
 
-### 4. 获取未提交的事件
+### 4. 获取与提交事件
 
 ```go
-func (h *CreateOrderHandler) Handle(ctx context.Context, cmd CreateOrderCommand) (string, error) {
-    order := NewOrder(uuid.New().String(), cmd.Items)
+// 获取未提交的领域事件
+events := order.UncommittedEvents()
 
-    // 获取未提交的领域事件
-    events := order.UncommittedEvents()
+// 标记事件已提交
+order.MarkEventsAsCommitted()
 
-    // 保存聚合根
-    if err := h.repo.Save(ctx, order); err != nil {
-        return "", err
-    }
-
-    // 发布事件
-    for _, event := range events {
-        h.eventBus.Publish(ctx, event)
-    }
-
-    // 标记事件已提交
-    order.MarkEventsAsCommitted()
-
-    return order.ID, nil
-}
+// 从历史事件重建聚合
+order.LoadFromHistory(events)
 ```
 
-### 5. 事件溯源模式（从事件流重建聚合）
+### 5. 纯事件收集器（无 When 回调）
 
 ```go
-func (o *Order) ApplyEvent(event core.DomainEvent) {
-    switch e := event.(type) {
-    case OrderCreatedEvent:
-        o.Items = e.Items
-        o.Total = e.Total
-        o.Status = OrderStatusPending
-    case OrderConfirmedEvent:
-        o.Status = OrderStatusConfirmed
-    case OrderCancelledEvent:
-        o.Status = OrderStatusCancelled
-    }
-}
-
-// 从事件存储加载
-func (r *OrderRepository) Load(ctx context.Context, id string) (*Order, error) {
-    events, err := r.eventStore.Load(ctx, id, 0)
-    if err != nil {
-        return nil, err
-    }
-
-    order := &Order{
-        AggregateRoot: *core.NewAggregateRoot(id),
-    }
-
-    // 重放事件重建状态
-    for _, event := range events {
-        order.ApplyEvent(event)
-        order.Version++
-    }
-
-    return order, nil
-}
+// NewEventCollector 仅收集事件，不触发 When 回调
+collector := aggregate.NewEventCollector("order-123")
+collector.Apply(someEvent)
 ```
 
 ---
 
-## 二、Entity 使用指南
-
-### 1. 定义实体
-
-```go
-package domain
-
-import "github.com/ddd-qce/core/core"
-
-type Product struct {
-    core.Entity
-    Name        string
-    Price       float64
-    Description string
-}
-
-func NewProduct(id, name string, price float64) *Product {
-    return &Product{
-        Entity: *core.NewEntity(id),
-        Name:   name,
-        Price:  price,
-    }
-}
-```
-
-### 2. 实体相等性判断
-
-```go
-func main() {
-    p1 := NewProduct("prod-1", "Product A", 100.0)
-    p2 := NewProduct("prod-1", "Product A Updated", 120.0)
-    p3 := NewProduct("prod-2", "Product B", 50.0)
-
-    // 基于 ID 判断相等性（即使其他字段不同）
-    fmt.Println(p1.Equals(&p2.Entity)) // true
-    fmt.Println(p1.Equals(&p3.Entity)) // false
-}
-```
-
-### 3. 空值判断
-
-```go
-func (r *ProductRepository) FindByID(ctx context.Context, id string) (*Product, error) {
-    product := r.cache.Get(id)
-    if product != nil && !product.IsEmpty() {
-        return product, nil
-    }
-    return nil, ErrNotFound
-}
-```
-
----
-
-## 三、Repository 使用指南
+## 四、Repository 使用指南
 
 ### 1. 标准仓储接口
 
@@ -224,92 +279,45 @@ type Repository[T any] interface {
 }
 ```
 
-### 2. 实现仓储
+### 2. PostgreSQL 仓储（带乐观锁）
 
 ```go
 package repository
 
 import (
-    "context"
-    "github.com/ddd-qce/core/core"
+    "database/sql"
+    "github.com/ddd-qce/core/infra/repository/pg"
 )
 
 type OrderRepository struct {
-    db       *sql.DB
-    eventBus event.Bus
+    *pg.PgRepository[*Order]
 }
 
-func NewOrderRepository(db *sql.DB, eventBus event.Bus) *OrderRepository {
-    return &OrderRepository{db: db, eventBus: eventBus}
+func NewOrderRepository(db *sql.DB) *OrderRepository {
+    return &OrderRepository{
+        PgRepository: pg.NewRepository[*Order](db, pg.JSONSerializer[*Order]{}),
+    }
 }
+```
 
-func (r *OrderRepository) Save(ctx context.Context, order *Order) error {
-    tx, err := r.db.BeginTx(ctx, nil)
-    if err != nil {
-        return err
+### 3. 乐观锁错误处理
+
+```go
+import "github.com/ddd-qce/core/infra/repository/pg"
+
+err := repo.Save(ctx, order)
+if err != nil {
+    var lockErr *pg.OptimisticLockError
+    if errors.As(err, &lockErr) {
+        // 处理并发冲突
+        fmt.Printf("乐观锁冲突: aggregate=%s expected_version=%d\n",
+            lockErr.AggregateID, lockErr.ExpectedVersion)
     }
-    defer tx.Rollback()
-
-    // 保存聚合根状态
-    _, err = tx.ExecContext(ctx,
-        "INSERT OR REPLACE INTO orders (id, status, total, version) VALUES (?, ?, ?, ?)",
-        order.ID, order.Status, order.Total, order.Version,
-    )
-    if err != nil {
-        return err
-    }
-
-    // 保存订单项
-    for _, item := range order.Items {
-        _, err = tx.ExecContext(ctx,
-            "INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)",
-            order.ID, item.ProductID, item.Quantity, item.Price,
-        )
-        if err != nil {
-            return err
-        }
-    }
-
-    return tx.Commit()
-}
-
-func (r *OrderRepository) FindByID(ctx context.Context, id string) (*Order, error) {
-    var order Order
-    err := r.db.QueryRowContext(ctx,
-        "SELECT id, status, total, version FROM orders WHERE id = ?", id,
-    ).Scan(&order.ID, &order.Status, &order.Total, &order.Version)
-
-    if err != nil {
-        return nil, err
-    }
-
-    // 加载订单项
-    rows, err := r.db.QueryContext(ctx,
-        "SELECT product_id, quantity, price FROM order_items WHERE order_id = ?", id,
-    )
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
-
-    for rows.Next() {
-        var item OrderItem
-        if err := rows.Scan(&item.ProductID, &item.Quantity, &item.Price); err != nil {
-            return nil, err
-        }
-        order.Items = append(order.Items, item)
-    }
-
-    return &order, nil
-}
-
-func (r *OrderRepository) Delete(ctx context.Context, id string) error {
-    _, err := r.db.ExecContext(ctx, "DELETE FROM orders WHERE id = ?", id)
     return err
 }
 ```
 
-### 3. 事件溯源仓储接口
+### 4. 事件溯源仓储接口
 
 ```go
 type EventSourcingRepository[T any] interface {
@@ -318,90 +326,42 @@ type EventSourcingRepository[T any] interface {
 }
 ```
 
-### 4. 实现事件溯源仓储
+### 5. PostgreSQL 事件溯源仓储（带快照）
 
 ```go
-type OrderESRepository struct {
-    eventStore core.EventStore[core.DomainEvent]
-    eventBus   event.Bus
-}
+import (
+    "database/sql"
+    cqevent "github.com/ddd-qce/core/cqrs/event"
+    "github.com/ddd-qce/core/cqrs/event/pg"
+    "github.com/ddd-qce/core/infra/repository/pg"
+)
 
-func NewOrderESRepository(eventStore core.EventStore[core.DomainEvent], eventBus event.Bus) *OrderESRepository {
-    return &OrderESRepository{eventStore: eventStore, eventBus: eventBus}
-}
+eventStore := pgevent.NewEventStore[event.DomainEvent](db)
 
-func (r *OrderESRepository) Save(ctx context.Context, order *Order) error {
-    events := order.UncommittedEvents()
-    if len(events) == 0 {
-        return nil
-    }
-
-    // 追加事件到事件存储
-    if err := r.eventStore.Append(ctx, events); err != nil {
-        return err
-    }
-
-    // 发布事件
-    for _, event := range events {
-        r.eventBus.Publish(ctx, event)
-    }
-
-    // 标记事件已提交
-    order.MarkEventsAsCommitted()
-
-    return nil
-}
-
-func (r *OrderESRepository) Load(ctx context.Context, id string) (*Order, error) {
-    events, err := r.eventStore.Load(ctx, id, 0)
-    if err != nil {
-        return nil, err
-    }
-
-    order := &Order{
-        AggregateRoot: *core.NewAggregateRoot(id),
-    }
-
-    // 重放事件重建状态
-    for _, event := range events {
-        order.ApplyEvent(event)
-        order.Version++
-    }
-
-    return order, nil
-}
-```
-
-### 5. 使用仓储
-
-```go
-func (h *ConfirmOrderHandler) Handle(ctx context.Context, cmd ConfirmOrderCommand) error {
-    // 加载聚合
-    order, err := h.repo.FindByID(ctx, cmd.OrderID)
-    if err != nil {
-        return err
-    }
-
-    // 执行业务逻辑
-    if err := order.Confirm(); err != nil {
-        return err
-    }
-
-    // 保存聚合
-    return h.repo.Save(ctx, order)
-}
+repo := pg.NewEventSourcedRepository[*Order](
+    db,
+    (*cqevent.EventStore[event.DomainEvent])(&eventStore), // 需要适配
+    func(id string) *Order {
+        return &Order{AggregateRoot: *aggregate.NewAggregateRootWithApplier(id, &Order{})}
+    },
+    pg.WithSnapshotEvery[*Order](10),      // 每 10 个事件保存一次快照
+    pg.WithSerializer[*Order](pg.JSONSerializer[*Order]{}),
+)
 ```
 
 ---
 
-## 四、Command 使用指南
+## 五、Command 使用指南
 
 ### 1. 定义 Command 结构
 
 ```go
 package command
 
+import "github.com/ddd-qce/core/cqrs/command"
+
 type CreateUserCommand struct {
+    command.BaseCommand
     Name  string
     Email string
     Age   int
@@ -415,7 +375,7 @@ package command
 
 import (
     "context"
-    "github.com/ddd-qce/core"
+    "github.com/ddd-qce/core/cqrs/command"
 )
 
 type CreateUserHandler struct {
@@ -424,11 +384,11 @@ type CreateUserHandler struct {
 
 func (h *CreateUserHandler) Handle(ctx context.Context, cmd CreateUserCommand) (string, error) {
     user := NewUser(cmd.Name, cmd.Email, cmd.Age)
-    
+
     if err := h.userRepo.Save(ctx, user); err != nil {
         return "", err
     }
-    
+
     return user.ID, nil
 }
 ```
@@ -438,23 +398,22 @@ func (h *CreateUserHandler) Handle(ctx context.Context, cmd CreateUserCommand) (
 ```go
 import (
     "context"
-    commandmemory "github.com/ddd-qce/core/command/memory"
     "github.com/ddd-qce/core/aspect"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 )
 
 func main() {
     ctx := context.Background()
-    
-    // 创建切面链和 Bus
+
     chain := aspect.NewAspectChain()
     bus := commandmemory.NewCommandBus(chain)
-    
+
     // 注册 Handler
-    commandmemory.RegisterCommand(bus, &CreateUserHandler{userRepo: repo})
-    
-    // 执行 Command
+    commandmemory.RegisterCommand[CreateUserCommand, string](bus, &CreateUserHandler{userRepo: repo})
+
+    // 执行 Command（注意：bus 在 ctx 前面）
     userID, err := commandmemory.Dispatch[CreateUserCommand, string](
-        ctx, bus, CreateUserCommand{
+        bus, ctx, CreateUserCommand{
             Name:  "Alice",
             Email: "alice@example.com",
             Age:   25,
@@ -467,30 +426,33 @@ func main() {
 
 ```go
 type DeleteUserCommand struct {
+    command.BaseCommand
     UserID string
 }
 
 type DeleteUserHandler struct{}
 
 func (h *DeleteUserHandler) Handle(ctx context.Context, cmd DeleteUserCommand) (struct{}, error) {
-    // 执行删除...
     return struct{}{}, nil
 }
 
 // 执行
-_, err := commandmemory.Dispatch[DeleteUserCommand, struct{}](ctx, bus, cmd)
+_, err := commandmemory.Dispatch[DeleteUserCommand, struct{}](bus, ctx, cmd)
 ```
 
 ---
 
-## 五、Query 使用指南
+## 六、Query 使用指南
 
 ### 1. 定义 Query 结构
 
 ```go
 package query
 
+import "github.com/ddd-qce/core/cqrs/query"
+
 type GetUserQuery struct {
+    query.BaseQuery
     UserID string
 }
 
@@ -517,7 +479,7 @@ func (h *GetUserHandler) Handle(ctx context.Context, q GetUserQuery) (*GetUserRe
     if err != nil {
         return nil, err
     }
-    
+
     return &GetUserResult{
         ID:    user.ID,
         Name:  user.Name,
@@ -531,36 +493,39 @@ func (h *GetUserHandler) Handle(ctx context.Context, q GetUserQuery) (*GetUserRe
 ```go
 import (
     "context"
-    querymemory "github.com/ddd-qce/core/query/memory"
     "github.com/ddd-qce/core/aspect"
+    querymemory "github.com/ddd-qce/core/cqrs/query/memory"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     chain := aspect.NewAspectChain()
     bus := querymemory.NewQueryBus(chain)
-    
+
     // 注册 Handler
-    querymemory.RegisterQuery(bus, &GetUserHandler{userRepo: repo})
-    
-    // 执行 Query
-    result, err := querymemory.Ask[GetUserQuery, *GetUserResult](
-        ctx, bus, GetUserQuery{UserID: "user-123"},
+    querymemory.RegisterQuery[GetUserQuery, *GetUserResult](bus, &GetUserHandler{userRepo: repo})
+
+    // 执行 Query（注意：bus 在 ctx 前面）
+    result, err := querymemory.Dispatch[GetUserQuery, *GetUserResult](
+        bus, ctx, GetUserQuery{UserID: "user-123"},
     )
 }
 ```
 
 ---
 
-## 六、Event 使用指南
+## 七、Event 使用指南
 
 ### 1. 定义 Event 结构
 
 ```go
 package event
 
-import "time"
+import (
+    "time"
+    "github.com/ddd-qce/core/domain/event"
+)
 
 type UserCreatedEvent struct {
     UserID    string
@@ -569,18 +534,9 @@ type UserCreatedEvent struct {
     CreatedAt time.Time
 }
 
-// 实现 DomainEvent 接口
-func (e UserCreatedEvent) AggregateID() string {
-    return e.UserID
-}
-
-func (e UserCreatedEvent) EventType() string {
-    return "UserCreated"
-}
-
-func (e UserCreatedEvent) OccurredAt() time.Time {
-    return e.CreatedAt
-}
+func (e UserCreatedEvent) AggregateID() string   { return e.UserID }
+func (e UserCreatedEvent) EventType() string     { return "UserCreated" }
+func (e UserCreatedEvent) OccurredAt() time.Time { return e.CreatedAt }
 ```
 
 ### 2. 定义 Handler
@@ -594,40 +550,41 @@ type SendWelcomeEmailHandler struct {
     emailService EmailService
 }
 
-func (h *SendWelcomeEmailHandler) Handle(ctx context.Context, event UserCreatedEvent) error {
-    return h.emailService.SendWelcome(event.Email, event.Name)
+func (h *SendWelcomeEmailHandler) Handle(ctx context.Context, evt UserCreatedEvent) error {
+    return h.emailService.SendWelcome(evt.Email, evt.Name)
 }
 
 type UpdateSearchIndexHandler struct {
     searchClient SearchClient
 }
 
-func (h *UpdateSearchIndexHandler) Handle(ctx context.Context, event UserCreatedEvent) error {
-    return h.searchClient.IndexUser(event.UserID, event.Name, event.Email)
+func (h *UpdateSearchIndexHandler) Handle(ctx context.Context, evt UserCreatedEvent) error {
+    return h.searchClient.IndexUser(evt.UserID, evt.Name, evt.Email)
 }
 ```
 
-### 3. 注册与发布
+### 3. 注册与发布（EventBus + RegisterHandler/Dispatch）
 
 ```go
 import (
     "context"
-    eventmemory "github.com/ddd-qce/core/event/memory"
     "github.com/ddd-qce/core/aspect"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     chain := aspect.NewAspectChain()
-    bus := eventmemory.NewEventBus(chain)
-    
+    // EventBus 是非泛型的，一个实例处理所有事件类型
+    bus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+
     // 订阅 Handler（同一事件可多个订阅者）
-    bus.Subscribe(&SendWelcomeEmailHandler{emailService: svc})
-    bus.Subscribe(&UpdateSearchIndexHandler{searchClient: client})
-    
+    eventmemory.RegisterHandler[UserCreatedEvent](bus, &SendWelcomeEmailHandler{emailService: svc})
+    eventmemory.RegisterHandler[UserCreatedEvent](bus, &UpdateSearchIndexHandler{searchClient: client})
+
     // 发布事件
-    err := bus.Publish[UserCreatedEvent](ctx, UserCreatedEvent{
+    err := eventmemory.Dispatch[UserCreatedEvent](bus, ctx, UserCreatedEvent{
         UserID:    "user-123",
         Name:      "Alice",
         Email:     "alice@example.com",
@@ -636,29 +593,56 @@ func main() {
 }
 ```
 
-### 4. EventStore 使用
+### 4. 多类型事件（同一个 EventBus）
 
 ```go
-import eventmemory "github.com/ddd-qce/core/event/memory"
+// 一个 EventBus 实例处理所有事件类型
+bus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+
+// 订阅不同类型的事件
+eventmemory.RegisterHandler[UserCreatedEvent](bus, &SendWelcomeEmailHandler{})
+eventmemory.RegisterHandler[OrderPlacedEvent](bus, &UpdateInventoryHandler{})
+
+// 发布不同类型的事件
+eventmemory.Dispatch[UserCreatedEvent](bus, ctx, UserCreatedEvent{...})
+eventmemory.Dispatch[OrderPlacedEvent](bus, ctx, OrderPlacedEvent{...})
+```
+
+### 5. EventStore 使用
+
+```go
+import eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 
 func main() {
     // 创建事件存储
     store := eventmemory.NewEventStore[UserCreatedEvent]()
-    
-    // 追加事件
-    events := []UserCreatedEvent{
+
+    // 追加事件（4 参数：ctx, aggregateID, expectedVersion, events）
+    store.Append(ctx, "user-123", 0, []UserCreatedEvent{
         {UserID: "user-123", Name: "Alice", Email: "alice@example.com", CreatedAt: time.Now()},
-    }
-    store.Append(ctx, events)
-    
+    })
+
     // 加载事件（用于事件溯源重建聚合）
     loadedEvents, err := store.Load(ctx, "user-123", 0)
 }
 ```
 
+### 6. PostgreSQL EventStore
+
+```go
+import pgevent "github.com/ddd-qce/core/cqrs/event/pg"
+
+store := pgevent.NewEventStore[event.DomainEvent](db)
+
+// 带工厂函数（用于反序列化优化）
+store := pgevent.NewEventStoreWithFactory[event.DomainEvent](db, func() event.DomainEvent {
+    return &MyDomainEvent{}
+})
+```
+
 ---
 
-## 七、Aspect 系统
+## 八、Aspect 系统
 
 ### 洋葱模型执行顺序
 
@@ -694,15 +678,13 @@ import (
 
 func main() {
     traceStore := trace.NewInMemoryTraceStore()
-    
+
     tracingAspect := &builtin.TracingAspect{Store: traceStore}
-    
+
     chain := aspect.NewAspectChain()
     chain.RegisterCommandAspect(tracingAspect)
     chain.RegisterQueryAspect(tracingAspect)
     chain.RegisterEventAspect(tracingAspect)
-    
-    // 执行后会自动记录 Span
 }
 ```
 
@@ -714,59 +696,30 @@ import (
     "github.com/ddd-qce/core/aspect"
 )
 
-type MyTransactionManager struct{}
-
-func (m *MyTransactionManager) Begin(ctx context.Context) (context.Context, error) {
-    // 开启事务
-    return ctx, nil
-}
-
-func (m *MyTransactionManager) Commit(ctx context.Context) error {
-    // 提交事务
-    return nil
-}
-
-func (m *MyTransactionManager) Rollback(ctx context.Context) error {
-    // 回滚事务
-    return nil
-}
-
 func main() {
-    txAspect := &builtin.TransactionAspect{Manager: &MyTransactionManager{}}
-    
+    // 使用 Backend 提供的 TransactionManager
+    backend := infra.NewMemoryBackend()
+
+    txAspect := &builtin.TransactionAspect{TxManager: backend.TransactionManager}
+
     chain := aspect.NewAspectChain()
-    chain.RegisterCommandAspect(txAspect) // 仅注册到 Command
-    
+    chain.RegisterCommandAspect(txAspect)
+
     // Command 执行自动包裹在事务中
     // Handler 成功 → Commit
     // Handler 失败 → Rollback
+    // 支持嵌套事务（Savepoint 语义）
 }
 ```
 
 ### 3. LoggingAspect（日志记录）
 
 ```go
-import (
-    "github.com/ddd-qce/core/aspect/builtin"
-)
-
-type MyLogger struct{}
-
-func (l *MyLogger) Info(msg string, args ...interface{}) {
-    log.Printf("[INFO] "+msg, args...)
-}
-
-func (l *MyLogger) Error(msg string, args ...interface{}) {
-    log.Printf("[ERROR] "+msg, args...)
-}
-
-func (l *MyLogger) Debug(msg string, args ...interface{}) {
-    log.Printf("[DEBUG] "+msg, args...)
-}
+import "github.com/ddd-qce/core/aspect/builtin"
 
 func main() {
     loggingAspect := &builtin.LoggingAspect{Logger: &MyLogger{}}
-    
+
     chain := aspect.NewAspectChain()
     chain.RegisterCommandAspect(loggingAspect)
     chain.RegisterQueryAspect(loggingAspect)
@@ -777,28 +730,11 @@ func main() {
 ### 4. MetricsAspect（指标采集）
 
 ```go
-import (
-    "time"
-    "github.com/ddd-qce/core/aspect/builtin"
-)
-
-type MyMetricsRecorder struct{}
-
-func (r *MyMetricsRecorder) RecordDuration(name string, duration time.Duration) {
-    prometheus.HistogramVec.
-        WithLabelValues(name).
-        Observe(duration.Seconds())
-}
-
-func (r *MyMetricsRecorder) RecordError(name string, err error) {
-    prometheus.CounterVec.
-        WithLabelValues(name, "error").
-        Inc()
-}
+import "github.com/ddd-qce/core/aspect/builtin"
 
 func main() {
     metricsAspect := &builtin.MetricsAspect{Recorder: &MyMetricsRecorder{}}
-    
+
     chain := aspect.NewAspectChain()
     chain.RegisterCommandAspect(metricsAspect)
     chain.RegisterQueryAspect(metricsAspect)
@@ -806,24 +742,39 @@ func main() {
 }
 ```
 
-### 5. 自定义 Aspect
+### 5. PersistenceAspect（消息持久化）
 
 ```go
-import "github.com/ddd-qce/core/aspect"
+import "github.com/ddd-qce/core/aspect/builtin"
+
+func main() {
+    // 使用 NopMessageStore 跳过持久化
+    nopStore := builtin.NewNopMessageStore()
+
+    persistenceAspect := &builtin.PersistenceAspect{Store: nopStore}
+
+    chain := aspect.NewAspectChain()
+    chain.RegisterCommandAspect(persistenceAspect)
+}
+```
+
+### 6. 自定义 Aspect
+
+```go
+import (
+    "context"
+    "time"
+
+    "github.com/ddd-qce/core/cqrs/aspect"
+)
 
 type MyAuthAspect struct{}
 
-func (a *MyAuthAspect) Name() string {
-    return "Auth"
-}
-
-func (a *MyAuthAspect) Order() int {
-    return 5 // 在 Tracing 之后，Logging 之前
-}
+func (a *MyAuthAspect) Name() string  { return "Auth" }
+func (a *MyAuthAspect) Order() int    { return 5 } // 在 Tracing 之后，Logging 之前
 
 // 实现 CommandAspect
 func (a *MyAuthAspect) BeforeCommand(ctx context.Context, cmd any) (context.Context, error) {
-    // 验证权限
     if !hasPermission(ctx, cmd) {
         return ctx, errors.New("permission denied")
     }
@@ -831,7 +782,6 @@ func (a *MyAuthAspect) BeforeCommand(ctx context.Context, cmd any) (context.Cont
 }
 
 func (a *MyAuthAspect) AfterCommand(ctx context.Context, cmd any, result any, err error, duration time.Duration) error {
-    // 记录审计日志
     auditLog(ctx, cmd, err)
     return nil
 }
@@ -842,7 +792,7 @@ chain.RegisterCommandAspect(&MyAuthAspect{})
 
 ---
 
-## 八、Job 系统
+## 九、Job 系统
 
 ### 1. 提交异步任务
 
@@ -851,22 +801,25 @@ import (
     "context"
     "github.com/ddd-qce/core/job/core"
     jobmemory "github.com/ddd-qce/core/job/memory"
-    "github.com/ddd-qce/core/aspect"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     chain := aspect.NewAspectChain()
+    cBus := commandmemory.NewCommandBus(chain)
+
     jobStore := jobmemory.NewJobStore()
-    jobManager := jobmemory.NewJobManager(jobStore, chain)
-    
+    // JobManager 需要 CommandExecutor 来执行任务
+    jobManager := jobmemory.NewJobManager(jobStore, cBus)
+
     // 提交任务
     job, err := jobManager.Submit(ctx, GenerateReportCommand{
         ReportType: "monthly",
         UserID:     "user-123",
     })
-    
+
     fmt.Printf("Job submitted: %s, status: %s\n", job.ID, job.Status)
 }
 ```
@@ -907,7 +860,7 @@ job, err := jobManager.Submit(ctx, cmd,
 
 ---
 
-## 九、链路追踪
+## 十、链路追踪
 
 ### 1. 跨 Command → Event → Command 传播
 
@@ -915,32 +868,34 @@ job, err := jobManager.Submit(ctx, cmd,
 import (
     "context"
     "github.com/ddd-qce/core/trace"
+    "github.com/ddd-qce/core/aspect/builtin"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
 )
 
 func main() {
     ctx := context.Background()
     traceStore := trace.NewInMemoryTraceStore()
-    
-    // 创建切面链并注册 TracingAspect
+
     chain := aspect.NewAspectChain()
     chain.RegisterCommandAspect(&builtin.TracingAspect{Store: traceStore})
     chain.RegisterEventAspect(&builtin.TracingAspect{Store: traceStore})
-    
+
     cBus := commandmemory.NewCommandBus(chain)
-    eBus := eventmemory.NewEventBus(chain)
-    
+    eBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+
     // 执行 Command 1
-    cBus.Dispatch[CreateUserCommand, string](ctx, cmd)
+    commandmemory.Dispatch[CreateUserCommand, string](cBus, ctx, cmd)
     // ↓ 自动创建 Span (TraceID: xxx, SpanID: aaa)
-    
+
     // Command 1 内部发布 Event
-    eBus.Publish[UserCreatedEvent](ctx, event)
+    eBus.Publish(ctx, event)
     // ↓ 自动创建 Span (TraceID: xxx, SpanID: bbb, ParentID: aaa)
-    
+
     // Event Handler 内部执行 Command 2
-    cBus.Dispatch[SendEmailCommand, struct{}](ctx, emailCmd)
+    commandmemory.Dispatch[SendEmailCommand, struct{}](cBus, ctx, emailCmd)
     // ↓ 自动创建 Span (TraceID: xxx, SpanID: ccc, ParentID: bbb)
-    
+
     // 查看完整调用链
     spans, _ := traceStore.GetTrace(ctx, traceID)
     // spans: [aaa → bbb → ccc]
@@ -957,7 +912,7 @@ func someFunction(ctx context.Context) {
     traceID := trace.GetTraceID(ctx)
     spanID := trace.GetSpanID(ctx)
     parentSpanID := trace.GetParentSpanID(ctx)
-    
+
     // 手动设置 Trace 上下文（用于 HTTP/gRPC 传播）
     newCtx := trace.WithTrace(ctx, traceID, newSpanID)
     newCtx = trace.WithParentSpan(newCtx, spanID)
@@ -972,17 +927,17 @@ import "github.com/ddd-qce/core/trace"
 func main() {
     traceStore := trace.NewInMemoryTraceStore()
     ctx := context.Background()
-    
+
     // 获取完整调用链
     spans, err := traceStore.GetTrace(ctx, "trace-id-xxx")
-    
+
     // 按条件过滤
     filter := &trace.TraceFilter{
-        Type:          "command",
-        Status:        "error",
-        NameContains:  "CreateUser",
-        StartTime:     time.Now().Add(-1 * time.Hour),
-        EndTime:       time.Now(),
+        Type:         "command",
+        Status:       "error",
+        NameContains: "CreateUser",
+        StartTime:    time.Now().Add(-1 * time.Hour),
+        EndTime:      time.Now(),
     }
     traceIDs, err := traceStore.ListTraces(ctx, filter)
 }
@@ -992,36 +947,110 @@ func main() {
 
 ```go
 type Span struct {
-    ID         string        // Span 唯一标识
-    TraceID    string        // 调用链唯一标识
-    ParentID   string        // 父 Span ID
-    Type       string        // command / query / event
-    Name       string        // 操作名称
-    Status     string        // success / error
-    Error      string        // 错误信息
-    StartedAt  time.Time     // 开始时间
-    Duration   time.Duration // 耗时
+    ID        string        // Span 唯一标识
+    TraceID   string        // 调用链唯一标识
+    ParentID  string        // 父 Span ID
+    Type      string        // command / query / event
+    Name      string        // 操作名称
+    Status    string        // success / error
+    Error     string        // 错误信息
+    StartedAt time.Time     // 开始时间
+    Duration  time.Duration // 耗时
 }
 ```
 
 ---
 
-## 十、完整集成示例
+## 十一、Backend 基础设施配置
+
+### 1. 内存后端（开发/测试）
+
+```go
+import "github.com/ddd-qce/core/infra"
+
+backend := infra.NewMemoryBackend()
+
+// backend.TransactionManager  — 内存事务管理器（支持嵌套）
+// backend.JobStore            — nil（需手动设置）
+// backend.TraceStore          — nil（需手动设置）
+// backend.MessageStore        — nil（需手动设置）
+```
+
+### 2. PostgreSQL 后端（生产）
+
+```go
+import (
+    "database/sql"
+    "github.com/ddd-qce/core/pgx"
+)
+
+db, _ := sql.Open("pgx", "postgres://...")
+backend := pgx.NewBackend(db)
+
+// backend.TransactionManager  — PgTransactionManager（Savepoint 嵌套事务）
+// backend.JobStore            — PgJobStore
+// backend.TraceStore          — PgTraceStore
+// backend.MessageStore        — PgMessageStore
+// backend.Migrate             — pg.Migrate 函数
+```
+
+### 3. 数据库迁移
+
+```go
+// 使用 Backend 的 Migrate 函数
+if backend.Migrate != nil {
+    err := backend.Migrate(db)
+}
+
+// 或直接调用
+err := pg.Migrate(db)
+```
+
+### 4. 嵌套事务
+
+```go
+// PgTransactionManager 自动支持嵌套事务
+// 外层: BEGIN
+//   内层: SAVEPOINT sp_1
+//   内层 Commit: RELEASE SAVEPOINT sp_1
+//   内层 Rollback: ROLLBACK TO SAVEPOINT sp_1 (标记 aborted)
+// 外层 Commit: COMMIT (检查 aborted 标记)
+// 外层 Rollback: ROLLBACK
+
+txMgr := pg.NewTransactionManager(db)
+ctx, _ = txMgr.Begin(ctx)     // BEGIN
+  ctx2, _ = txMgr.Begin(ctx)  // SAVEPOINT sp_1
+  txMgr.Commit(ctx2)          // RELEASE SAVEPOINT sp_1
+txMgr.Commit(ctx)              // COMMIT
+```
+
+### 5. 事务内查询
+
+```go
+import "github.com/ddd-qce/core/pg"
+
+// GetQuerier 自动从 ctx 获取当前事务，若无事务则使用 db
+querier := pg.GetQuerier(ctx, db)
+querier.QueryContext(ctx, "SELECT ...", args...)
+```
+
+---
+
+## 十二、完整集成示例
 
 ```go
 package main
 
 import (
     "context"
-    "fmt"
     "log"
     "time"
 
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/aspect/builtin"
-    commandmemory "github.com/ddd-qce/core/command/memory"
-    eventmemory "github.com/ddd-qce/core/event/memory"
-    querymemory "github.com/ddd-qce/core/query/memory"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+    querymemory "github.com/ddd-qce/core/cqrs/query/memory"
     jobmemory "github.com/ddd-qce/core/job/memory"
     "github.com/ddd-qce/core/trace"
 )
@@ -1035,83 +1064,59 @@ func main() {
     // 2. 创建切面链
     chain := aspect.NewAspectChain()
     chain.RegisterCommandAspect(&builtin.TracingAspect{Store: traceStore})
-    chain.RegisterCommandAspect(&builtin.MetricsAspect{Recorder: &SimpleMetricsRecorder{}})
     chain.RegisterCommandAspect(&builtin.LoggingAspect{Logger: &SimpleLogger{}})
+    chain.RegisterCommandAspect(&builtin.MetricsAspect{Recorder: &SimpleMetricsRecorder{}})
     chain.RegisterQueryAspect(&builtin.TracingAspect{Store: traceStore})
-    chain.RegisterQueryAspect(&builtin.MetricsAspect{Recorder: &SimpleMetricsRecorder{}})
     chain.RegisterQueryAspect(&builtin.LoggingAspect{Logger: &SimpleLogger{}})
     chain.RegisterEventAspect(&builtin.TracingAspect{Store: traceStore})
-    chain.RegisterEventAspect(&builtin.MetricsAspect{Recorder: &SimpleMetricsRecorder{}})
     chain.RegisterEventAspect(&builtin.LoggingAspect{Logger: &SimpleLogger{}})
 
     // 3. 创建 Bus
     qBus := querymemory.NewQueryBus(chain)
     cBus := commandmemory.NewCommandBus(chain)
-    eBus := eventmemory.NewEventBus(chain)
+    eBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
     // 4. 创建 Job 管理器
     jobStore := jobmemory.NewJobStore()
-    jobManager := jobmemory.NewJobManager(jobStore, chain)
+    jobManager := jobmemory.NewJobManager(jobStore, cBus)
 
     // 5. 注册 Handler
-    // command.RegisterHandlers(cBus)
-    // query.RegisterHandlers(qBus)
-    // event.SubscribeHandlers(eBus)
+    // commandmemory.RegisterCommand[CreateUserCommand, string](cBus, &CreateUserHandler{...})
+    // querymemory.RegisterQuery[GetUserQuery, *GetUserResult](qBus, &GetUserHandler{...})
+    // eventmemory.RegisterHandler[UserCreatedEvent](eBus, &SendWelcomeEmailHandler{...})
 
     // 6. 执行
-    // cBus.Dispatch[...]
-    // querymemory.Ask[...]
-    // eBus.Publish[...]
-    // jobManager.Submit(...)
+    // commandmemory.Dispatch[CreateUserCommand, string](cBus, ctx, cmd)
+    // querymemory.Dispatch[GetUserQuery, *GetUserResult](qBus, ctx, q)
+    // eventmemory.Dispatch[UserCreatedEvent](eBus, ctx, evt)
+    // jobManager.Submit(ctx, cmd)
 
     // 7. 查看追踪
     // traceStore.GetTrace(ctx, traceID)
-}
-
-type SimpleMetricsRecorder struct{}
-
-func (r *SimpleMetricsRecorder) RecordDuration(name string, d time.Duration) {
-    log.Printf("[Metrics] %s took %v", name, d)
-}
-
-func (r *SimpleMetricsRecorder) RecordError(name string, err error) {
-    log.Printf("[Metrics] %s error: %v", name, err)
-}
-
-type SimpleLogger struct{}
-
-func (l *SimpleLogger) Info(msg string, args ...interface{}) {
-    log.Printf("[INFO] "+msg, args...)
-}
-
-func (l *SimpleLogger) Error(msg string, args ...interface{}) {
-    log.Printf("[ERROR] "+msg, args...)
-}
-
-func (l *SimpleLogger) Debug(msg string, args ...interface{}) {
-    log.Printf("[DEBUG] "+msg, args...)
 }
 ```
 
 ---
 
-## 十一、最佳实践
+## 十三、最佳实践
 
 ### 1. Command 命名规范
 
 - 使用动词开头：`CreateUser`、`UpdateOrder`、`CancelPayment`
 - 包含完整意图：避免模糊名称如 `Process`、`Handle`
-- 一个 Command 对应一个 Handler
+- 一个 Command 对应一个 Handler（1:1）
 
 ### 2. Query 命名规范
 
 - 使用 `Get`、`List`、`Find` 开头：`GetUser`、`ListOrders`、`FindInactiveUsers`
 - Query 应该是只读的，不修改状态
+- 一个 Query 对应一个 Handler（1:1）
 
 ### 3. Event 命名规范
 
 - 使用过去时态：`UserCreated`、`OrderCancelled`、`PaymentCompleted`
 - Event 表示已发生的事实，不可拒绝
+- 一个 Event 可以有多个订阅者（1:N）
 
 ### 4. 跨领域交互原则
 
@@ -1128,11 +1133,12 @@ func (l *SimpleLogger) Debug(msg string, args ...interface{}) {
 
 ```go
 // 推荐顺序（Order 值从小到大）
-chain.RegisterCommandAspect(&builtin.TracingAspect{...})     // Order: 0
-chain.RegisterCommandAspect(&builtin.TransactionAspect{...}) // Order: 10
-chain.RegisterCommandAspect(&MyAuthAspect{})                 // Order: 20 (自定义)
-chain.RegisterCommandAspect(&builtin.LoggingAspect{...})     // Order: 50
-chain.RegisterCommandAspect(&builtin.MetricsAspect{...})     // Order: 100
+chain.RegisterCommandAspect(&builtin.TracingAspect{...})      // Order: 0
+chain.RegisterCommandAspect(&builtin.TransactionAspect{...})  // Order: 10
+chain.RegisterCommandAspect(&MyAuthAspect{})                  // Order: 5-20 (自定义)
+chain.RegisterCommandAspect(&builtin.LoggingAspect{...})      // Order: 50
+chain.RegisterCommandAspect(&builtin.MetricsAspect{...})      // Order: 100
+chain.RegisterCommandAspect(&builtin.PersistenceAspect{...})  // Order: 200
 ```
 
 ### 6. 错误处理
@@ -1143,12 +1149,18 @@ func (h *CreateUserHandler) Handle(ctx context.Context, cmd CreateUserCommand) (
     if cmd.Email == "" {
         return "", errors.New("email is required") // 业务错误
     }
-    
+
     if err := h.repo.Save(ctx, user); err != nil {
         return "", fmt.Errorf("save user: %w", err) // 包装系统错误
     }
-    
+
     return user.ID, nil
+}
+
+// 乐观锁冲突
+var lockErr *pg.OptimisticLockError
+if errors.As(err, &lockErr) {
+    // 重试或返回冲突提示
 }
 
 // Event Handler 错误不影响其他订阅者
@@ -1163,4 +1175,17 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (Result, error) {
     // ctx 包含 TraceID、SpanID、超时、取消信号等
     return h.repo.Save(ctx, entity) // 传递 ctx 给下游
 }
+```
+
+### 8. Backend 选择
+
+```go
+// 开发/测试：使用内存后端
+backend := infra.NewMemoryBackend()
+
+// 生产：使用 PostgreSQL 后端
+backend := pgx.NewBackend(db)
+
+// 切换后端不需要修改业务代码
+// Backend 统一了 TransactionManager、JobStore、TraceStore、MessageStore 接口
 ```

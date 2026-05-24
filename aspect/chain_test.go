@@ -497,6 +497,127 @@ func (a *eventAspectErrorBefore) AfterPublish(ctx context.Context, e any, err er
 	return nil
 }
 
+func TestAspectChain_RegisterAspect_ImplementsAll(t *testing.T) {
+	chain := NewAspectChain()
+	a := &allAspect{}
+	chain.RegisterAspect(a)
+
+	cmd := &testCommand{ID: "1"}
+	_, _ = chain.ExecuteWithCommandAspects(context.Background(), cmd, func(ctx context.Context) (any, error) {
+		return &testCommandResult{Success: true}, nil
+	})
+
+	q := &testQuery{ID: "1"}
+	_, _ = chain.ExecuteWithQueryAspects(context.Background(), q, func(ctx context.Context) (any, error) {
+		return &testQueryResult{Value: "ok"}, nil
+	})
+
+	evt := &testEvent{id: "1"}
+	_ = chain.ExecuteWithEventAspects(context.Background(), evt, func(ctx context.Context) error {
+		return nil
+	})
+
+	if !a.commandBefore {
+		t.Error("BeforeCommand not called")
+	}
+	if !a.commandAfter {
+		t.Error("AfterCommand not called")
+	}
+	if !a.queryBefore {
+		t.Error("BeforeQuery not called")
+	}
+	if !a.queryAfter {
+		t.Error("AfterQuery not called")
+	}
+	if !a.eventBefore {
+		t.Error("BeforePublish not called")
+	}
+	if !a.eventAfter {
+		t.Error("AfterPublish not called")
+	}
+}
+
+func TestAspectChain_RegisterAspect_CommandOnly(t *testing.T) {
+	chain := NewAspectChain()
+	a := &commandOnlyAspect{}
+	chain.RegisterAspect(a)
+
+	cmd := &testCommand{ID: "1"}
+	_, _ = chain.ExecuteWithCommandAspects(context.Background(), cmd, func(ctx context.Context) (any, error) {
+		return &testCommandResult{Success: true}, nil
+	})
+
+	q := &testQuery{ID: "1"}
+	_, _ = chain.ExecuteWithQueryAspects(context.Background(), q, func(ctx context.Context) (any, error) {
+		return &testQueryResult{Value: "ok"}, nil
+	})
+
+	if !a.beforeCalled {
+		t.Error("BeforeCommand not called")
+	}
+	if !a.afterCalled {
+		t.Error("AfterCommand not called")
+	}
+	if chain.queryAspects != nil && len(chain.queryAspects) > 0 {
+		t.Error("expected no query aspects registered from command-only aspect")
+	}
+	if chain.eventAspects != nil && len(chain.eventAspects) > 0 {
+		t.Error("expected no event aspects registered from command-only aspect")
+	}
+}
+
+type allAspect struct {
+	commandBefore bool
+	commandAfter  bool
+	queryBefore   bool
+	queryAfter    bool
+	eventBefore   bool
+	eventAfter    bool
+}
+
+func (a *allAspect) Name() string { return "all" }
+func (a *allAspect) Order() int   { return 1 }
+func (a *allAspect) BeforeCommand(ctx context.Context, cmd any) (context.Context, error) {
+	a.commandBefore = true
+	return ctx, nil
+}
+func (a *allAspect) AfterCommand(ctx context.Context, cmd any, r any, err error, d time.Duration) error {
+	a.commandAfter = true
+	return nil
+}
+func (a *allAspect) BeforeQuery(ctx context.Context, q any) (context.Context, error) {
+	a.queryBefore = true
+	return ctx, nil
+}
+func (a *allAspect) AfterQuery(ctx context.Context, q any, r any, err error, d time.Duration) error {
+	a.queryAfter = true
+	return nil
+}
+func (a *allAspect) BeforePublish(ctx context.Context, e any) (context.Context, error) {
+	a.eventBefore = true
+	return ctx, nil
+}
+func (a *allAspect) AfterPublish(ctx context.Context, e any, err error, d time.Duration) error {
+	a.eventAfter = true
+	return nil
+}
+
+type commandOnlyAspect struct {
+	beforeCalled bool
+	afterCalled  bool
+}
+
+func (a *commandOnlyAspect) Name() string { return "command-only" }
+func (a *commandOnlyAspect) Order() int   { return 1 }
+func (a *commandOnlyAspect) BeforeCommand(ctx context.Context, cmd any) (context.Context, error) {
+	a.beforeCalled = true
+	return ctx, nil
+}
+func (a *commandOnlyAspect) AfterCommand(ctx context.Context, cmd any, r any, err error, d time.Duration) error {
+	a.afterCalled = true
+	return nil
+}
+
 func TestAspectChain_EventAspectAfterError(t *testing.T) {
 	chain := NewAspectChain()
 	chain.RegisterEventAspect(&eventAspectAfterError{})

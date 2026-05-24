@@ -67,7 +67,7 @@ func TestEventSourcing_CreateApplySaveLoadReplay(t *testing.T) {
 	createdEvents := []*orderCreated{
 		{OrderID: "ORD-001", UserID: "user-001", Amount: 99.99},
 	}
-	err := createdStore.Append(ctx, createdEvents)
+	err := createdStore.Append(ctx, "ORD-001", 0, createdEvents)
 	if err != nil {
 		t.Fatalf("append created failed: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestEventSourcing_CreateApplySaveLoadReplay(t *testing.T) {
 	confirmedEvents := []*orderConfirmed{
 		{OrderID: "ORD-001"},
 	}
-	err = confirmedStore.Append(ctx, confirmedEvents)
+	err = confirmedStore.Append(ctx, "ORD-001", 0, confirmedEvents)
 	if err != nil {
 		t.Fatalf("append confirmed failed: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestEventSourcing_MultipleAggregates(t *testing.T) {
 		{OrderID: "ORD-002", UserID: "user-002", Amount: 250.00},
 	}
 
-	err := store.Append(ctx, events)
+	err := store.Append(ctx, "ORD-001", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestEventSourcing_Versioning(t *testing.T) {
 		{OrderID: "ORD-001", UserID: "user-001", Amount: 300.00},
 	}
 
-	err := store.Append(ctx, events)
+	err := store.Append(ctx, "ORD-001", 0, events)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -191,13 +191,13 @@ func TestEventSourcing_FullReplay(t *testing.T) {
 	confirmedStore := eventmemory.NewEventStore[*orderConfirmed]()
 	cancelledStore := eventmemory.NewEventStore[*orderCancelled]()
 
-	createdStore.Append(ctx, []*orderCreated{
+	createdStore.Append(ctx, "ORD-001", 0, []*orderCreated{
 		{OrderID: "ORD-001", UserID: "user-001", Amount: 500.00},
 	})
-	confirmedStore.Append(ctx, []*orderConfirmed{
+	confirmedStore.Append(ctx, "ORD-001", 0, []*orderConfirmed{
 		{OrderID: "ORD-001"},
 	})
-	cancelledStore.Append(ctx, []*orderCancelled{
+	cancelledStore.Append(ctx, "ORD-001", 0, []*orderCancelled{
 		{OrderID: "ORD-001", Reason: "customer request"},
 	})
 

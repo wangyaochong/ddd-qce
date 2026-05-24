@@ -198,8 +198,8 @@ func TestOrderRepository_CRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find failed: %v", err)
 	}
-	if found.GetID() != "ORD-CRUD" {
-		t.Errorf("expected ORD-CRUD, got %s", found.GetID())
+	if found.ID() != "ORD-CRUD" {
+		t.Errorf("expected ORD-CRUD, got %s", found.ID())
 	}
 	if err := repo.Delete(ctx, "ORD-CRUD"); err != nil {
 		t.Fatalf("delete failed: %v", err)
@@ -228,8 +228,8 @@ func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
-	if loaded.GetID() != "ORD-ES1" {
-		t.Errorf("expected ORD-ES1, got %s", loaded.GetID())
+	if loaded.ID() != "ORD-ES1" {
+		t.Errorf("expected ORD-ES1, got %s", loaded.ID())
 	}
 	if loaded.UserID != "user-001" {
 		t.Errorf("expected user-001, got %s", loaded.UserID)
@@ -252,8 +252,8 @@ func TestEventSourcedRepo_LoadFromHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
-	if loaded.AggregateRoot.GetVersion() != 1 {
-		t.Errorf("expected version 1, got %d", loaded.AggregateRoot.GetVersion())
+	if loaded.AggregateRoot.Version() != 1 {
+		t.Errorf("expected version 1, got %d", loaded.AggregateRoot.Version())
 	}
 }
 
@@ -279,8 +279,8 @@ func TestEventSourcedRepo_MultipleEventTypes(t *testing.T) {
 	if loaded.Status != domain.OrderStatusShipped {
 		t.Errorf("expected shipped, got %s", loaded.Status)
 	}
-	if loaded.AggregateRoot.GetVersion() != 3 {
-		t.Errorf("expected version 3, got %d", loaded.AggregateRoot.GetVersion())
+	if loaded.AggregateRoot.Version() != 3 {
+		t.Errorf("expected version 3, got %d", loaded.AggregateRoot.Version())
 	}
 }
 

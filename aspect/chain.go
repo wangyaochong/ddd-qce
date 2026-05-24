@@ -5,22 +5,55 @@ import (
 	"sort"
 	"sync"
 	"time"
-
-	"github.com/ddd-qce/core/cqrs/aspect"
 )
+
+type Aspect interface {
+	Name() string
+	Order() int
+}
+
+type CommandAspect interface {
+	Aspect
+	BeforeCommand(ctx context.Context, cmd any) (context.Context, error)
+	AfterCommand(ctx context.Context, cmd any, result any, err error, duration time.Duration) error
+}
+
+type QueryAspect interface {
+	Aspect
+	BeforeQuery(ctx context.Context, query any) (context.Context, error)
+	AfterQuery(ctx context.Context, query any, result any, err error, duration time.Duration) error
+}
+
+type EventAspect interface {
+	Aspect
+	BeforePublish(ctx context.Context, event any) (context.Context, error)
+	AfterPublish(ctx context.Context, event any, err error, duration time.Duration) error
+}
 
 type AspectChain struct {
 	mu             sync.RWMutex
-	queryAspects   []aspect.QueryAspect
-	commandAspects []aspect.CommandAspect
-	eventAspects   []aspect.EventAspect
+	queryAspects   []QueryAspect
+	commandAspects []CommandAspect
+	eventAspects   []EventAspect
 }
 
 func NewAspectChain() *AspectChain {
 	return &AspectChain{}
 }
 
-func (c *AspectChain) RegisterQueryAspect(a aspect.QueryAspect) {
+func (c *AspectChain) RegisterAspect(a any) {
+	if ca, ok := a.(CommandAspect); ok {
+		c.RegisterCommandAspect(ca)
+	}
+	if qa, ok := a.(QueryAspect); ok {
+		c.RegisterQueryAspect(qa)
+	}
+	if ea, ok := a.(EventAspect); ok {
+		c.RegisterEventAspect(ea)
+	}
+}
+
+func (c *AspectChain) RegisterQueryAspect(a QueryAspect) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.queryAspects = append(c.queryAspects, a)
@@ -29,7 +62,7 @@ func (c *AspectChain) RegisterQueryAspect(a aspect.QueryAspect) {
 	})
 }
 
-func (c *AspectChain) RegisterCommandAspect(a aspect.CommandAspect) {
+func (c *AspectChain) RegisterCommandAspect(a CommandAspect) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.commandAspects = append(c.commandAspects, a)
@@ -38,7 +71,7 @@ func (c *AspectChain) RegisterCommandAspect(a aspect.CommandAspect) {
 	})
 }
 
-func (c *AspectChain) RegisterEventAspect(a aspect.EventAspect) {
+func (c *AspectChain) RegisterEventAspect(a EventAspect) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.eventAspects = append(c.eventAspects, a)
@@ -53,7 +86,7 @@ func (c *AspectChain) ExecuteWithQueryAspects(
 	next func(context.Context) (any, error),
 ) (any, error) {
 	c.mu.RLock()
-	aspects := make([]aspect.QueryAspect, len(c.queryAspects))
+	aspects := make([]QueryAspect, len(c.queryAspects))
 	copy(aspects, c.queryAspects)
 	c.mu.RUnlock()
 	return c.runQueryAspects(ctx, query, next, 0, aspects)
@@ -64,7 +97,7 @@ func (c *AspectChain) runQueryAspects(
 	query any,
 	next func(context.Context) (any, error),
 	index int,
-	aspects []aspect.QueryAspect,
+	aspects []QueryAspect,
 ) (any, error) {
 	if index >= len(aspects) {
 		return next(ctx)
@@ -96,7 +129,7 @@ func (c *AspectChain) ExecuteWithCommandAspects(
 	next func(context.Context) (any, error),
 ) (any, error) {
 	c.mu.RLock()
-	aspects := make([]aspect.CommandAspect, len(c.commandAspects))
+	aspects := make([]CommandAspect, len(c.commandAspects))
 	copy(aspects, c.commandAspects)
 	c.mu.RUnlock()
 	return c.runCommandAspects(ctx, cmd, next, 0, aspects)
@@ -107,7 +140,7 @@ func (c *AspectChain) runCommandAspects(
 	cmd any,
 	next func(context.Context) (any, error),
 	index int,
-	aspects []aspect.CommandAspect,
+	aspects []CommandAspect,
 ) (any, error) {
 	if index >= len(aspects) {
 		return next(ctx)
@@ -139,7 +172,7 @@ func (c *AspectChain) ExecuteWithEventAspects(
 	next func(context.Context) error,
 ) error {
 	c.mu.RLock()
-	aspects := make([]aspect.EventAspect, len(c.eventAspects))
+	aspects := make([]EventAspect, len(c.eventAspects))
 	copy(aspects, c.eventAspects)
 	c.mu.RUnlock()
 	return c.runEventAspects(ctx, event, next, 0, aspects)
@@ -150,7 +183,7 @@ func (c *AspectChain) runEventAspects(
 	event any,
 	next func(context.Context) error,
 	index int,
-	aspects []aspect.EventAspect,
+	aspects []EventAspect,
 ) error {
 	if index >= len(aspects) {
 		return next(ctx)

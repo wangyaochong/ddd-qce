@@ -64,7 +64,7 @@ func NewOrder(id, userID string, items []*OrderItem) (*Order, error) {
 	}
 	o.TotalAmount = o.calculateTotal()
 	o.Apply(&OrderPlacedEvent{
-		OrderID:     o.GetID(),
+		OrderID:     o.ID(),
 		UserID:      o.UserID,
 		TotalAmount: o.TotalAmount,
 		Items:       o.ItemNames(),
@@ -106,10 +106,10 @@ func (o *Order) When(evt event.DomainEvent) {
 
 func (o *Order) ConfirmPayment() error {
 	if o.Status != OrderStatusPending {
-		return fmt.Errorf("order %s cannot be confirmed payment (status: %s)", o.GetID(), o.Status)
+		return fmt.Errorf("order %s cannot be confirmed payment (status: %s)", o.ID(), o.Status)
 	}
 	o.Apply(&PaymentConfirmedEvent{
-		OrderID: o.GetID(),
+		OrderID: o.ID(),
 		Time:    time.Now(),
 	})
 	return nil
@@ -117,10 +117,10 @@ func (o *Order) ConfirmPayment() error {
 
 func (o *Order) Ship() error {
 	if o.Status != OrderStatusPaid {
-		return fmt.Errorf("order %s cannot be shipped (status: %s)", o.GetID(), o.Status)
+		return fmt.Errorf("order %s cannot be shipped (status: %s)", o.ID(), o.Status)
 	}
 	o.Apply(&OrderShippedEvent{
-		OrderID: o.GetID(),
+		OrderID: o.ID(),
 		Time:    time.Now(),
 	})
 	return nil
@@ -128,13 +128,13 @@ func (o *Order) Ship() error {
 
 func (o *Order) Cancel(reason string) error {
 	if o.Status == OrderStatusCancelled {
-		return fmt.Errorf("order %s already cancelled", o.GetID())
+		return fmt.Errorf("order %s already cancelled", o.ID())
 	}
 	if o.Status == OrderStatusShipped {
-		return fmt.Errorf("order %s already shipped, cannot cancel", o.GetID())
+		return fmt.Errorf("order %s already shipped, cannot cancel", o.ID())
 	}
 	o.Apply(&OrderCancelledEvent{
-		OrderID: o.GetID(),
+		OrderID: o.ID(),
 		Reason:  reason,
 		Time:    time.Now(),
 	})

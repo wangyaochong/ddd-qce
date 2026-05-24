@@ -43,7 +43,7 @@ func (e *executeTestErr) Error() string { return e.msg }
 
 func TestCommandBus_Execute(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := NewCommandBus(chain)
+	bus := NewCommandBus(WithCommandBusAspectChain(chain))
 	RegisterCommand(bus, &executeTestHandler{})
 
 	ctx := context.Background()
@@ -65,7 +65,7 @@ func TestCommandBus_Execute(t *testing.T) {
 
 func TestCommandBus_Execute_NoHandler(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := NewCommandBus(chain)
+	bus := NewCommandBus(WithCommandBusAspectChain(chain))
 
 	ctx := context.Background()
 	cmd := &executeTestCommand{Value: 1}
@@ -78,7 +78,7 @@ func TestCommandBus_Execute_NoHandler(t *testing.T) {
 
 func TestCommandBus_Execute_Error(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := NewCommandBus(chain)
+	bus := NewCommandBus(WithCommandBusAspectChain(chain))
 	RegisterCommand(bus, &executeErrorHandler{})
 
 	ctx := context.Background()
@@ -95,7 +95,7 @@ func TestCommandBus_Execute_Error(t *testing.T) {
 
 func TestCommandBus_Execute_MultipleCommands(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := NewCommandBus(chain)
+	bus := NewCommandBus(WithCommandBusAspectChain(chain))
 	RegisterCommand(bus, &executeTestHandler{})
 	RegisterCommand(bus, &testCreateUserHandler{})
 
@@ -128,7 +128,7 @@ func TestCommandBus_Execute_WithAspects(t *testing.T) {
 	}
 	chain.RegisterCommandAspect(testAspect)
 
-	bus := NewCommandBus(chain)
+	bus := NewCommandBus(WithCommandBusAspectChain(chain))
 	RegisterCommand(bus, &executeTestHandler{})
 
 	ctx := context.Background()
@@ -145,19 +145,36 @@ func TestCommandBus_Execute_WithAspects(t *testing.T) {
 	}
 }
 
-func TestInvokeHandler_NoHandleMethod(t *testing.T) {
-	type badHandler struct{}
+func TestCommandBus_Execute_PrecompiledInvoker(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	bus := NewCommandBus(WithCommandBusAspectChain(chain))
+	RegisterCommand(bus, &executeTestHandler{})
 
-	handler := &badHandler{}
-	cmd := &executeTestCommand{Value: 1}
 	ctx := context.Background()
 
-	_, err := invokeHandler(handler, cmd, ctx)
-	if err == nil {
-		t.Fatal("expected error for handler without Handle method")
+	for i := 0; i < 100; i++ {
+		result, err := bus.Execute(ctx, &executeTestCommand{Value: i})
+		if err != nil {
+			t.Fatalf("unexpected error on iteration %d: %v", i, err)
+		}
+		r := result.(*executeTestResult)
+		if r.Doubled != i*2 {
+			t.Errorf("iteration %d: expected %d, got %d", i, i*2, r.Doubled)
+		}
 	}
-	if err.Error() != "handler does not have Handle method" {
-		t.Errorf("expected 'handler does not have Handle method', got '%v'", err)
+}
+
+func TestCommandBus_Execute_WrongCommandType(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	bus := NewCommandBus(WithCommandBusAspectChain(chain))
+	RegisterCommand(bus, &executeTestHandler{})
+
+	ctx := context.Background()
+	cmd := &testCreateUserCommand{Name: "wrong"}
+
+	_, err := bus.Execute(ctx, cmd)
+	if err == nil {
+		t.Fatal("expected error for wrong command type (no handler registered)")
 	}
 }
 

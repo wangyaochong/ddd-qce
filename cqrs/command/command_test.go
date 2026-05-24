@@ -2,103 +2,178 @@ package command
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	"testing"
-	"time"
 )
 
-type CreateOrderCommand struct {
-	UserID string
-	Amount float64
+type testCommand struct {
+	BaseCommand
+	Name string
 }
 
-type CreateOrderResult struct {
-	OrderID string
+type testCommandResult struct {
+	ID string
 }
 
-type CreateOrderHandler struct{}
+type testCommandHandler struct{}
 
-func (h *CreateOrderHandler) Handle(ctx context.Context, cmd *CreateOrderCommand) (*CreateOrderResult, error) {
-	return &CreateOrderResult{OrderID: "ORD-" + time.Now().Format("20060102150405")}, nil
+func (h *testCommandHandler) Handle(ctx context.Context, cmd *testCommand) (*testCommandResult, error) {
+	return &testCommandResult{ID: "result-" + cmd.Name}, nil
 }
 
-type InMemoryCommandBus struct {
-	handlers map[string]func(ctx context.Context, cmd any) (any, error)
+type testFailingCommand struct {
+	BaseCommand
 }
 
-func NewInMemoryCommandBus() *InMemoryCommandBus {
-	return &InMemoryCommandBus{
-		handlers: make(map[string]func(ctx context.Context, cmd any) (any, error)),
+type testFailingCommandResult struct{}
+
+type testFailingCommandHandler struct{}
+
+func (h *testFailingCommandHandler) Handle(ctx context.Context, cmd *testFailingCommand) (*testFailingCommandResult, error) {
+	return nil, errors.New("command failed")
+}
+
+type testCommandWithoutBase struct {
+	Name string
+}
+
+func (testCommandWithoutBase) isCommand() {}
+
+func TestBaseCommand_ImplementsCommand(t *testing.T) {
+	var _ Command = (*testCommand)(nil)
+	var _ Command = (*testFailingCommand)(nil)
+	var _ Command = (*testCommandWithoutBase)(nil)
+	var _ Command = BaseCommand{}
+}
+
+func TestCommandNameOf_PointerType(t *testing.T) {
+	cmd := &testCommand{Name: "test"}
+	name := CommandNameOf(cmd)
+	if name != "testCommand" {
+		t.Errorf("expected 'testCommand', got '%s'", name)
 	}
 }
 
-func (b *InMemoryCommandBus) Register(handler *CreateOrderHandler) {
-	b.handlers["CreateOrderCommand"] = func(ctx context.Context, cmd any) (any, error) {
-		return handler.Handle(ctx, cmd.(*CreateOrderCommand))
+func TestCommandNameOf_ValueType(t *testing.T) {
+	cmd := testCommand{Name: "test"}
+	name := CommandNameOf(cmd)
+	if name != "testCommand" {
+		t.Errorf("expected 'testCommand', got '%s'", name)
 	}
 }
 
-func (b *InMemoryCommandBus) Execute(ctx context.Context, cmd any) (any, error) {
-	handler, exists := b.handlers["CreateOrderCommand"]
-	if !exists {
-		return nil, nil
+func TestCommandNameOf_DifferentTypes(t *testing.T) {
+	tests := []struct {
+		cmd  any
+		want string
+	}{
+		{&testCommand{}, "testCommand"},
+		{&testFailingCommand{}, "testFailingCommand"},
+		{&testCommandWithoutBase{}, "testCommandWithoutBase"},
+		{testCommand{}, "testCommand"},
+		{BaseCommand{}, "BaseCommand"},
 	}
-	return handler(ctx, cmd)
+	for _, tt := range tests {
+		got := CommandNameOf(tt.cmd)
+		if got != tt.want {
+			t.Errorf("CommandNameOf(%T) = '%s', want '%s'", tt.cmd, got, tt.want)
+		}
+	}
 }
 
 func TestCommandHandler_Handle(t *testing.T) {
 	ctx := context.Background()
-	handler := &CreateOrderHandler{}
+	handler := &testCommandHandler{}
 
-	cmd := &CreateOrderCommand{
-		UserID: "user-001",
-		Amount: 99.99,
-	}
-
-	result, err := handler.Handle(ctx, cmd)
+	result, err := handler.Handle(ctx, &testCommand{Name: "hello"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.OrderID == "" {
-		t.Fatal("expected non-empty OrderID")
+	if result.ID != "result-hello" {
+		t.Errorf("expected 'result-hello', got '%s'", result.ID)
 	}
 }
 
-func TestCommandBus_Execute(t *testing.T) {
+func TestCommandHandler_Error(t *testing.T) {
 	ctx := context.Background()
-	bus := NewInMemoryCommandBus()
+	handler := &testFailingCommandHandler{}
 
-	handler := &CreateOrderHandler{}
-	bus.Register(handler)
-
-	cmd := &CreateOrderCommand{
-		UserID: "user-001",
-		Amount: 99.99,
+	_, err := handler.Handle(ctx, &testFailingCommand{})
+	if err == nil {
+		t.Fatal("expected error from failing handler")
 	}
-
-	result, err := bus.Execute(ctx, cmd)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	r := result.(*CreateOrderResult)
-	if r.OrderID == "" {
-		t.Errorf("expected non-empty OrderID")
+	if err.Error() != "command failed" {
+		t.Errorf("expected 'command failed', got '%v'", err)
 	}
 }
 
-func TestCommandBus_Execute_Unregistered(t *testing.T) {
-	ctx := context.Background()
-	bus := NewInMemoryCommandBus()
+func TestCommandHandler_InterfaceSatisfaction(t *testing.T) {
+	var _ CommandHandler[*testCommand, *testCommandResult] = &testCommandHandler{}
+	var _ CommandHandler[*testFailingCommand, *testFailingCommandResult] = &testFailingCommandHandler{}
+}
 
-	cmd := &CreateOrderCommand{
-		UserID: "user-001",
-		Amount: 99.99,
+func TestCommand_InterfaceEnforcement(t *testing.T) {
+	cmd := &testCommand{Name: "test"}
+	var _ Command = cmd
+
+	if _, ok := any(cmd).(Command); !ok {
+		t.Error("testCommand should implement Command interface")
 	}
 
-	result, err := bus.Execute(ctx, cmd)
+	plain := &struct{ Name string }{Name: "not-a-command"}
+	if _, ok := any(plain).(Command); ok {
+		t.Error("plain struct should NOT implement Command interface")
+	}
+}
+
+func TestCommandNameOf_UnexportedType(t *testing.T) {
+	type internalCommand struct {
+		BaseCommand
+		Data string
+	}
+	cmd := &internalCommand{Data: "test"}
+	name := CommandNameOf(cmd)
+	if name != "internalCommand" {
+		t.Errorf("expected 'internalCommand', got '%s'", name)
+	}
+}
+
+func TestBaseCommand_MarkerMethod(t *testing.T) {
+	var cmd Command = BaseCommand{}
+	cmd.isCommand()
+}
+
+func TestCommandNameOf_ReflectTypeConsistency(t *testing.T) {
+	cmd := &testCommand{Name: "test"}
+	ptrName := CommandNameOf(cmd)
+
+	var zero *testCommand
+	typeName := reflect.TypeOf(zero).Elem().Name()
+
+	if ptrName != typeName {
+		t.Errorf("CommandNameOf pointer '%s' doesn't match reflect type name '%s'", ptrName, typeName)
+	}
+}
+
+func TestCommandHandler_ContextPropagation(t *testing.T) {
+	ctx := context.WithValue(context.Background(), "testKey", "testValue")
+	handler := &testCommandHandler{}
+
+	result, err := handler.Handle(ctx, &testCommand{Name: "ctx"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != nil {
-		t.Errorf("expected nil result for unregistered command, got %v", result)
+	if result.ID != "result-ctx" {
+		t.Errorf("expected 'result-ctx', got '%s'", result.ID)
+	}
+}
+
+func TestCommand_WithCustomIsCommand(t *testing.T) {
+	type customCmd struct{ id int }
+	// customCmd does NOT embed BaseCommand, so it doesn't implement Command
+	// unless isCommand() is added. This test verifies the marker interface pattern.
+	if _, ok := any(&customCmd{}).(Command); ok {
+		t.Error("type without isCommand() should NOT satisfy Command")
 	}
 }

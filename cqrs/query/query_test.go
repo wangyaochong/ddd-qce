@@ -2,126 +2,225 @@ package query
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	"testing"
 )
 
-type GetOrderQuery struct {
+type testQuery struct {
 	BaseQuery
-	OrderID string
+	UserID string
 }
 
-type GetOrderResult struct {
-	OrderID string
-	Status  string
-	Total   float64
+type testQueryResult struct {
+	ID   string
+	Name string
 }
 
-type GetOrderHandler struct {
-	orders map[string]*GetOrderResult
+type testQueryHandler struct {
+	data map[string]*testQueryResult
 }
 
-func (h *GetOrderHandler) Handle(ctx context.Context, query *GetOrderQuery) (*GetOrderResult, error) {
-	result, exists := h.orders[query.OrderID]
-	if !exists {
-		return nil, nil
-	}
-	return result, nil
-}
-
-type InMemoryQueryBus struct {
-	handlers map[string]func(ctx context.Context, query any) (any, error)
-}
-
-func NewInMemoryQueryBus() *InMemoryQueryBus {
-	return &InMemoryQueryBus{
-		handlers: make(map[string]func(ctx context.Context, query any) (any, error)),
+func newTestQueryHandler() *testQueryHandler {
+	return &testQueryHandler{
+		data: map[string]*testQueryResult{
+			"1": {ID: "1", Name: "Alice"},
+			"2": {ID: "2", Name: "Bob"},
+		},
 	}
 }
 
-func (b *InMemoryQueryBus) Register(queryType string, handler func(ctx context.Context, query any) (any, error)) {
-	b.handlers[queryType] = handler
+func (h *testQueryHandler) Handle(ctx context.Context, q *testQuery) (*testQueryResult, error) {
+	if result, ok := h.data[q.UserID]; ok {
+		return result, nil
+	}
+	return nil, nil
 }
 
-func (b *InMemoryQueryBus) Ask(ctx context.Context, query any) (any, error) {
-	queryType := "GetOrderQuery"
-	handler, exists := b.handlers[queryType]
-	if !exists {
-		return nil, nil
+type testFailingQuery struct {
+	BaseQuery
+}
+
+type testFailingQueryResult struct{}
+
+type testFailingQueryHandler struct{}
+
+func (h *testFailingQueryHandler) Handle(ctx context.Context, q *testFailingQuery) (*testFailingQueryResult, error) {
+	return nil, errors.New("query failed")
+}
+
+type testQueryWithoutBase struct {
+	Key string
+}
+
+func (testQueryWithoutBase) isQuery() {}
+
+type testListQuery struct {
+	BaseQuery
+	Page int
+}
+
+type testListResult struct {
+	Total int
+}
+
+type testListQueryHandler struct{}
+
+func (h *testListQueryHandler) Handle(ctx context.Context, q *testListQuery) (*testListResult, error) {
+	return &testListResult{Total: 42}, nil
+}
+
+func TestBaseQuery_ImplementsQuery(t *testing.T) {
+	var _ Query = (*testQuery)(nil)
+	var _ Query = (*testFailingQuery)(nil)
+	var _ Query = (*testQueryWithoutBase)(nil)
+	var _ Query = BaseQuery{}
+}
+
+func TestQueryNameOf_PointerType(t *testing.T) {
+	q := &testQuery{UserID: "1"}
+	name := QueryNameOf(q)
+	if name != "testQuery" {
+		t.Errorf("expected 'testQuery', got '%s'", name)
 	}
-	return handler(ctx, query)
+}
+
+func TestQueryNameOf_ValueType(t *testing.T) {
+	q := testQuery{UserID: "1"}
+	name := QueryNameOf(q)
+	if name != "testQuery" {
+		t.Errorf("expected 'testQuery', got '%s'", name)
+	}
+}
+
+func TestQueryNameOf_DifferentTypes(t *testing.T) {
+	tests := []struct {
+		query any
+		want  string
+	}{
+		{&testQuery{}, "testQuery"},
+		{&testFailingQuery{}, "testFailingQuery"},
+		{&testQueryWithoutBase{}, "testQueryWithoutBase"},
+		{testQuery{}, "testQuery"},
+		{BaseQuery{}, "BaseQuery"},
+	}
+	for _, tt := range tests {
+		got := QueryNameOf(tt.query)
+		if got != tt.want {
+			t.Errorf("QueryNameOf(%T) = '%s', want '%s'", tt.query, got, tt.want)
+		}
+	}
 }
 
 func TestQueryHandler_Handle(t *testing.T) {
 	ctx := context.Background()
-	handler := &GetOrderHandler{
-		orders: map[string]*GetOrderResult{
-			"ORD-001": {OrderID: "ORD-001", Status: "confirmed", Total: 99.99},
-		},
-	}
+	handler := newTestQueryHandler()
 
-	query := &GetOrderQuery{OrderID: "ORD-001"}
-
-	result, err := handler.Handle(ctx, query)
+	result, err := handler.Handle(ctx, &testQuery{UserID: "1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.OrderID != "ORD-001" {
-		t.Errorf("expected OrderID 'ORD-001', got %s", result.OrderID)
+	if result == nil {
+		t.Fatal("expected non-nil result")
 	}
-	if result.Status != "confirmed" {
-		t.Errorf("expected status 'confirmed', got %s", result.Status)
+	if result.Name != "Alice" {
+		t.Errorf("expected 'Alice', got '%s'", result.Name)
 	}
 }
 
 func TestQueryHandler_Handle_NotFound(t *testing.T) {
 	ctx := context.Background()
-	handler := &GetOrderHandler{
-		orders: map[string]*GetOrderResult{},
-	}
+	handler := newTestQueryHandler()
 
-	query := &GetOrderQuery{OrderID: "ORD-999"}
-
-	result, err := handler.Handle(ctx, query)
+	result, err := handler.Handle(ctx, &testQuery{UserID: "999"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result != nil {
-		t.Errorf("expected nil for non-existent order, got %v", result)
+		t.Errorf("expected nil for non-existent ID, got %v", result)
 	}
 }
 
-func TestQueryBus_Ask(t *testing.T) {
+func TestQueryHandler_Error(t *testing.T) {
 	ctx := context.Background()
-	bus := NewInMemoryQueryBus()
+	handler := &testFailingQueryHandler{}
 
-	bus.Register("GetOrderQuery", func(ctx context.Context, query any) (any, error) {
-		q := query.(*GetOrderQuery)
-		return &GetOrderResult{OrderID: q.OrderID, Status: "pending", Total: 0}, nil
-	})
-
-	query := &GetOrderQuery{OrderID: "ORD-002"}
-
-	result, err := bus.Ask(ctx, query)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := handler.Handle(ctx, &testFailingQuery{})
+	if err == nil {
+		t.Fatal("expected error from failing handler")
 	}
-	r := result.(*GetOrderResult)
-	if r.OrderID != "ORD-002" {
-		t.Errorf("expected OrderID 'ORD-002', got %s", r.OrderID)
+	if err.Error() != "query failed" {
+		t.Errorf("expected 'query failed', got '%v'", err)
 	}
 }
 
-func TestQueryBus_Ask_Unregistered(t *testing.T) {
-	ctx := context.Background()
-	bus := NewInMemoryQueryBus()
+func TestQueryHandler_InterfaceSatisfaction(t *testing.T) {
+	var _ QueryHandler[*testQuery, *testQueryResult] = &testQueryHandler{}
+	var _ QueryHandler[*testFailingQuery, *testFailingQueryResult] = &testFailingQueryHandler{}
+	var _ QueryHandler[*testListQuery, *testListResult] = &testListQueryHandler{}
+}
 
-	query := &GetOrderQuery{OrderID: "ORD-003"}
+func TestQuery_InterfaceEnforcement(t *testing.T) {
+	q := &testQuery{UserID: "1"}
+	var _ Query = q
 
-	result, err := bus.Ask(ctx, query)
+	if _, ok := any(q).(Query); !ok {
+		t.Error("testQuery should implement Query interface")
+	}
+
+	plain := &struct{ Key string }{Key: "not-a-query"}
+	if _, ok := any(plain).(Query); ok {
+		t.Error("plain struct should NOT implement Query interface")
+	}
+}
+
+func TestQueryNameOf_UnexportedType(t *testing.T) {
+	type internalQuery struct {
+		BaseQuery
+		Filter string
+	}
+	q := &internalQuery{Filter: "test"}
+	name := QueryNameOf(q)
+	if name != "internalQuery" {
+		t.Errorf("expected 'internalQuery', got '%s'", name)
+	}
+}
+
+func TestBaseQuery_MarkerMethod(t *testing.T) {
+	var q Query = BaseQuery{}
+	q.isQuery()
+}
+
+func TestQueryNameOf_ReflectTypeConsistency(t *testing.T) {
+	q := &testQuery{UserID: "1"}
+	ptrName := QueryNameOf(q)
+
+	var zero *testQuery
+	typeName := reflect.TypeOf(zero).Elem().Name()
+
+	if ptrName != typeName {
+		t.Errorf("QueryNameOf pointer '%s' doesn't match reflect type name '%s'", ptrName, typeName)
+	}
+}
+
+func TestQueryHandler_ContextPropagation(t *testing.T) {
+	ctx := context.WithValue(context.Background(), "testKey", "testValue")
+	handler := newTestQueryHandler()
+
+	result, err := handler.Handle(ctx, &testQuery{UserID: "1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != nil {
-		t.Errorf("expected nil for unregistered query, got %v", result)
+	if result.Name != "Alice" {
+		t.Errorf("expected 'Alice', got '%s'", result.Name)
+	}
+}
+
+func TestQuery_WithCustomIsQuery(t *testing.T) {
+	type customQuery struct{ id int }
+	// customQuery does NOT embed BaseQuery, so it doesn't implement Query
+	// unless isQuery() is added. This test verifies the marker interface pattern.
+	if _, ok := any(&customQuery{}).(Query); ok {
+		t.Error("type without isQuery() should NOT satisfy Query")
 	}
 }

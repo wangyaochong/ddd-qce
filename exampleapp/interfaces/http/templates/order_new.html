@@ -1,0 +1,30 @@
+{{define "order_new"}}{{template "header" .}}
+
+<h1 style="margin-bottom:1.5rem;">Place New Order</h1>
+
+<div class="card">
+    <form method="POST" action="/orders">
+        <div class="form-group">
+            <label>User ID</label>
+            <input type="text" name="user_id" value="user-001" required>
+        </div>
+        <h3 style="margin:1rem 0 0.5rem;">Select Products</h3>
+        <table>
+            <tr><th>Product</th><th>Price</th><th>Stock</th><th>Quantity</th></tr>
+            {{range .Products}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td>${{printf "%.2f" .Price}}</td>
+                <td>{{.Stock}}</td>
+                <td><input type="number" name="qty_{{.ID}}" min="0" max="{{.Stock}}" value="0" style="width:60px;"></td>
+            </tr>
+            {{end}}
+        </table>
+        <div style="margin-top:1rem;">
+            <button type="submit" class="btn btn-success">Place Order</button>
+            <a href="/orders" class="btn btn-primary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+{{template "footer" .}}{{end}}

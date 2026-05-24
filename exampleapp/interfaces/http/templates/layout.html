@@ -1,0 +1,71 @@
+{{define "header"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+        nav { background: #1a1a2e; padding: 0 2rem; display: flex; align-items: center; height: 56px; }
+        nav a { color: #e0e0e0; text-decoration: none; padding: 0 1rem; font-size: 0.95rem; }
+        nav a:hover, nav a.active { color: #4fc3f7; }
+        nav .brand { font-weight: 700; font-size: 1.1rem; color: #fff; margin-right: 2rem; }
+        .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+        .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; margin-bottom: 1.5rem; }
+        .card h2 { margin-bottom: 1rem; font-size: 1.2rem; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat { background: #fff; border-radius: 8px; padding: 1.2rem; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stat .number { font-size: 2rem; font-weight: 700; color: #1a1a2e; }
+        .stat .label { font-size: 0.85rem; color: #888; margin-top: 0.3rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #eee; }
+        th { font-weight: 600; color: #666; font-size: 0.85rem; text-transform: uppercase; }
+        .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+        .badge-pending { background: #fff3e0; color: #e65100; }
+        .badge-paid { background: #e3f2fd; color: #1565c0; }
+        .badge-shipped { background: #e8f5e9; color: #2e7d32; }
+        .badge-cancelled { background: #fce4ec; color: #c62828; }
+        .badge-completed { background: #e8f5e9; color: #2e7d32; }
+        .badge-running { background: #e3f2fd; color: #1565c0; }
+        .badge-failed { background: #fce4ec; color: #c62828; }
+        .btn { display: inline-block; padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
+        .btn-primary { background: #1a1a2e; color: #fff; }
+        .btn-primary:hover { background: #16213e; }
+        .btn-success { background: #2e7d32; color: #fff; }
+        .btn-warning { background: #f57c00; color: #fff; }
+        .btn-danger { background: #c62828; color: #fff; }
+        .btn-sm { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+        form { display: inline; }
+        .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        input, select { padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9rem; }
+        label { font-size: 0.9rem; font-weight: 500; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.3rem; }
+        .empty { text-align: center; padding: 2rem; color: #999; }
+        a { color: #1565c0; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .trace-tree { font-family: monospace; font-size: 0.85rem; }
+        .trace-tree .span-item { padding: 0.2rem 0; }
+        .trace-tree .indent { margin-left: 2rem; }
+        .ok { color: #2e7d32; }
+        .err { color: #c62828; }
+    </style>
+</head>
+<body>
+    <nav>
+        <span class="brand">DDD-QCE Shop</span>
+        <a href="/" class="{{if eq .Page "dashboard"}}active{{end}}">Dashboard</a>
+        <a href="/orders" class="{{if eq .Page "orders"}}active{{end}}">Orders</a>
+        <a href="/inventory" class="{{if eq .Page "inventory"}}active{{end}}">Inventory</a>
+        <a href="/jobs" class="{{if eq .Page "jobs"}}active{{end}}">Jobs</a>
+        <a href="/traces" class="{{if eq .Page "traces"}}active{{end}}">Traces</a>
+    </nav>
+    <div class="container">
+{{end}}
+
+{{define "footer"}}
+    </div>
+</body>
+</html>
+{{end}}

@@ -66,21 +66,21 @@ func RegisterHandlers(bus *commandmemory.CommandBus) {
 
 func RunExample(ctx context.Context, bus *commandmemory.CommandBus) {
 	fmt.Println("=== Command: CreateUser ===")
-	cmdResult, err := commandmemory.Dispatch[*CreateUserCommand, *CreateUserResult](bus, ctx, &CreateUserCommand{Name: "李四", Email: "lisi@example.com"})
+	cmdResult, err := commandmemory.Dispatch[*CreateUserCommand, *CreateUserResult](ctx, bus, &CreateUserCommand{Name: "李四", Email: "lisi@example.com"})
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("Created user with ID: %s\n", cmdResult.ID)
 
 	fmt.Println("\n=== Command: UpdateUser ===")
-	updateResult, err := commandmemory.Dispatch[*UpdateUserCommand, *UpdateUserResult](bus, ctx, &UpdateUserCommand{UserID: "1", Name: "张三更新", Email: "zhangsan_new@example.com"})
+	updateResult, err := commandmemory.Dispatch[*UpdateUserCommand, *UpdateUserResult](ctx, bus, &UpdateUserCommand{UserID: "1", Name: "张三更新", Email: "zhangsan_new@example.com"})
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("Update success: %v\n", updateResult.Success)
 
 	fmt.Println("\n=== Command: CancelOrder ===")
-	cancelResult, err := commandmemory.Dispatch[*CancelOrderCommand, *CancelOrderResult](bus, ctx, &CancelOrderCommand{OrderID: "ORD-001", Reason: "用户取消"})
+	cancelResult, err := commandmemory.Dispatch[*CancelOrderCommand, *CancelOrderResult](ctx, bus, &CancelOrderCommand{OrderID: "ORD-001", Reason: "用户取消"})
 	if err != nil {
 		panic(err)
 	}

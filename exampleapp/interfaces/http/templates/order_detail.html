@@ -1,0 +1,47 @@
+{{define "order_detail"}}{{template "header" .}}
+
+{{with .Order}}
+<h1 style="margin-bottom:1.5rem;">Order {{printf "%.8s" .OrderID}}...</h1>
+
+<div class="card">
+    <h2>Status: <span class="badge badge-{{.Status}}">{{.Status}}</span></h2>
+    <table style="margin-top:1rem;">
+        <tr><td style="width:150px;font-weight:600;">Order ID</td><td>{{.OrderID}}</td></tr>
+        <tr><td style="font-weight:600;">User</td><td>{{.UserID}}</td></tr>
+        <tr><td style="font-weight:600;">Total</td><td>${{printf "%.2f" .TotalAmount}}</td></tr>
+        <tr><td style="font-weight:600;">Created</td><td>{{.CreatedAt}}</td></tr>
+        {{if .PaidAt}}<tr><td style="font-weight:600;">Paid</td><td>{{.PaidAt}}</td></tr>{{end}}
+        {{if .ShippedAt}}<tr><td style="font-weight:600;">Shipped</td><td>{{.ShippedAt}}</td></tr>{{end}}
+        {{if .CancelledAt}}<tr><td style="font-weight:600;">Cancelled</td><td>{{.CancelledAt}}</td></tr>{{end}}
+        {{if .CancelReason}}<tr><td style="font-weight:600;">Reason</td><td>{{.CancelReason}}</td></tr>{{end}}
+    </table>
+</div>
+
+<div class="card">
+    <h2>Items</h2>
+    <table>
+        <tr><th>Product</th><th>Price</th><th>Qty</th><th>Subtotal</th></tr>
+        {{range .Items}}
+        <tr><td>{{.ProductName}}</td><td>${{printf "%.2f" .Price}}</td><td>{{.Quantity}}</td><td>${{printf "%.2f" .Subtotal}}</td></tr>
+        {{end}}
+    </table>
+</div>
+
+<div class="card">
+    <h2>Actions</h2>
+    <div class="actions">
+        {{if eq .Status "pending"}}
+        <form method="POST" action="/orders/{{.OrderID}}/confirm"><button class="btn btn-success">Confirm Payment</button></form>
+        <form method="POST" action="/orders/{{.OrderID}}/cancel"><input type="text" name="reason" placeholder="Cancel reason" style="width:200px;" required><button class="btn btn-danger">Cancel Order</button></form>
+        {{end}}
+        {{if eq .Status "paid"}}
+        <form method="POST" action="/orders/{{.OrderID}}/ship"><button class="btn btn-success">Ship Order</button></form>
+        <form method="POST" action="/orders/{{.OrderID}}/cancel"><input type="text" name="reason" placeholder="Cancel reason" style="width:200px;" required><button class="btn btn-danger">Cancel Order</button></form>
+        {{end}}
+        <a href="/orders/{{.OrderID}}/events" class="btn btn-primary">View Events</a>
+        <form method="POST" action="/orders/{{.OrderID}}/delete" onclick="return confirm('Delete this order?')"><button class="btn btn-danger btn-sm">Delete</button></form>
+    </div>
+</div>
+{{end}}
+
+{{template "footer" .}}{{end}}

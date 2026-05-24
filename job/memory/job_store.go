@@ -25,7 +25,7 @@ func (s *InMemoryJobStore) Create(ctx context.Context, job *jobcore.Job) error {
 	if _, exists := s.jobs[job.ID]; exists {
 		return fmt.Errorf("job %s already exists", job.ID)
 	}
-	s.jobs[job.ID] = job
+	s.jobs[job.ID] = job.Snapshot()
 	return nil
 }
 
@@ -36,8 +36,7 @@ func (s *InMemoryJobStore) Get(ctx context.Context, id string) (*jobcore.Job, er
 	if !exists {
 		return nil, fmt.Errorf("job %s not found", id)
 	}
-	jobCopy := *job
-	return &jobCopy, nil
+	return job.Snapshot(), nil
 }
 
 func (s *InMemoryJobStore) Update(ctx context.Context, job *jobcore.Job) error {
@@ -46,7 +45,7 @@ func (s *InMemoryJobStore) Update(ctx context.Context, job *jobcore.Job) error {
 	if _, exists := s.jobs[job.ID]; !exists {
 		return fmt.Errorf("job %s not found", job.ID)
 	}
-	s.jobs[job.ID] = job
+	s.jobs[job.ID] = job.Snapshot()
 	return nil
 }
 
@@ -56,8 +55,7 @@ func (s *InMemoryJobStore) List(ctx context.Context, status jobcore.JobStatus) (
 	var result []*jobcore.Job
 	for _, job := range s.jobs {
 		if job.Status == status {
-			jobCopy := *job
-			result = append(result, &jobCopy)
+			result = append(result, job.Snapshot())
 		}
 	}
 	return result, nil

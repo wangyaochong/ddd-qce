@@ -1,0 +1,19 @@
+{{define "inventory"}}{{template "header" .}}
+
+<h1 style="margin-bottom:1.5rem;">Inventory</h1>
+
+<div class="card">
+    <table>
+        <tr><th>Product ID</th><th>Name</th><th>Price</th><th>Stock</th></tr>
+        {{range .Products}}
+        <tr>
+            <td>{{.ID}}</td>
+            <td>{{.Name}}</td>
+            <td>${{printf "%.2f" .Price}}</td>
+            <td>{{if le .Stock 5}}<span style="color:#c62828;font-weight:700;">{{.Stock}}</span>{{else}}{{.Stock}}{{end}}</td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+
+{{template "footer" .}}{{end}}

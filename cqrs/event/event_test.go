@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	domainevent "github.com/ddd-qce/core/domain/event"
 	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+	domainevent "github.com/ddd-qce/core/domain/event"
 )
 
 type testEvent struct {
@@ -28,20 +28,20 @@ func (h *testEventHandler) Handle(ctx context.Context, event *testEvent) error {
 }
 
 func TestEventBus_InterfaceSatisfied(t *testing.T) {
-	var _ EventBus[*testEvent] = eventmemory.NewEventBus[*testEvent](nil)
+	var _ EventBus = eventmemory.NewEventBus()
 }
 
 func TestEventBus_SubscribeAndPublish(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := eventmemory.NewEventBus[*testEvent](chain)
+	bus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
-	var _ EventBus[*testEvent] = bus
+	var _ EventBus = bus
 
 	handler := &testEventHandler{}
-	bus.Subscribe(domainevent.EventHandler[*testEvent](handler))
+	eventmemory.RegisterHandler[*testEvent](bus, handler)
 
 	ctx := context.Background()
-	err := bus.Publish(ctx, &testEvent{AggID: "agg-1"})
+	err := eventmemory.Dispatch[*testEvent](ctx, bus, &testEvent{AggID: "agg-1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

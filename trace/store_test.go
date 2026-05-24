@@ -109,20 +109,20 @@ func TestListTraces_WithTypeFilter(t *testing.T) {
 	ctx := context.Background()
 
 	store.RecordSpan(ctx, &Span{
-		TraceID:  "trace-1",
-		ID:       "span-1",
-		Type:     SpanTypeCommand,
-		Name:     "CreateOrder",
-		Status:   SpanStatusSuccess,
+		TraceID:   "trace-1",
+		ID:        "span-1",
+		Type:      SpanTypeCommand,
+		Name:      "CreateOrder",
+		Status:    SpanStatusSuccess,
 		StartedAt: time.Now(),
 	})
 
 	store.RecordSpan(ctx, &Span{
-		TraceID:  "trace-2",
-		ID:       "span-2",
-		Type:     SpanTypeEvent,
-		Name:     "OrderCreated",
-		Status:   SpanStatusSuccess,
+		TraceID:   "trace-2",
+		ID:        "span-2",
+		Type:      SpanTypeEvent,
+		Name:      "OrderCreated",
+		Status:    SpanStatusSuccess,
 		StartedAt: time.Now(),
 	})
 
@@ -143,20 +143,20 @@ func TestListTraces_WithNameContains(t *testing.T) {
 	ctx := context.Background()
 
 	store.RecordSpan(ctx, &Span{
-		TraceID:  "trace-1",
-		ID:       "span-1",
-		Type:     SpanTypeCommand,
-		Name:     "CreateOrder",
-		Status:   SpanStatusSuccess,
+		TraceID:   "trace-1",
+		ID:        "span-1",
+		Type:      SpanTypeCommand,
+		Name:      "CreateOrder",
+		Status:    SpanStatusSuccess,
 		StartedAt: time.Now(),
 	})
 
 	store.RecordSpan(ctx, &Span{
-		TraceID:  "trace-2",
-		ID:       "span-2",
-		Type:     SpanTypeCommand,
-		Name:     "UpdateUser",
-		Status:   SpanStatusSuccess,
+		TraceID:   "trace-2",
+		ID:        "span-2",
+		Type:      SpanTypeCommand,
+		Name:      "UpdateUser",
+		Status:    SpanStatusSuccess,
 		StartedAt: time.Now(),
 	})
 

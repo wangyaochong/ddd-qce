@@ -24,10 +24,10 @@ type Span struct {
 }
 
 type TraceFilter struct {
-	TraceID    string
-	Type       string
-	Status     string
-	StartTime  time.Time
-	EndTime    time.Time
+	TraceID      string
+	Type         string
+	Status       string
+	StartTime    time.Time
+	EndTime      time.Time
 	NameContains string
 }

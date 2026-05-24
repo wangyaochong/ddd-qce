@@ -51,24 +51,18 @@ func main() {
 	traceStore := trace.NewInMemoryTraceStore()
 
 	chain := aspect.NewAspectChain()
-	chain.RegisterCommandAspect(&builtin.TracingAspect{Store: traceStore})
-	chain.RegisterCommandAspect(&builtin.MetricsAspect{Recorder: &SimpleMetricsRecorder{}})
-	chain.RegisterCommandAspect(&builtin.LoggingAspect{Logger: &SimpleLogger{}})
-	chain.RegisterQueryAspect(&builtin.TracingAspect{Store: traceStore})
-	chain.RegisterQueryAspect(&builtin.MetricsAspect{Recorder: &SimpleMetricsRecorder{}})
-	chain.RegisterQueryAspect(&builtin.LoggingAspect{Logger: &SimpleLogger{}})
-	chain.RegisterEventAspect(&builtin.TracingAspect{Store: traceStore})
-	chain.RegisterEventAspect(&builtin.MetricsAspect{Recorder: &SimpleMetricsRecorder{}})
-	chain.RegisterEventAspect(&builtin.LoggingAspect{Logger: &SimpleLogger{}})
+	chain.RegisterAspect(builtin.NewTracingAspect(traceStore))
+	chain.RegisterAspect(builtin.NewMetricsAspect(&SimpleMetricsRecorder{}))
+	chain.RegisterAspect(builtin.NewLoggingAspect(&SimpleLogger{}))
 
-	qBus := querymemory.NewQueryBus(chain)
+	qBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
 	query.RegisterHandlers(qBus)
 
-	cBus := commandmemory.NewCommandBus(chain)
+	cBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	command.RegisterHandlers(cBus)
 
-	eventGroup := eventmemory.NewEventBusGroup(chain)
-	event.RegisterHandlers(eventGroup)
+	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	event.RegisterHandlers(eventBus)
 
 	jobStore := jobmemory.NewJobStore()
 	jobManager := job.NewJobManager(jobStore, chain)
@@ -81,12 +75,12 @@ func main() {
 	fmt.Println()
 	command.RunExample(ctx, cBus)
 	fmt.Println()
-	event.RunExample(ctx, eventGroup)
+	event.RunExample(ctx, eventBus)
 	fmt.Println()
 	job.RunExample(ctx, jobManager)
 
 	fmt.Println()
-	traceexample.RunExample(ctx, cBus, eventGroup, qBus)
+	traceexample.RunExample(ctx, cBus, eventBus, qBus)
 
 	fmt.Println("\n========================================")
 	fmt.Println("  Traces:")

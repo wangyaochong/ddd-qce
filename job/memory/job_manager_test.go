@@ -42,7 +42,7 @@ func (e *testError) Error() string { return e.msg }
 
 func newTestCommandBus(duration time.Duration) *commandmemory.CommandBus {
 	chain := aspect.NewAspectChain()
-	bus := commandmemory.NewCommandBus(chain)
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &testLongHandler{Duration: duration})
 	return bus
 }
@@ -396,11 +396,11 @@ func (s *failingGetJobStore) Get(ctx context.Context, id string) (*jobcore.Job, 
 	return s.JobStore.Get(ctx, id)
 }
 
-func TestJobManager_Cancel_GetLatestStoreError(t *testing.T) {
+func TestJobManager_Cancel_StoreUpdateError(t *testing.T) {
 	innerStore := NewJobStore()
-	store := &failingGetJobStore{
-		JobStore: innerStore,
-		getErr:   fmt.Errorf("get failed"),
+	store := &failingUpdateJobStore{
+		JobStore:  innerStore,
+		updateErr: fmt.Errorf("store update failed"),
 	}
 	cmdBus := newTestCommandBus(10 * time.Second)
 	manager := NewJobManager(store, cmdBus)
@@ -415,7 +415,10 @@ func TestJobManager_Cancel_GetLatestStoreError(t *testing.T) {
 
 	err = manager.Cancel(ctx, job.ID)
 	if err == nil {
-		t.Fatal("expected error when store.Get fails during cancel")
+		t.Fatal("expected error when store.Update fails during cancel")
+	}
+	if err.Error() != "store update failed" {
+		t.Errorf("expected 'store update failed', got '%v'", err)
 	}
 }
 
@@ -568,4 +571,107 @@ func TestJobManager_ExecuteJob_CancelledDuringRetry(t *testing.T) {
 	if result.Status != jobcore.JobStatusCancelled {
 		t.Errorf("expected cancelled, got %s", result.Status)
 	}
+}
+
+func TestJobManager_ExecuteJob_StoreErrorHandler(t *testing.T) {
+	innerStore := NewJobStore()
+	store := &failingUpdateJobStore{
+		JobStore:  innerStore,
+		updateErr: fmt.Errorf("update failed"),
+	}
+
+	var capturedErrors []*jobcore.StoreError
+	handler := func(ctx context.Context, storeErr *jobcore.StoreError) {
+		capturedErrors = append(capturedErrors, storeErr)
+	}
+
+	cmdBus := newTestCommandBus(100 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus, WithStoreErrorHandler(handler))
+
+	ctx := context.Background()
+	job, err := manager.Submit(ctx, &testLongCommand{Duration: 100 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("failed to submit job: %v", err)
+	}
+
+	_, err = manager.Wait(ctx, job.ID, 2*time.Second)
+	if err != nil {
+		t.Logf("wait result: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	if len(capturedErrors) == 0 {
+		t.Fatal("expected store errors to be captured by handler")
+	}
+
+	foundRunning := false
+	foundFinal := false
+	for _, se := range capturedErrors {
+		if se.JobID != job.ID {
+			t.Errorf("expected job ID %s, got %s", job.ID, se.JobID)
+		}
+		if se.Operation == "update_running" {
+			foundRunning = true
+		}
+		if se.Operation == "update_final" {
+			foundFinal = true
+		}
+	}
+	if !foundRunning {
+		t.Error("expected update_running store error")
+	}
+	if !foundFinal {
+		t.Error("expected update_final store error")
+	}
+}
+
+func TestJobManager_Retry_UpdateError(t *testing.T) {
+	innerStore := NewJobStore()
+	store := &failingUpdateJobStore{
+		JobStore:  innerStore,
+		updateErr: fmt.Errorf("update failed"),
+	}
+	cmdBus := newTestCommandBus(100 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+	job, err := manager.Submit(ctx, &testLongCommand{Duration: 100 * time.Millisecond},
+		jobcore.WithTimeout(50*time.Millisecond),
+	)
+	if err != nil {
+		t.Fatalf("failed to submit job: %v", err)
+	}
+
+	_, err = manager.Wait(ctx, job.ID, 2*time.Second)
+	if err != nil {
+		t.Fatalf("wait failed: %v", err)
+	}
+
+	err = manager.Retry(ctx, job.ID)
+	if err == nil {
+		t.Fatal("expected error when store.Update fails during retry")
+	}
+	if err.Error() != "failed to reset job for retry: update failed" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestJobManager_StoreErrorHandler_NoHandler(t *testing.T) {
+	innerStore := NewJobStore()
+	store := &failingUpdateJobStore{
+		JobStore:  innerStore,
+		updateErr: fmt.Errorf("update failed"),
+	}
+
+	cmdBus := newTestCommandBus(100 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+	_, err := manager.Submit(ctx, &testLongCommand{Duration: 100 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("failed to submit job: %v", err)
+	}
+
+	time.Sleep(300 * time.Millisecond)
 }

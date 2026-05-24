@@ -90,3 +90,86 @@ func TestJobStatus_Constants(t *testing.T) {
 		}
 	}
 }
+
+func TestTypeRegistry_RegisterAndNew(t *testing.T) {
+	reg := NewTypeRegistry()
+	reg.Register(&testSampleCmd{})
+
+	inst, ok := reg.NewInstance("core.testSampleCmd")
+	if !ok {
+		t.Fatal("expected type to be found")
+	}
+	if _, ok := inst.(*testSampleCmd); !ok {
+		t.Fatalf("expected *testSampleCmd, got %T", inst)
+	}
+}
+
+func TestTypeRegistry_NotFound(t *testing.T) {
+	reg := NewTypeRegistry()
+	_, ok := reg.NewInstance("nonexistent")
+	if ok {
+		t.Error("expected not found")
+	}
+}
+
+func TestTypeRegistry_ValueType(t *testing.T) {
+	reg := NewTypeRegistry()
+	reg.Register(testSampleCmd{})
+
+	inst, ok := reg.NewInstance("core.testSampleCmd")
+	if !ok {
+		t.Fatal("expected type to be found")
+	}
+	if _, ok := inst.(*testSampleCmd); !ok {
+		t.Fatalf("expected *testSampleCmd, got %T", inst)
+	}
+}
+
+func TestTypeRegistry_MultipleTypes(t *testing.T) {
+	reg := NewTypeRegistry()
+	reg.Register(&testSampleCmd{})
+	reg.Register(&testSampleResult{})
+
+	_, ok1 := reg.NewInstance("core.testSampleCmd")
+	_, ok2 := reg.NewInstance("core.testSampleResult")
+	if !ok1 || !ok2 {
+		t.Error("expected both types to be found")
+	}
+}
+
+func TestTypeName(t *testing.T) {
+	if got := TypeName(&testSampleCmd{}); got != "core.testSampleCmd" {
+		t.Errorf("expected 'core.testSampleCmd', got %q", got)
+	}
+	if got := TypeName(testSampleCmd{}); got != "core.testSampleCmd" {
+		t.Errorf("expected 'core.testSampleCmd', got %q", got)
+	}
+	if got := TypeName(nil); got != "" {
+		t.Errorf("expected empty string for nil, got %q", got)
+	}
+}
+
+func TestJob_Snapshot_IncludesCommandType(t *testing.T) {
+	job := &Job{
+		ID:          "j1",
+		Command:     &testSampleCmd{Name: "test"},
+		CommandType: "core.testSampleCmd",
+		Result:      &testSampleResult{File: "out.pdf"},
+		ResultType:  "core.testSampleResult",
+	}
+	snap := job.Snapshot()
+	if snap.CommandType != "core.testSampleCmd" {
+		t.Errorf("expected CommandType preserved, got %q", snap.CommandType)
+	}
+	if snap.ResultType != "core.testSampleResult" {
+		t.Errorf("expected ResultType preserved, got %q", snap.ResultType)
+	}
+}
+
+type testSampleCmd struct {
+	Name string
+}
+
+type testSampleResult struct {
+	File string
+}

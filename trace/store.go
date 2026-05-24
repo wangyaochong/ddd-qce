@@ -56,7 +56,7 @@ func (s *InMemoryTraceStore) ListTraces(ctx context.Context, filter TraceFilter)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var result []string
+	result := make([]string, 0, len(s.traceIndex))
 	for traceID, indexes := range s.traceIndex {
 		if filter.TraceID != "" && traceID != filter.TraceID {
 			continue
@@ -76,84 +76,33 @@ func (s *InMemoryTraceStore) ListTraces(ctx context.Context, filter TraceFilter)
 	return result, nil
 }
 
+func anyMatch(spans []*Span, pred func(*Span) bool) bool {
+	for _, s := range spans {
+		if pred(s) {
+			return true
+		}
+	}
+	return false
+}
+
 func matchesFilter(spans []*Span, filter TraceFilter) bool {
-	if filter.TraceID != "" {
-		found := false
-		for _, s := range spans {
-			if s.TraceID == filter.TraceID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	if filter.TraceID != "" && !anyMatch(spans, func(s *Span) bool { return s.TraceID == filter.TraceID }) {
+		return false
 	}
-
-	if filter.Type != "" {
-		found := false
-		for _, s := range spans {
-			if s.Type == filter.Type {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	if filter.Type != "" && !anyMatch(spans, func(s *Span) bool { return s.Type == filter.Type }) {
+		return false
 	}
-
-	if filter.Status != "" {
-		found := false
-		for _, s := range spans {
-			if s.Status == filter.Status {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	if filter.Status != "" && !anyMatch(spans, func(s *Span) bool { return s.Status == filter.Status }) {
+		return false
 	}
-
-	if !filter.StartTime.IsZero() {
-		found := false
-		for _, s := range spans {
-			if !s.StartedAt.Before(filter.StartTime) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	if !filter.StartTime.IsZero() && !anyMatch(spans, func(s *Span) bool { return !s.StartedAt.Before(filter.StartTime) }) {
+		return false
 	}
-
-	if !filter.EndTime.IsZero() {
-		found := false
-		for _, s := range spans {
-			if !s.StartedAt.After(filter.EndTime) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	if !filter.EndTime.IsZero() && !anyMatch(spans, func(s *Span) bool { return !s.StartedAt.After(filter.EndTime) }) {
+		return false
 	}
-
-	if filter.NameContains != "" {
-		found := false
-		for _, s := range spans {
-			if strings.Contains(s.Name, filter.NameContains) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	if filter.NameContains != "" && !anyMatch(spans, func(s *Span) bool { return strings.Contains(s.Name, filter.NameContains) }) {
+		return false
 	}
-
 	return true
 }

@@ -72,8 +72,8 @@ func TestOrderAggregate_Cancel(t *testing.T) {
 
 func TestOrderAggregate_WithApplier(t *testing.T) {
 	order := mustCreateOrder("ORD-001", "user-001")
-	if order.AggregateRoot.GetVersion() != 1 {
-		t.Errorf("expected version 1 after Place, got %d", order.AggregateRoot.GetVersion())
+	if order.AggregateRoot.Version() != 1 {
+		t.Errorf("expected version 1 after Place, got %d", order.AggregateRoot.Version())
 	}
 }
 
@@ -85,8 +85,8 @@ func TestOrderAggregate_SetApplier(t *testing.T) {
 	if o.UserID != "u1" {
 		t.Errorf("When not applied via SetApplier, got UserID=%s", o.UserID)
 	}
-	if o.AggregateRoot.GetVersion() != 1 {
-		t.Errorf("expected version 1, got %d", o.AggregateRoot.GetVersion())
+	if o.AggregateRoot.Version() != 1 {
+		t.Errorf("expected version 1, got %d", o.AggregateRoot.Version())
 	}
 }
 
@@ -96,8 +96,8 @@ func TestEventCollector_EventsOnly(t *testing.T) {
 	if len(ar.UncommittedEvents()) != 1 {
 		t.Errorf("expected 1 event, got %d", len(ar.UncommittedEvents()))
 	}
-	if ar.GetVersion() != 1 {
-		t.Errorf("expected version 1, got %d", ar.GetVersion())
+	if ar.Version() != 1 {
+		t.Errorf("expected version 1, got %d", ar.Version())
 	}
 }
 
@@ -146,8 +146,8 @@ func TestOrderAggregate_When(t *testing.T) {
 
 func TestOrderItem_EntityBasics(t *testing.T) {
 	item := NewOrderItem("p1", "Laptop", 999, 2)
-	if item.GetID() != "p1" {
-		t.Errorf("expected p1, got %s", item.GetID())
+	if item.ID() != "p1" {
+		t.Errorf("expected p1, got %s", item.ID())
 	}
 	if item.Subtotal() != 1998 {
 		t.Errorf("expected 1998, got %.2f", item.Subtotal())

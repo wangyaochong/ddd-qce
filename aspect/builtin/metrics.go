@@ -15,6 +15,10 @@ type MetricsAspect struct {
 	Recorder MetricsRecorder
 }
 
+func NewMetricsAspect(recorder MetricsRecorder) *MetricsAspect {
+	return &MetricsAspect{Recorder: recorder}
+}
+
 func (m *MetricsAspect) Name() string {
 	return "metrics"
 }

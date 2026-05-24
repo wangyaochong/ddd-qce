@@ -16,14 +16,21 @@ type QueryBus struct {
 	mu       sync.RWMutex
 }
 
-func NewQueryBus(chain *aspect.AspectChain) *QueryBus {
-	if chain == nil {
-		chain = aspect.NewAspectChain()
-	}
-	return &QueryBus{
+type QueryBusOption func(*QueryBus)
+
+func WithQueryBusAspectChain(chain *aspect.AspectChain) QueryBusOption {
+	return func(b *QueryBus) { b.chain = chain }
+}
+
+func NewQueryBus(opts ...QueryBusOption) *QueryBus {
+	b := &QueryBus{
 		handlers: make(map[reflect.Type]any),
-		chain:    chain,
+		chain:    aspect.NewAspectChain(),
 	}
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
 }
 
 func RegisterQuery[T query.Query, R any](bus *QueryBus, handler query.QueryHandler[T, R]) {
@@ -37,7 +44,7 @@ func RegisterQuery[T query.Query, R any](bus *QueryBus, handler query.QueryHandl
 	bus.handlers[queryType] = handler
 }
 
-func Ask[T query.Query, R any](bus *QueryBus, ctx context.Context, q T) (R, error) {
+func Dispatch[T query.Query, R any](ctx context.Context, bus *QueryBus, q T) (R, error) {
 	queryType := reflect.TypeOf(q)
 
 	bus.mu.RLock()
@@ -49,7 +56,11 @@ func Ask[T query.Query, R any](bus *QueryBus, ctx context.Context, q T) (R, erro
 		return zero, fmt.Errorf("no handler registered for query type: %s", queryType)
 	}
 
-	handler := h.(query.QueryHandler[T, R])
+	handler, ok := h.(query.QueryHandler[T, R])
+	if !ok {
+		var zero R
+		return zero, fmt.Errorf("handler type mismatch for query type: %s", queryType)
+	}
 	result, err := bus.chain.ExecuteWithQueryAspects(ctx, q, func(ctx context.Context) (any, error) {
 		return handler.Handle(ctx, q)
 	})
@@ -57,5 +68,10 @@ func Ask[T query.Query, R any](bus *QueryBus, ctx context.Context, q T) (R, erro
 		var zero R
 		return zero, err
 	}
-	return result.(R), nil
+	typedResult, ok := result.(R)
+	if !ok {
+		var zero R
+		return zero, fmt.Errorf("result type mismatch for query type: %s", queryType)
+	}
+	return typedResult, nil
 }

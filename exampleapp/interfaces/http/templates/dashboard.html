@@ -1,0 +1,43 @@
+{{define "dashboard"}}{{template "header" .}}
+
+<h1 style="margin-bottom:1.5rem;">Dashboard</h1>
+
+<div class="stats">
+    <div class="stat"><div class="number">{{.TotalOrders}}</div><div class="label">Total Orders</div></div>
+    <div class="stat"><div class="number">{{.Pending}}</div><div class="label">Pending</div></div>
+    <div class="stat"><div class="number">{{.Paid}}</div><div class="label">Paid</div></div>
+    <div class="stat"><div class="number">{{.Shipped}}</div><div class="label">Shipped</div></div>
+    <div class="stat"><div class="number">{{.Cancelled}}</div><div class="label">Cancelled</div></div>
+    <div class="stat"><div class="number">{{.TraceCount}}</div><div class="label">Traces</div></div>
+</div>
+
+<div class="card">
+    <h2>Products</h2>
+    <table>
+        <tr><th>Product</th><th>Price</th><th>Stock</th></tr>
+        {{range .Products}}
+        <tr><td>{{.Name}}</td><td>${{printf "%.2f" .Price}}</td><td>{{.Stock}}</td></tr>
+        {{end}}
+    </table>
+    <div style="margin-top:1rem;"><a href="/orders/new" class="btn btn-primary">Place New Order</a></div>
+</div>
+
+<div class="card">
+    <h2>Recent Orders</h2>
+    {{if .RecentOrders}}
+    <table>
+        <tr><th>Order ID</th><th>User</th><th>Total</th><th>Status</th><th>Actions</th></tr>
+        {{range .RecentOrders}}
+        <tr>
+            <td><a href="/orders/{{.OrderID}}">{{printf "%.8s" .OrderID}}...</a></td>
+            <td>{{.UserID}}</td>
+            <td>${{printf "%.2f" .TotalAmount}}</td>
+            <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+            <td><a href="/orders/{{.OrderID}}" class="btn btn-sm btn-primary">View</a></td>
+        </tr>
+        {{end}}
+    </table>
+    {{else}}<div class="empty">No orders yet. <a href="/orders/new">Place one now</a>!</div>{{end}}
+</div>
+
+{{template "footer" .}}{{end}}

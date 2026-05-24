@@ -76,11 +76,11 @@ func (h *testSlowQueryHandler) Handle(ctx context.Context, query *testSlowQuery)
 
 func TestQueryBus_Ask(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := NewQueryBus(chain)
+	bus := NewQueryBus(WithQueryBusAspectChain(chain))
 	RegisterQuery(bus, &testGetUserHandler{})
 
 	ctx := context.Background()
-	result, err := Ask[*testGetUserQuery, *testGetUserResult](bus, ctx, &testGetUserQuery{UserID: "123"})
+	result, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -92,10 +92,10 @@ func TestQueryBus_Ask(t *testing.T) {
 
 func TestQueryBus_Ask_NoHandler(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := NewQueryBus(chain)
+	bus := NewQueryBus(WithQueryBusAspectChain(chain))
 
 	ctx := context.Background()
-	_, err := Ask[*testGetUserQuery, *testGetUserResult](bus, ctx, &testGetUserQuery{UserID: "123"})
+	_, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
 
 	if err == nil {
 		t.Fatal("expected error for unregistered query type")
@@ -104,13 +104,13 @@ func TestQueryBus_Ask_NoHandler(t *testing.T) {
 
 func TestQueryBus_MultipleHandlers(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := NewQueryBus(chain)
+	bus := NewQueryBus(WithQueryBusAspectChain(chain))
 	RegisterQuery(bus, &testGetUserHandler{})
 	RegisterQuery(bus, &testListUsersHandler{})
 
 	ctx := context.Background()
 
-	r1, err := Ask[*testGetUserQuery, *testGetUserResult](bus, ctx, &testGetUserQuery{UserID: "1"})
+	r1, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestQueryBus_MultipleHandlers(t *testing.T) {
 		t.Errorf("unexpected result: %v", r1)
 	}
 
-	r2, err := Ask[*testListUsersQuery, *testListUsersResult](bus, ctx, &testListUsersQuery{Page: 1})
+	r2, err := Dispatch[*testListUsersQuery, *testListUsersResult](ctx, bus, &testListUsersQuery{Page: 1})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -129,11 +129,11 @@ func TestQueryBus_MultipleHandlers(t *testing.T) {
 
 func TestQueryBus_HandlerError(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := NewQueryBus(chain)
+	bus := NewQueryBus(WithQueryBusAspectChain(chain))
 	RegisterQuery(bus, &testErrorQueryHandler{})
 
 	ctx := context.Background()
-	_, err := Ask[*testErrorQuery, *testErrorQueryResult](bus, ctx, &testErrorQuery{})
+	_, err := Dispatch[*testErrorQuery, *testErrorQueryResult](ctx, bus, &testErrorQuery{})
 
 	if err == nil {
 		t.Fatal("expected error from handler")
@@ -145,7 +145,7 @@ func TestQueryBus_HandlerError(t *testing.T) {
 
 func TestQueryBus_Concurrent(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := NewQueryBus(chain)
+	bus := NewQueryBus(WithQueryBusAspectChain(chain))
 	RegisterQuery(bus, &testGetUserHandler{})
 
 	ctx := context.Background()
@@ -156,7 +156,7 @@ func TestQueryBus_Concurrent(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			_, err := Ask[*testGetUserQuery, *testGetUserResult](bus, ctx, &testGetUserQuery{UserID: string(rune(id))})
+			_, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: string(rune(id))})
 			if err != nil {
 				errs <- err
 			}
@@ -172,11 +172,11 @@ func TestQueryBus_Concurrent(t *testing.T) {
 }
 
 func TestQueryBus_NilChain(t *testing.T) {
-	bus := NewQueryBus(nil)
+	bus := NewQueryBus()
 	RegisterQuery(bus, &testGetUserHandler{})
 
 	ctx := context.Background()
-	result, err := Ask[*testGetUserQuery, *testGetUserResult](bus, ctx, &testGetUserQuery{UserID: "123"})
+	result, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -196,11 +196,11 @@ func TestQueryBus_WithAspects(t *testing.T) {
 	}
 	chain.RegisterQueryAspect(testAspect)
 
-	bus := NewQueryBus(chain)
+	bus := NewQueryBus(WithQueryBusAspectChain(chain))
 	RegisterQuery(bus, &testGetUserHandler{})
 
 	ctx := context.Background()
-	_, err := Ask[*testGetUserQuery, *testGetUserResult](bus, ctx, &testGetUserQuery{UserID: "123"})
+	_, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -214,7 +214,7 @@ func TestQueryBus_WithAspects(t *testing.T) {
 }
 
 func TestQueryBus_DuplicateRegistration_Panics(t *testing.T) {
-	bus := NewQueryBus(nil)
+	bus := NewQueryBus()
 	RegisterQuery(bus, &testGetUserHandler{})
 
 	defer func() {

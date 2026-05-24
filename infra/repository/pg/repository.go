@@ -69,7 +69,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
 		 WHERE ddd_aggregate_snapshots.version < $4`,
-		root.GetID(), r.typeName, data, root.GetVersion(), time.Now(),
+		root.ID(), r.typeName, data, root.Version(), time.Now(),
 	)
 	if err != nil {
 		return err
@@ -79,7 +79,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.GetVersion()}
+		return &OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }
@@ -180,10 +180,10 @@ func (r *PgEventSourcedRepository[T]) Save(ctx context.Context, agg T) error {
 	}
 	typedEvents := make([]event.DomainEvent, len(events))
 	copy(typedEvents, events)
-	if err := r.eventStore.Append(ctx, root.GetID(), root.GetVersion()-len(events), typedEvents); err != nil {
+	if err := r.eventStore.Append(ctx, root.ID(), root.Version()-len(events), typedEvents); err != nil {
 		return fmt.Errorf("append events: %w", err)
 	}
-	if r.snapshotEvery > 0 && root.GetVersion()%r.snapshotEvery == 0 {
+	if r.snapshotEvery > 0 && root.Version()%r.snapshotEvery == 0 {
 		if err := r.saveSnapshot(ctx, agg, root); err != nil {
 			return fmt.Errorf("save snapshot: %w", err)
 		}
@@ -234,7 +234,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
 		 WHERE ddd_aggregate_snapshots.version < $4`,
-		root.GetID(), r.typeName, data, root.GetVersion(), time.Now(),
+		root.ID(), r.typeName, data, root.Version(), time.Now(),
 	)
 	if err != nil {
 		return err
@@ -244,7 +244,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.GetVersion()}
+		return &OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }

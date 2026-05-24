@@ -24,7 +24,7 @@ type EventHandler[T DomainEvent] interface {
 	Handle(ctx context.Context, event T) error
 }
 
-type EventStore[T DomainEvent] interface {
-	Append(ctx context.Context, events []T) error
-	Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error)
+type DomainEventAppendOnlyStore interface {
+	Append(ctx context.Context, aggregateID string, expectedVersion int, events []DomainEvent) error
+	Load(ctx context.Context, aggregateID string, afterVersion int) ([]DomainEvent, error)
 }

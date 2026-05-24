@@ -1,6 +1,9 @@
 package entity
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type Entity struct {
 	id string
@@ -29,5 +32,22 @@ func (e *Entity) Validate() error {
 	if e.id == "" {
 		return fmt.Errorf("entity ID cannot be empty")
 	}
+	return nil
+}
+
+type entityJSON struct {
+	ID string `json:"id"`
+}
+
+func (e *Entity) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&entityJSON{ID: e.id})
+}
+
+func (e *Entity) UnmarshalJSON(data []byte) error {
+	var v entityJSON
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	e.id = v.ID
 	return nil
 }
