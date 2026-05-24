@@ -37,6 +37,19 @@ func Dispatch[T Command, R any](ctx context.Context, bus CommandBus, cmd T) (R, 
 		var zero R
 		return zero, err
 	}
+	typed, err := typeAssert[R](result, cmd)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	return typed, nil
+}
+
+func typeAssert[R any](result any, cmd any) (R, error) {
+	if result == nil {
+		var zero R
+		return zero, nil
+	}
 	typed, ok := result.(R)
 	if !ok {
 		var zero R
