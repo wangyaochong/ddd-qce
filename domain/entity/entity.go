@@ -10,7 +10,7 @@ func NewEntity(id string) *Entity {
 	return &Entity{id: id}
 }
 
-func (e *Entity) GetID() string {
+func (e *Entity) ID() string {
 	return e.id
 }
 

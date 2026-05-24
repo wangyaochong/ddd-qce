@@ -4,8 +4,8 @@ import "testing"
 
 func TestNewEntity(t *testing.T) {
 	e := NewEntity("user-1")
-	if e.GetID() != "user-1" {
-		t.Errorf("expected ID 'user-1', got '%s'", e.GetID())
+	if e.ID() != "user-1" {
+		t.Errorf("expected ID 'user-1', got '%s'", e.ID())
 	}
 }
 
@@ -16,10 +16,10 @@ func TestNewEntity_EmptyID(t *testing.T) {
 	}
 }
 
-func TestGetID(t *testing.T) {
+func TestID(t *testing.T) {
 	e := NewEntity("user-1")
-	if e.GetID() != "user-1" {
-		t.Errorf("expected GetID 'user-1', got '%s'", e.GetID())
+	if e.ID() != "user-1" {
+		t.Errorf("expected ID 'user-1', got '%s'", e.ID())
 	}
 }
 
