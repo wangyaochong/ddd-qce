@@ -14,16 +14,17 @@ type pgMigrator struct {
 	db *sql.DB
 }
 
-func (m pgMigrator) Migrate(ctx context.Context) error {
+func (m *pgMigrator) Migrate(_ context.Context) error {
 	return corepg.Migrate(m.db)
 }
 
-func NewPgBackend(db *sql.DB) *Backend {
-	return NewBackend(
+func NewPgBackend(db *sql.DB, opts ...BackendOption) *Backend {
+	defaults := []BackendOption{
 		WithTransactionManager(corepg.NewTransactionManager(db)),
 		WithJobStore(jobpg.NewJobStore(db)),
 		WithTraceStore(tracepg.NewTraceStore(db)),
 		WithMessageStore(builtinpg.NewMessageStore(db)),
-		WithMigrator(pgMigrator{db: db}),
-	)
+		WithMigrator(&pgMigrator{db: db}),
+	}
+	return NewBackend(append(defaults, opts...)...)
 }

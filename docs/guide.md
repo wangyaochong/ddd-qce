@@ -988,11 +988,11 @@ backend := infra.NewMemoryBackend()
 ```go
 import (
     "database/sql"
-    "github.com/ddd-qce/core/pgx"
+    "github.com/ddd-qce/core/infra"
 )
 
 db, _ := sql.Open("pgx", "postgres://...")
-backend := pgx.NewBackend(db)
+backend := infra.NewPgBackend(db)
 
 // backend.TransactionManager  — PgTransactionManager（Savepoint 嵌套事务）
 // backend.JobStore            — PgJobStore
