@@ -60,7 +60,8 @@ func (m *JobManager) handleStoreError(ctx context.Context, jobID string, operati
 }
 
 func (m *JobManager) Submit(ctx context.Context, cmd any, opts ...jobcore.JobOption) (*jobcore.Job, error) {
-	job := jobcore.NewJob(hex.EncodeToString(uuid.New()[:]), cmd, opts...)
+	jobID := uuid.New()
+	job := jobcore.NewJob(hex.EncodeToString(jobID[:]), cmd, opts...)
 
 	if err := m.store.Create(ctx, job); err != nil {
 		return nil, err

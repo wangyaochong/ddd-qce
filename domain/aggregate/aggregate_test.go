@@ -169,7 +169,7 @@ func TestValidate_EmptyID(t *testing.T) {
 
 func TestValidate_NegativeVersion(t *testing.T) {
 	agg := NewAggregateRoot("order-1")
-	agg.forceSetVersion(-1)
+	agg.SetSnapshotVersion(-1)
 	err := agg.Validate()
 	if err == nil {
 		t.Fatal("expected error for negative version")
@@ -405,8 +405,7 @@ func TestNewAggregateRootWithApplier(t *testing.T) {
 
 func TestSetApplier_StillWorks(t *testing.T) {
 	o := &testOrder{}
-	o.AggregateRoot = *NewAggregateRoot("ORD-001")
-	o.setApplier(o)
+	o.AggregateRoot = *NewAggregateRootWithApplier("ORD-001", o)
 
 	_ = o.Apply(&orderCreatedEvent{aggregateID: "ORD-001", amount: 50.00, occurredAt: time.Now()})
 
