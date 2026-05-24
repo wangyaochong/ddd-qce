@@ -6,7 +6,19 @@ import (
 	"time"
 )
 
-func EventTypeOf(event DomainEvent) string {
+type BaseEvent struct {
+	aggregateID string
+	occurredAt  time.Time
+}
+
+func NewBaseEvent(aggregateID string, occurredAt time.Time) BaseEvent {
+	return BaseEvent{aggregateID: aggregateID, occurredAt: occurredAt}
+}
+
+func (e BaseEvent) AggregateID() string   { return e.aggregateID }
+func (e BaseEvent) OccurredAt() time.Time { return e.occurredAt }
+
+func EventTypeOf(event any) string {
 	t := reflect.TypeOf(event)
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
@@ -16,7 +28,6 @@ func EventTypeOf(event DomainEvent) string {
 
 type DomainEvent interface {
 	AggregateID() string
-	EventType() string
 	OccurredAt() time.Time
 }
 
@@ -24,7 +35,7 @@ type EventHandler[T DomainEvent] interface {
 	Handle(ctx context.Context, event T) error
 }
 
-type DomainEventAppendOnlyStore interface {
-	Append(ctx context.Context, aggregateID string, expectedVersion int, events []DomainEvent) error
-	Load(ctx context.Context, aggregateID string, afterVersion int) ([]DomainEvent, error)
+type EventStore[T DomainEvent] interface {
+	Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error
+	Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error)
 }
