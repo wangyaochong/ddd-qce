@@ -28,9 +28,6 @@ func WithFactory[T event.DomainEvent](factory func() T) EventStoreOption[T] {
 func NewEventStore[T event.DomainEvent](db *sql.DB, opts ...EventStoreOption[T]) (*EventStore[T], error) {
 	var zero T
 	t := reflect.TypeOf(zero)
-	if t == nil || t.Kind() != reflect.Ptr {
-		return nil, fmt.Errorf("PgEventStore[T]: T must be a pointer type, got %v", t)
-	}
 
 	s := &EventStore[T]{
 		db: db,
@@ -38,6 +35,17 @@ func NewEventStore[T event.DomainEvent](db *sql.DB, opts ...EventStoreOption[T])
 
 	for _, opt := range opts {
 		opt(s)
+	}
+
+	if t == nil {
+		if s.newFunc == nil {
+			return nil, fmt.Errorf("PgEventStore[T]: WithFactory is required when T is an interface type")
+		}
+		return s, nil
+	}
+
+	if t.Kind() != reflect.Ptr {
+		return nil, fmt.Errorf("PgEventStore[T]: T must be a pointer type, got %v", t)
 	}
 
 	if s.newFunc != nil {
@@ -90,7 +98,7 @@ func (s *EventStore[T]) Append(ctx context.Context, aggregateID string, expected
 		_, err = q.ExecContext(ctx,
 			`INSERT INTO ddd_domain_events (aggregate_id, event_type, event_data, occurred_at, version)
 			 VALUES ($1, $2, $3, $4, $5)`,
-			evt.AggregateID(), evt.EventType(), data, evt.OccurredAt(), version,
+			evt.AggregateID(), event.EventTypeOf(evt), data, evt.OccurredAt(), version,
 		)
 		if err != nil {
 			if isUniqueViolation(err) {
