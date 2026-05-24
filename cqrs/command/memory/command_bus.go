@@ -10,8 +10,11 @@ import (
 	"github.com/ddd-qce/core/cqrs/command"
 )
 
+type commandInvoker func(cmd any, ctx context.Context) (any, error)
+
 type CommandBus struct {
 	handlers map[reflect.Type]any
+	invokers map[reflect.Type]commandInvoker
 	chain    *aspect.AspectChain
 	mu       sync.RWMutex
 }
@@ -27,6 +30,7 @@ func WithCommandBusAspectChain(chain *aspect.AspectChain) CommandBusOption {
 func NewCommandBus(opts ...CommandBusOption) *CommandBus {
 	b := &CommandBus{
 		handlers: make(map[reflect.Type]any),
+		invokers: make(map[reflect.Type]commandInvoker),
 		chain:    aspect.NewAspectChain(),
 	}
 	for _, opt := range opts {
@@ -46,6 +50,11 @@ func (b *CommandBus) RegisterHandler(handler any) error {
 		return fmt.Errorf("RegisterHandler: handler must implement command.CommandHandler[T], got %T", handler)
 	}
 
+	invoker, err := makeCommandInvoker(handler, handlerType)
+	if err != nil {
+		return fmt.Errorf("RegisterHandler: %w", err)
+	}
+
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -53,6 +62,7 @@ func (b *CommandBus) RegisterHandler(handler any) error {
 		return fmt.Errorf("handler already registered for command type %v", evtType)
 	}
 	b.handlers[evtType] = handler
+	b.invokers[evtType] = invoker
 	return nil
 }
 
@@ -90,22 +100,26 @@ func (b *CommandBus) Execute(ctx context.Context, cmd any) (any, error) {
 	cmdType := reflect.TypeOf(cmd)
 
 	b.mu.RLock()
-	h, exists := b.handlers[cmdType]
+	inv, exists := b.invokers[cmdType]
 	b.mu.RUnlock()
 
 	if !exists {
 		return nil, fmt.Errorf("no handler registered for command type: %s", cmdType)
 	}
 
-	handlerType := reflect.TypeOf(h)
+	return b.chain.ExecuteWithCommandAspects(ctx, cmd, func(ctx context.Context) (any, error) {
+		return inv(cmd, ctx)
+	})
+}
+
+func makeCommandInvoker(handler any, handlerType reflect.Type) (commandInvoker, error) {
 	handleMethod, ok := handlerType.MethodByName("Handle")
 	if !ok {
-		return nil, fmt.Errorf("handler for %s has no Handle method", cmdType)
+		return nil, fmt.Errorf("handler %T does not have a Handle method", handler)
 	}
-
-	return b.chain.ExecuteWithCommandAspects(ctx, cmd, func(ctx context.Context) (any, error) {
+	return func(cmd any, ctx context.Context) (any, error) {
 		args := []reflect.Value{
-			reflect.ValueOf(h),
+			reflect.ValueOf(handler),
 			reflect.ValueOf(ctx),
 			reflect.ValueOf(cmd),
 		}
@@ -120,38 +134,5 @@ func (b *CommandBus) Execute(ctx context.Context, cmd any) (any, error) {
 			return results[0].Interface(), err
 		}
 		return nil, err
-	})
-}
-
-// Deprecated: Use command.Dispatch instead. memory.Dispatch will be removed in a future version.
-func Dispatch[T command.Command, R any](ctx context.Context, bus *CommandBus, cmd T) (R, error) {
-	cmdType := reflect.TypeOf(cmd)
-
-	bus.mu.RLock()
-	h, exists := bus.handlers[cmdType]
-	bus.mu.RUnlock()
-
-	if !exists {
-		var zero R
-		return zero, fmt.Errorf("no handler registered for command type: %s", cmdType)
-	}
-
-	handler, ok := h.(command.CommandHandler[T, R])
-	if !ok {
-		var zero R
-		return zero, fmt.Errorf("handler type mismatch for command type: %s", cmdType)
-	}
-	result, err := bus.chain.ExecuteWithCommandAspects(ctx, cmd, func(ctx context.Context) (any, error) {
-		return handler.Handle(ctx, cmd)
-	})
-	if err != nil {
-		var zero R
-		return zero, err
-	}
-	typedResult, ok := result.(R)
-	if !ok {
-		var zero R
-		return zero, fmt.Errorf("result type mismatch for command type: %s", cmdType)
-	}
-	return typedResult, nil
+	}, nil
 }

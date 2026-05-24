@@ -101,7 +101,17 @@ func (s *EventStore[T]) Append(ctx context.Context, aggregateID string, expected
 
 	for _, evt := range events {
 		aggID := evt.AggregateID()
-		s.events[aggID] = append(s.events[aggID], evt)
+		var eventToStore T
+		if s.shallowCopy {
+			eventToStore = evt
+		} else {
+			copied, err := s.copyEvent(evt)
+			if err != nil {
+				return fmt.Errorf("copy event: %w", err)
+			}
+			eventToStore = copied
+		}
+		s.events[aggID] = append(s.events[aggID], eventToStore)
 	}
 	return nil
 }

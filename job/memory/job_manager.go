@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ddd-qce/core/cqrs/command"
-	ddderror "github.com/ddd-qce/core/error"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )
@@ -24,6 +23,7 @@ type JobManager struct {
 	onStoreError jobcore.StoreErrorHandler
 	wg           sync.WaitGroup
 	stopCh       chan struct{}
+	recovery     bool
 }
 
 func NewJobManager(store jobcore.JobStore, executor command.CommandBus, opts ...JobManagerOption) *JobManager {
@@ -245,7 +245,7 @@ func (m *JobManager) Wait(ctx context.Context, jobID string, timeout time.Durati
 	m.mu.Unlock()
 
 	if !exists {
-		return nil, fmt.Errorf("job %s: %w", jobID, ddderror.ErrJobNotFound)
+		return nil, fmt.Errorf("job %s: %w", jobID, jobcore.ErrJobNotFound)
 	}
 
 	select {

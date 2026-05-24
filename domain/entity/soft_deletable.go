@@ -4,8 +4,10 @@ import "time"
 
 type SoftDeletableEntity struct {
 	AuditableEntity
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	deletedAt *time.Time `json:"deletedAt,omitempty"`
 }
+
+func (e *SoftDeletableEntity) DeletedAt() *time.Time { return e.deletedAt }
 
 func NewSoftDeletableEntity(id string) *SoftDeletableEntity {
 	return &SoftDeletableEntity{
@@ -16,21 +18,21 @@ func NewSoftDeletableEntity(id string) *SoftDeletableEntity {
 func NewSoftDeletableEntityFromData(id string, createdAt, updatedAt time.Time, deletedAt *time.Time) *SoftDeletableEntity {
 	return &SoftDeletableEntity{
 		AuditableEntity: *NewAuditableEntityFromData(id, createdAt, updatedAt),
-		DeletedAt:       deletedAt,
+		deletedAt:       deletedAt,
 	}
 }
 
 func (e *SoftDeletableEntity) IsDeleted() bool {
-	return e.DeletedAt != nil
+	return e.deletedAt != nil
 }
 
 func (e *SoftDeletableEntity) SoftDelete() {
 	now := time.Now()
-	e.DeletedAt = &now
+	e.deletedAt = &now
 	e.Touch()
 }
 
 func (e *SoftDeletableEntity) Restore() {
-	e.DeletedAt = nil
+	e.deletedAt = nil
 	e.Touch()
 }

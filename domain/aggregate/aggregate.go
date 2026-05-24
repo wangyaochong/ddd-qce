@@ -54,6 +54,13 @@ func (a *AggregateRoot) GetAggregateRoot() *AggregateRoot {
 	return a
 }
 
+func (a *AggregateRoot) Equals(other *AggregateRoot) bool {
+	if a == nil || other == nil {
+		return a == other
+	}
+	return a.GetID() == other.GetID()
+}
+
 func (a *AggregateRoot) Version() int {
 	return a.version
 }

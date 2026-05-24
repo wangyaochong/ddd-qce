@@ -62,3 +62,7 @@ coverage_*
 
 
 *.test
+
+
+/ddd
+cmd/ddd/ddd

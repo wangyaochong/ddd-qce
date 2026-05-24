@@ -265,7 +265,7 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | IDGenerator | `domain/entity` | ID 生成器类型，DefaultIDGenerator() (UUID hex)，NewEntityWithID() |
 | AggregateRoot | `domain/aggregate` | 聚合根，嵌入 Entity + Version + 事件收集/回溯 + EventApplier |
 | ValueObject[T] | `domain/valueobject` | 泛型值对象，New[T]() / MustNew[T]() / Value() / Equals() / Validate() / DeepEquals() |
-| DomainEvent | `domain/event` | 领域事件接口，AggregateID() / EventType() / OccurredAt() |
+| DomainEvent | `domain/event` | 领域事件接口，AggregateID() / OccurredAt()；EventTypeOf() 包级函数获取事件类型名 |
 | EventHandler[T] | `domain/event` | 泛型事件处理器接口，Handle(ctx, T) error |
 | EventStore[T] | `domain/event` | 事件存储接口，Append(ctx, []T) / Load(ctx, aggregateID, afterVersion) |
 | Repository[T] | `domain/repository` | 仓储接口，Save / FindByID / Delete |
@@ -376,6 +376,14 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 详细使用指南请查看 [实战指南](guide.md)。
 
 想了解如何将本框架与 Actor 模型结合，请查看 [Actor + CQRS + DDD 组合架构](actor-cqrs-ddd.md)。
+
+---
+
+## 脚手架工具
+
+为了确保 AI 生成代码符合框架约定，降低新用户入门门槛，ddd-qce 提供脚手架工具。
+
+详见 [实战指南 - 使用脚手架创建聚合](guide.md#十四使用脚手架创建聚合)。
 
 ---
 

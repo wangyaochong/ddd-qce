@@ -19,8 +19,8 @@ func TestSentinelDomainErrors(t *testing.T) {
 	}
 	for _, tt := range sentinels {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.err.Code != tt.code {
-				t.Errorf("Code = %q, want %q", tt.err.Code, tt.code)
+			if tt.err.Code() != tt.code {
+				t.Errorf("Code = %q, want %q", tt.err.Code(), tt.code)
 			}
 		})
 	}
@@ -32,21 +32,5 @@ func TestSentinelDomainErrors_ErrorsIs(t *testing.T) {
 	}
 	if errors.Is(ErrNotFound, ErrAlreadyExists) {
 		t.Error("errors.Is(ErrNotFound, ErrAlreadyExists) = true, want false")
-	}
-}
-
-func TestSentinelPlainErrors(t *testing.T) {
-	plainSentinels := []struct {
-		name string
-		err  error
-	}{
-		{"ErrJobNotFound", ErrJobNotFound},
-	}
-	for _, tt := range plainSentinels {
-		t.Run(tt.name, func(t *testing.T) {
-			if !errors.Is(tt.err, tt.err) {
-				t.Errorf("errors.Is(%s, %s) = false", tt.name, tt.name)
-			}
-		})
 	}
 }

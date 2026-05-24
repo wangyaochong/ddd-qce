@@ -50,11 +50,11 @@ func TestIsDomainError(t *testing.T) {
 
 func TestDomainError_CodeAccess(t *testing.T) {
 	e := NewDomainError("MY_CODE", "msg")
-	if e.Code != "MY_CODE" {
-		t.Errorf("Code = %q, want %q", e.Code, "MY_CODE")
+	if e.Code() != "MY_CODE" {
+		t.Errorf("Code = %q, want %q", e.Code(), "MY_CODE")
 	}
-	if e.Message != "msg" {
-		t.Errorf("Message = %q, want %q", e.Message, "msg")
+	if e.Message() != "msg" {
+		t.Errorf("Message = %q, want %q", e.Message(), "msg")
 	}
 }
 

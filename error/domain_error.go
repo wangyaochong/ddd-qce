@@ -6,28 +6,32 @@ import (
 )
 
 type DomainError struct {
-	Code    string
-	Message string
-	Cause   error
+	code    string
+	message string
+	cause   error
 }
 
+func (e *DomainError) Code() string    { return e.code }
+func (e *DomainError) Message() string { return e.message }
+func (e *DomainError) Cause() error    { return e.cause }
+
 func NewDomainError(code, msg string) *DomainError {
-	return &DomainError{Code: code, Message: msg}
+	return &DomainError{code: code, message: msg}
 }
 
 func NewDomainErrorWithCause(code, msg string, cause error) *DomainError {
-	return &DomainError{Code: code, Message: msg, Cause: cause}
+	return &DomainError{code: code, message: msg, cause: cause}
 }
 
 func (e *DomainError) Error() string {
-	if e.Cause != nil {
-		return fmt.Sprintf("[%s] %s: %v", e.Code, e.Message, e.Cause)
+	if e.cause != nil {
+		return fmt.Sprintf("[%s] %s: %v", e.code, e.message, e.cause)
 	}
-	return fmt.Sprintf("[%s] %s", e.Code, e.Message)
+	return fmt.Sprintf("[%s] %s", e.code, e.message)
 }
 
 func (e *DomainError) Unwrap() error {
-	return e.Cause
+	return e.cause
 }
 
 func IsDomainError(err error) bool {

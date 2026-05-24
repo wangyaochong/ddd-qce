@@ -369,3 +369,48 @@ func TestSetApplier_StillWorks(t *testing.T) {
 		t.Errorf("expected status 'created', got '%s'", o.Status)
 	}
 }
+
+func TestAggregateRoot_Equals_SameID(t *testing.T) {
+	agg1 := NewEventCollector("order-1")
+	agg2 := NewEventCollector("order-1")
+
+	if !agg1.Equals(agg2) {
+		t.Error("expected aggregates with same ID to be equal")
+	}
+}
+
+func TestAggregateRoot_Equals_DifferentID(t *testing.T) {
+	agg1 := NewEventCollector("order-1")
+	agg2 := NewEventCollector("order-2")
+
+	if agg1.Equals(agg2) {
+		t.Error("expected aggregates with different IDs to not be equal")
+	}
+}
+
+func TestAggregateRoot_Equals_NilReceiver(t *testing.T) {
+	var agg1 *AggregateRoot
+	agg2 := NewEventCollector("order-1")
+
+	if agg1.Equals(agg2) {
+		t.Error("expected nil receiver to not equal non-nil")
+	}
+}
+
+func TestAggregateRoot_Equals_NilOther(t *testing.T) {
+	agg1 := NewEventCollector("order-1")
+	var agg2 *AggregateRoot
+
+	if agg1.Equals(agg2) {
+		t.Error("expected non-nil to not equal nil")
+	}
+}
+
+func TestAggregateRoot_Equals_BothNil(t *testing.T) {
+	var agg1 *AggregateRoot
+	var agg2 *AggregateRoot
+
+	if !agg1.Equals(agg2) {
+		t.Error("expected both nil to be equal")
+	}
+}

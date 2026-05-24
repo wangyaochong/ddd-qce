@@ -59,7 +59,7 @@ func TestMultiError_ErrorsAs(t *testing.T) {
 	if !errors.As(me, &got) {
 		t.Error("errors.As(MultiError, *DomainError) = false, want true")
 	}
-	if got.Code != "X" {
-		t.Errorf("as DomainError Code = %q, want %q", got.Code, "X")
+	if got.Code() != "X" {
+		t.Errorf("as DomainError Code = %q, want %q", got.Code(), "X")
 	}
 }

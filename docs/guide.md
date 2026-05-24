@@ -1245,3 +1245,71 @@ DDD_STORE_TYPE=memory ./myapp
 ```
 
 PostgreSQL 是唯一的生产运行模式。Memory 模式的价值在于验证架构设计——确保依赖倒置、接口隔离等原则得到遵守。
+
+---
+
+## 十四、使用脚手架创建聚合
+
+### 1. 脚手架工具简介
+
+ddd-qce 提供 `ddd new aggregate` 命令，自动生成符合框架约定的聚合骨架代码。
+
+### 2. 安装与使用
+
+```bash
+# 进入你的模块目录
+cd my-ddd-app
+
+# 生成聚合骨架
+go run ./cmd/ddd new aggregate Order --module github.com/myorg/myapp
+```
+
+### 3. 生成的文件
+
+执行命令后，会在当前目录生成以下文件：
+
+```
+domain/
+├── order.go           # 聚合根 + 实体 + 状态常量
+├── order_events.go    # 领域事件定义
+└── order_test.go      # 基础测试用例
+
+application/
+├── order_commands.go    # Command + Result 定义
+├── order_cmd_handler.go # Command Handler
+├── order_query_handler.go # Query Handler
+├── order_event_handler.go # Event Handler
+└── order_repository.go  # Repository 适配器
+```
+
+### 4. 后续步骤
+
+1. 补充业务逻辑（domain/order.go 中的业务方法）
+2. 在 infrastructure/wire.go 中注册 Handler（参考输出的 registration snippet）
+3. 运行测试验证：`go test ./...`
+
+### 5. 示例：创建一个新的 Product 聚合
+
+```bash
+# 1. 创建模块（如果还没有）
+go mod init github.com/myorg/shop
+
+# 2. 添加框架依赖
+go get github.com/ddd-qce/core
+
+# 3. 生成聚合
+go run ./cmd/ddd new aggregate Product --module github.com/myorg/shop
+
+# 4. 查看生成的文件
+ls -la domain/ application/
+```
+
+### 6. 命名规范
+
+- 聚合名称使用 PascalCase：如 `Order`、`Product`、`Inventory`
+- 生成的文件名自动转换为 camelCase：如 `order.go`、`order_events.go`
+- 状态常量使用 `StatusName` 格式：如 `OrderStatusPending`
+
+### 7. 自定义模板
+
+（预留）未来版本将支持自定义模板目录。

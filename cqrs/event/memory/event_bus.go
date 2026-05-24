@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
@@ -27,24 +28,34 @@ type handlerEntry struct {
 	name    string
 }
 
+const defaultHandlerTimeout = 30 * time.Second
+
 type EventBus struct {
-	handlers map[reflect.Type][]handlerEntry
-	chain    *aspect.AspectChain
-	mu       sync.RWMutex
+	handlers       map[reflect.Type][]handlerEntry
+	chain          *aspect.AspectChain
+	handlerTimeout time.Duration
+	mu             sync.RWMutex
 }
 
 var _ eventbus.EventBus = (*EventBus)(nil)
 
 type EventBusOption func(*EventBus)
 
-func WithBusAspectChain(chain *aspect.AspectChain) EventBusOption {
+func WithEventBusAspectChain(chain *aspect.AspectChain) EventBusOption {
 	return func(b *EventBus) { b.chain = chain }
 }
 
+func WithHandlerTimeout(timeout time.Duration) EventBusOption {
+	return func(b *EventBus) { b.handlerTimeout = timeout }
+}
+
+var WithBusAspectChain = WithEventBusAspectChain
+
 func NewEventBus(opts ...EventBusOption) *EventBus {
 	b := &EventBus{
-		handlers: make(map[reflect.Type][]handlerEntry),
-		chain:    aspect.NewAspectChain(),
+		handlers:       make(map[reflect.Type][]handlerEntry),
+		chain:          aspect.NewAspectChain(),
+		handlerTimeout: defaultHandlerTimeout,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -98,8 +109,17 @@ func (b *EventBus) Publish(ctx context.Context, evt event.DomainEvent) error {
 		return nil
 	}
 
+	timeout := b.handlerTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		if d := time.Until(deadline); d < timeout {
+			timeout = d
+		}
+	}
+
 	if handlerCount == 1 {
-		hCtx := builtin.ContextWithHandlerType(ctx, entries[0].name)
+		hCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		hCtx = builtin.ContextWithHandlerType(hCtx, entries[0].name)
 		return b.chain.ExecuteWithEventAspects(hCtx, evt, func(ctx context.Context) error {
 			return entries[0].invoke(ctx, evt)
 		})
@@ -112,7 +132,9 @@ func (b *EventBus) Publish(ctx context.Context, evt event.DomainEvent) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			hCtx := builtin.ContextWithHandlerType(ctx, e.name)
+			hCtx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			hCtx = builtin.ContextWithHandlerType(hCtx, e.name)
 			err := b.chain.ExecuteWithEventAspects(hCtx, evt, func(ctx context.Context) error {
 				return e.invoke(ctx, evt)
 			})
@@ -150,6 +172,7 @@ func RegisterHandler[T event.DomainEvent](bus *EventBus, handler event.EventHand
 	return bus.SubscribeHandler(handler)
 }
 
+// Deprecated: Use event.Dispatch instead. memory.Dispatch will be removed in a future version.
 func Dispatch[T event.DomainEvent](ctx context.Context, bus *EventBus, evt T) error {
 	return bus.Publish(ctx, evt)
 }

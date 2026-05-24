@@ -136,6 +136,7 @@ func makeQueryInvoker(handler any, handlerType reflect.Type) (queryInvoker, erro
 	}, nil
 }
 
+// Deprecated: Use query.Dispatch instead. memory.Dispatch will be removed in a future version.
 func Dispatch[T query.Query, R any](ctx context.Context, bus *QueryBus, q T) (R, error) {
 	result, err := bus.Execute(ctx, q)
 	if err != nil {

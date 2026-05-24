@@ -79,7 +79,6 @@ type UserCreatedEvent struct {
 }
 
 func (e UserCreatedEvent) AggregateID() string   { return e.UserID }
-func (e UserCreatedEvent) EventType() string     { return "UserCreated" }
 func (e UserCreatedEvent) OccurredAt() time.Time { return e.CreatedAt }
 
 type UserCreatedHandler struct{}
@@ -209,8 +208,7 @@ go run example/main.go
 │   ├── transaction.go           # PgTransactionManager（Savepoint 嵌套事务）+ DBTX + GetQuerier
 │   └── migrate.go               # Migrate() / DropAll()
 │
-├── /pgx                         # PostgreSQL Backend 预设
-│   └── backend.go               # NewBackend(db) 组装全部 PG 实现
+
 │
 ├── /infra                       # 基础设施抽象
 │   ├── backend.go               # Backend 结构体 + TransactionManager 接口

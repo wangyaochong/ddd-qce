@@ -4,27 +4,30 @@ import "time"
 
 type AuditableEntity struct {
 	Entity
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	createdAt time.Time `json:"createdAt"`
+	updatedAt time.Time `json:"updatedAt"`
 }
+
+func (e *AuditableEntity) CreatedAt() time.Time { return e.createdAt }
+func (e *AuditableEntity) UpdatedAt() time.Time { return e.updatedAt }
 
 func NewAuditableEntity(id string) *AuditableEntity {
 	now := time.Now()
 	return &AuditableEntity{
-		Entity:    Entity{id: id},
-		CreatedAt: now,
-		UpdatedAt: now,
+		Entity:     *NewEntity(id),
+		createdAt: now,
+		updatedAt: now,
 	}
 }
 
 func NewAuditableEntityFromData(id string, createdAt, updatedAt time.Time) *AuditableEntity {
 	return &AuditableEntity{
-		Entity:    Entity{id: id},
-		CreatedAt: createdAt,
-		UpdatedAt: updatedAt,
+		Entity:     *NewEntity(id),
+		createdAt:  createdAt,
+		updatedAt:  updatedAt,
 	}
 }
 
 func (e *AuditableEntity) Touch() {
-	e.UpdatedAt = time.Now()
+	e.updatedAt = time.Now()
 }

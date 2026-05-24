@@ -92,7 +92,7 @@ func TestDispatch_GenericAPI(t *testing.T) {
 	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &integrationHandler{})
 
-	result, err := commandmemory.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "dispatch"})
+	result, err := command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "dispatch"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestDispatch_GenericAPI_NoHandler(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 
-	_, err := commandmemory.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "no-handler"})
+	_, err := command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "no-handler"})
 	if err == nil {
 		t.Fatal("expected error for unregistered command")
 	}

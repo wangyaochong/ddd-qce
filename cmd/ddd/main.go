@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/ddd-qce/cmd/ddd/generator"
 )
 
 func main() {
@@ -57,7 +59,7 @@ func reorderFlags(args []string) []string {
 }
 
 func handleNewAggregate(args []string) error {
-	fs := flag.NewFlagSet("new aggregate", flag.ExitOnError)
+	fs := flag.NewFlagSet("new aggregate", flag.ContinueOnError)
 	fs.Usage = usage
 	module := fs.String("module", "", "target module name (e.g., github.com/myorg/myapp)")
 	if err := fs.Parse(args); err != nil {
@@ -73,8 +75,14 @@ func handleNewAggregate(args []string) error {
 		return fmt.Errorf("aggregate name is required")
 	}
 
-	fmt.Printf("Generating aggregate %s for module %s\n", name, *module)
-	// TODO: implement generator
+	if len(name) == 0 || !isUpperCase(name[0]) {
+		return fmt.Errorf("aggregate name must start with uppercase letter")
+	}
+
+	if err := generator.GenerateAggregate(name, *module); err != nil {
+		return fmt.Errorf("generate: %w", err)
+	}
+
 	return nil
 }
 
@@ -90,4 +98,8 @@ Options:
 Examples:
   ddd new aggregate Order --module github.com/myorg/myapp
 `)
+}
+
+func isUpperCase(c byte) bool {
+	return c >= 'A' && c <= 'Z'
 }
