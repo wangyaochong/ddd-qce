@@ -282,11 +282,8 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | QueryHandler[T,R] | `cqrs/query` | 查询处理器接口 |
 | QueryBus | `cqrs/query/memory` | 内存查询总线，RegisterQuery[T,R](bus, handler) / Dispatch[T,R](ctx, bus, q) |
 | EventBus | `cqrs/event` | 事件总线接口，Publish(ctx, evt) error |
-| EventStore[T] | `cqrs/event` | 事件存储接口（re-export from domain/event），Append(ctx, aggregateID, expectedVersion, events) / Load(...) |
-| EventBus (实现) | `cqrs/event/memory` | 非泛型内存事件总线，RegisterHandler[T] / Dispatch[T] 类型安全辅助 |
-| TypedEventBus[T] | `cqrs/event/memory` | 单类型事件总线包装（Deprecated，推荐用 RegisterHandler[T]/Dispatch[T]） |
-| EventStore[T] | `cqrs/event/memory` | 内存事件存储，实现 domain/event.EventStore[T] |
-| EventStore[T] | `cqrs/event/pg` | PostgreSQL 事件存储，实现 domain/event.EventStore[T] |
+| EventStore[T] | `cqrs/event/memory` | 内存事件存储，实现 domain/event.EventStore[T]（支持指针类型和接口类型 T） |
+| EventStore[T] | `cqrs/event/pg` | PostgreSQL 事件存储，实现 domain/event.EventStore[T]（接口类型 T 需 WithFactory） |
 
 ### 切面层
 

@@ -178,9 +178,9 @@ go run example/main.go
 │   │   └── /memory              # 内存 CommandBus（RegisterCommand / Dispatch）
 │   ├── /query                   # Query / QueryHandler[T,R] 接口
 │   │   └── /memory              # 内存 QueryBus（RegisterQuery / Dispatch）
-│   └── /event                   # EventBus 接口 / EventStore[T] re-export from domain/event
-│       ├── /memory              # 内存 EventBus / RegisterHandler[T] / Dispatch[T] / DomainEventStore(impl EventStore[DomainEvent]) / EventStore[T]
-│       └── /pg                  # PostgreSQL EventStore[T]
+│   └── /event                   # EventBus 接口
+│       ├── /memory              # 内存 EventBus / RegisterHandler[T] / Dispatch[T] / EventStore[T]（支持接口类型 T）
+│       └── /pg                  # PostgreSQL EventStore[T]（接口类型 T 需 WithFactory）
 │
 ├── /aspect                      # 切面链实现
 │   ├── chain.go                 # AspectChain 洋葱模型执行
