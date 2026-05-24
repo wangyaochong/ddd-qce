@@ -23,15 +23,6 @@ type AggregateRoot struct {
 	skipApplierCheck  bool
 }
 
-// NewAggregateRoot creates an AggregateRoot without an applier.
-// Deprecated: use NewAggregateRootWithApplier(id, self) for aggregates that apply events,
-// or NewEventCollector(id) for pure event collection without state mutation.
-func NewAggregateRoot(id string) *AggregateRoot {
-	return &AggregateRoot{
-		Entity: *entity.NewEntity(id),
-	}
-}
-
 // NewAggregateRootWithApplier creates an AggregateRoot with an EventApplier.
 // This is the recommended constructor for aggregates that need to mutate state
 // when events are applied. Typically called as:
@@ -110,10 +101,6 @@ func (a *AggregateRoot) applyEvent(evt event.DomainEvent) error {
 	}
 	a.version++
 	return nil
-}
-
-type AggregateRootValidator interface {
-	Validate() error
 }
 
 func (a *AggregateRoot) Validate() error {

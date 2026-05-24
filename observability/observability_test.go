@@ -381,6 +381,3 @@ func TestDashboard_CommandsWithReader(t *testing.T) {
 	}
 }
 
-func TestOTelBridge_ImplementsMetricsRecorder(t *testing.T) {
-	var _ builtin.MetricsRecorder = NewOTelBridge(OTelConfig{}, nil)
-}

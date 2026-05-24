@@ -9,7 +9,5 @@ var (
 	ErrConcurrency      = NewDomainError("CONCURRENCY", "concurrent modification conflict")
 	ErrPermissionDenied = NewDomainError("PERMISSION_DENIED", "permission denied")
 
-	ErrHandlerAlreadyRegistered = errors.New("handler already registered for this type")
-	ErrJobAlreadyCompleted      = errors.New("job has already reached a terminal state")
-	ErrJobNotFound              = errors.New("job not found")
+	ErrJobNotFound = errors.New("job not found")
 )

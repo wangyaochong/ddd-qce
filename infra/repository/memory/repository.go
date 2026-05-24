@@ -8,6 +8,7 @@ import (
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
 	"github.com/ddd-qce/core/domain/repository"
+	rep "github.com/ddd-qce/core/infra/repository"
 )
 
 type aggregateRecord[T aggregate.AggregateRef] struct {
@@ -36,7 +37,7 @@ func (r *InMemoryRepository[T]) Save(_ context.Context, agg T) error {
 
 	if existing, ok := r.store[root.GetID()]; ok {
 		if root.Version() <= existing.version {
-			return &OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
+			return &rep.OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
 		}
 	}
 
@@ -117,15 +118,3 @@ func (r *InMemoryEventSourcedRepository[T]) Load(_ context.Context, id string) (
 	return rec.agg, nil
 }
 
-type OptimisticLockError struct {
-	AggregateID     string
-	ExpectedVersion int
-}
-
-func (e *OptimisticLockError) Error() string {
-	return fmt.Sprintf("optimistic lock error: aggregate %s version %d was already updated by another transaction", e.AggregateID, e.ExpectedVersion)
-}
-
-func (e *OptimisticLockError) Unwrap() error {
-	return ddderror.ErrConcurrency
-}

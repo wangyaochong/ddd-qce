@@ -25,11 +25,9 @@ type MessageStoreReader interface {
 }
 
 type InMemoryMessageStore struct {
-	mu       sync.RWMutex
-	commands []builtin.CommandEntry
-	queries  []builtin.QueryEntry
-	events   []builtin.EventEntry
-	maxSize  int
+	inner  *builtin.InMemoryMessageStore
+	mu     sync.RWMutex
+	maxSize int
 }
 
 type InMemoryMessageStoreOption func(*InMemoryMessageStore)
@@ -40,10 +38,14 @@ func WithMaxSize(n int) InMemoryMessageStoreOption {
 
 func NewInMemoryMessageStore(opts ...InMemoryMessageStoreOption) *InMemoryMessageStore {
 	s := &InMemoryMessageStore{
+		inner:   builtin.NewInMemoryMessageStore(),
 		maxSize: 1000,
 	}
 	for _, opt := range opts {
 		opt(s)
+	}
+	if s.maxSize != 1000 {
+		s.inner = builtin.NewInMemoryMessageStore(builtin.WithInMemoryMaxSize(s.maxSize))
 	}
 	return s
 }
@@ -51,44 +53,32 @@ func NewInMemoryMessageStore(opts ...InMemoryMessageStoreOption) *InMemoryMessag
 func (s *InMemoryMessageStore) RecordCommand(ctx context.Context, entry *builtin.CommandEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.commands = append(s.commands, *entry)
-	if len(s.commands) > s.maxSize {
-		s.commands = s.commands[len(s.commands)-s.maxSize:]
-	}
-	return nil
+	return s.inner.RecordCommand(ctx, entry)
 }
 
 func (s *InMemoryMessageStore) RecordQuery(ctx context.Context, entry *builtin.QueryEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.queries = append(s.queries, *entry)
-	if len(s.queries) > s.maxSize {
-		s.queries = s.queries[len(s.queries)-s.maxSize:]
-	}
-	return nil
+	return s.inner.RecordQuery(ctx, entry)
 }
 
 func (s *InMemoryMessageStore) RecordEvent(ctx context.Context, entry *builtin.EventEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.events = append(s.events, *entry)
-	if len(s.events) > s.maxSize {
-		s.events = s.events[len(s.events)-s.maxSize:]
-	}
+	return s.inner.RecordEvent(ctx, entry)
+}
+
+func (s *InMemoryMessageStore) RecordEventHandler(_ context.Context, _ *builtin.EventHandlerEntry) error {
 	return nil
 }
 
-func (s *InMemoryMessageStore) RecordEventHandler(ctx context.Context, entry *builtin.EventHandlerEntry) error {
-	return nil
-}
-
-func (s *InMemoryMessageStore) QueryCommands(ctx context.Context, filter MessageFilter) ([]builtin.CommandEntry, error) {
+func (s *InMemoryMessageStore) QueryCommands(_ context.Context, filter MessageFilter) ([]builtin.CommandEntry, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var result []builtin.CommandEntry
-	for i := len(s.commands) - 1; i >= 0; i-- {
-		e := s.commands[i]
+	for i := len(s.inner.Commands) - 1; i >= 0; i-- {
+		e := s.inner.Commands[i]
 		if !matchCommandFilter(e, filter) {
 			continue
 		}
@@ -100,13 +90,13 @@ func (s *InMemoryMessageStore) QueryCommands(ctx context.Context, filter Message
 	return result, nil
 }
 
-func (s *InMemoryMessageStore) QueryQueries(ctx context.Context, filter MessageFilter) ([]builtin.QueryEntry, error) {
+func (s *InMemoryMessageStore) QueryQueries(_ context.Context, filter MessageFilter) ([]builtin.QueryEntry, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var result []builtin.QueryEntry
-	for i := len(s.queries) - 1; i >= 0; i-- {
-		e := s.queries[i]
+	for i := len(s.inner.Queries) - 1; i >= 0; i-- {
+		e := s.inner.Queries[i]
 		if !matchQueryFilter(e, filter) {
 			continue
 		}
@@ -118,13 +108,13 @@ func (s *InMemoryMessageStore) QueryQueries(ctx context.Context, filter MessageF
 	return result, nil
 }
 
-func (s *InMemoryMessageStore) QueryEvents(ctx context.Context, filter MessageFilter) ([]builtin.EventEntry, error) {
+func (s *InMemoryMessageStore) QueryEvents(_ context.Context, filter MessageFilter) ([]builtin.EventEntry, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var result []builtin.EventEntry
-	for i := len(s.events) - 1; i >= 0; i-- {
-		e := s.events[i]
+	for i := len(s.inner.Events) - 1; i >= 0; i-- {
+		e := s.inner.Events[i]
 		if !matchEventFilter(e, filter) {
 			continue
 		}
@@ -136,64 +126,38 @@ func (s *InMemoryMessageStore) QueryEvents(ctx context.Context, filter MessageFi
 	return result, nil
 }
 
-func matchCommandFilter(e builtin.CommandEntry, f MessageFilter) bool {
-	if f.Type != "" && e.CommandType != f.Type {
+func matchStringFilter(entryType, traceID, err string, createdAt time.Time, f MessageFilter) bool {
+	if f.Type != "" && entryType != f.Type {
 		return false
 	}
-	if f.TraceID != "" && e.TraceID != f.TraceID {
+	if f.TraceID != "" && traceID != f.TraceID {
 		return false
 	}
-	if f.Status == "error" && e.Error == "" {
+	if f.Status == "error" && err == "" {
 		return false
 	}
-	if f.Status == "success" && e.Error != "" {
+	if f.Status == "success" && err != "" {
 		return false
 	}
-	if !f.Since.IsZero() && e.CreatedAt.Before(f.Since) {
+	if !f.Since.IsZero() && createdAt.Before(f.Since) {
 		return false
 	}
 	return true
+}
+
+func matchCommandFilter(e builtin.CommandEntry, f MessageFilter) bool {
+	return matchStringFilter(e.CommandType, e.TraceID, e.Error, e.CreatedAt, f)
 }
 
 func matchQueryFilter(e builtin.QueryEntry, f MessageFilter) bool {
-	if f.Type != "" && e.QueryType != f.Type {
-		return false
-	}
-	if f.TraceID != "" && e.TraceID != f.TraceID {
-		return false
-	}
-	if f.Status == "error" && e.Error == "" {
-		return false
-	}
-	if f.Status == "success" && e.Error != "" {
-		return false
-	}
-	if !f.Since.IsZero() && e.CreatedAt.Before(f.Since) {
-		return false
-	}
-	return true
+	return matchStringFilter(e.QueryType, e.TraceID, e.Error, e.CreatedAt, f)
 }
 
 func matchEventFilter(e builtin.EventEntry, f MessageFilter) bool {
-	if f.Type != "" && e.EventType != f.Type {
-		return false
-	}
-	if f.TraceID != "" && e.TraceID != f.TraceID {
-		return false
-	}
 	if f.AggregateID != "" && e.AggregateID != f.AggregateID {
 		return false
 	}
-	if f.Status == "error" && e.Error == "" {
-		return false
-	}
-	if f.Status == "success" && e.Error != "" {
-		return false
-	}
-	if !f.Since.IsZero() && e.CreatedAt.Before(f.Since) {
-		return false
-	}
-	return true
+	return matchStringFilter(e.EventType, e.TraceID, e.Error, e.CreatedAt, f)
 }
 
 var _ builtin.MessageStore = (*InMemoryMessageStore)(nil)

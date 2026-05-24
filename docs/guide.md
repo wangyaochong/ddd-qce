@@ -305,11 +305,14 @@ func NewOrderRepository(db *sql.DB) *OrderRepository {
 ### 3. 乐观锁错误处理
 
 ```go
-import "github.com/ddd-qce/core/infra/repository/pg"
+import (
+    "github.com/ddd-qce/core/infra/repository"
+    "github.com/ddd-qce/core/infra/repository/pg"
+)
 
 err := repo.Save(ctx, order)
 if err != nil {
-    var lockErr *pg.OptimisticLockError
+    var lockErr *repository.OptimisticLockError
     if errors.As(err, &lockErr) {
         // 处理并发冲突
         fmt.Printf("乐观锁冲突: aggregate=%s expected_version=%d\n",
@@ -750,10 +753,10 @@ func main() {
 import "github.com/ddd-qce/core/aspect/builtin"
 
 func main() {
-    // 使用 NopMessageStore 跳过持久化
-    nopStore := builtin.NewNopMessageStore()
+    // 使用 InMemoryMessageStore 进行内存持久化
+    memStore := builtin.NewInMemoryMessageStore()
 
-    persistenceAspect := &builtin.PersistenceAspect{Store: nopStore}
+    persistenceAspect := &builtin.PersistenceAspect{Store: memStore}
 
     chain := aspect.NewAspectChain()
     chain.RegisterCommandAspect(persistenceAspect)
@@ -1160,7 +1163,7 @@ func (h *CreateUserHandler) Handle(ctx context.Context, cmd CreateUserCommand) (
 }
 
 // 乐观锁冲突
-var lockErr *pg.OptimisticLockError
+var lockErr *repository.OptimisticLockError
 if errors.As(err, &lockErr) {
     // 重试或返回冲突提示
 }

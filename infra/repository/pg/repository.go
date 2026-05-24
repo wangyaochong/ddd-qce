@@ -12,6 +12,7 @@ import (
 	"github.com/ddd-qce/core/domain/aggregate"
 	"github.com/ddd-qce/core/domain/event"
 	corepg "github.com/ddd-qce/core/pg"
+	"github.com/ddd-qce/core/infra/repository"
 )
 
 type SnapshotSerializer[T aggregate.AggregateRef] interface {
@@ -79,7 +80,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
+		return &repository.OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }
@@ -244,7 +245,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
+		return &repository.OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }
@@ -260,15 +261,3 @@ func (r *PgEventSourcedRepository[T]) loadSnapshot(ctx context.Context, id strin
 	return data, version, err
 }
 
-type OptimisticLockError struct {
-	AggregateID     string
-	ExpectedVersion int
-}
-
-func (e *OptimisticLockError) Error() string {
-	return fmt.Sprintf("optimistic lock error: aggregate %s version %d was already updated by another transaction", e.AggregateID, e.ExpectedVersion)
-}
-
-func (e *OptimisticLockError) Unwrap() error {
-	return ddderror.ErrConcurrency
-}

@@ -299,7 +299,6 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | MetricsAspect | `aspect/builtin` | 指标采集切面（Order: 100） |
 | PersistenceAspect | `aspect/builtin` | 消息持久化切面（Order: 200） |
 | MessageStore | `aspect/builtin` | 消息存储接口，RecordCommand/Query/Event/EventHandler |
-| NopMessageStore | `aspect/builtin` | 空操作消息存储 |
 | PgMessageStore | `aspect/builtin/pg` | PostgreSQL 消息存储 |
 
 ### Job 系统
@@ -336,7 +335,7 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | PgEventSourcedRepository[T] | `infra/repository/pg` | PostgreSQL 事件溯源仓储，快照 + 乐观锁 |
 | SnapshotSerializer[T] | `infra/repository/pg` | 快照序列化接口，Serialize/Deserialize |
 | JSONSerializer[T] | `infra/repository/pg` | JSON 快照序列化实现 |
-| OptimisticLockError | `infra/repository/pg` | 乐观锁冲突错误 |
+| OptimisticLockError | `infra/repository` | 乐观锁冲突错误 |
 | PgTransactionManager | `pg` | PostgreSQL 事务管理器，Savepoint 嵌套事务 |
 | DBTX / GetQuerier | `pg` | 事务内查询器，自动从 ctx 获取当前 tx |
 | Migrate / DropAll | `pg` | 数据库迁移 |

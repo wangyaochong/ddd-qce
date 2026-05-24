@@ -40,8 +40,6 @@ func TestSentinelPlainErrors(t *testing.T) {
 		name string
 		err  error
 	}{
-		{"ErrHandlerAlreadyRegistered", ErrHandlerAlreadyRegistered},
-		{"ErrJobAlreadyCompleted", ErrJobAlreadyCompleted},
 		{"ErrJobNotFound", ErrJobNotFound},
 	}
 	for _, tt := range plainSentinels {

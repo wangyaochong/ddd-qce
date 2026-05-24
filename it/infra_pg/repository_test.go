@@ -14,6 +14,7 @@ import (
 	"github.com/ddd-qce/core/domain/aggregate"
 	"github.com/ddd-qce/core/domain/event"
 	pgrepo "github.com/ddd-qce/core/infra/repository/pg"
+	rep "github.com/ddd-qce/core/infra/repository"
 	"github.com/ddd-qce/core/domain/repository/repositorytest"
 	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -164,7 +165,7 @@ func TestPgRepository_FindByID_VersionRestoredForOptimisticLock(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected OptimisticLockError for stale version")
 	}
-	var ole *pgrepo.OptimisticLockError
+	var ole *rep.OptimisticLockError
 	if !errors.As(err, &ole) {
 		t.Errorf("expected *OptimisticLockError, got %T: %v", err, err)
 	}
@@ -240,7 +241,7 @@ func TestPgRepository_OptimisticLock(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected OptimisticLockError")
 	}
-	var ole *pgrepo.OptimisticLockError
+	var ole *rep.OptimisticLockError
 	if !errors.As(err, &ole) {
 		t.Errorf("expected *OptimisticLockError, got %T: %v", err, err)
 	}

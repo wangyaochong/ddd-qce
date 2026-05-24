@@ -11,6 +11,7 @@ import (
 	"github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/domain/repository"
 	"github.com/ddd-qce/core/domain/repository/repositorytest"
+	rep "github.com/ddd-qce/core/infra/repository"
 )
 
 type testAggregate struct {
@@ -121,7 +122,7 @@ func TestInMemoryRepository_OptimisticLock(t *testing.T) {
 		t.Fatal("expected optimistic lock error, got nil")
 	}
 
-	var ole *OptimisticLockError
+	var ole *rep.OptimisticLockError
 	if !errors.As(err, &ole) {
 		t.Fatalf("expected *OptimisticLockError, got %T: %v", err, err)
 	}

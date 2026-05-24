@@ -11,8 +11,8 @@ type testDomainEvent struct {
 	event.BaseEvent
 }
 
-func TestNewAggregateRoot(t *testing.T) {
-	agg := NewAggregateRoot("order-1")
+func TestNewEventCollector_Initial(t *testing.T) {
+	agg := NewEventCollector("order-1")
 	if agg.GetID() != "order-1" {
 		t.Errorf("expected ID 'order-1', got '%s'", agg.GetID())
 	}
@@ -76,7 +76,7 @@ func TestUncommittedEvents_ReturnsCopy(t *testing.T) {
 }
 
 func TestUncommittedEvents_Empty(t *testing.T) {
-	agg := NewAggregateRoot("order-1")
+	agg := NewEventCollector("order-1")
 
 	events := agg.UncommittedEvents()
 	if len(events) != 0 {
@@ -102,7 +102,7 @@ func TestMarkEventsAsCommitted(t *testing.T) {
 }
 
 func TestMarkEventsAsCommitted_Empty(t *testing.T) {
-	agg := NewAggregateRoot("order-1")
+	agg := NewEventCollector("order-1")
 	agg.MarkEventsAsCommitted()
 
 	events := agg.UncommittedEvents()
@@ -112,7 +112,7 @@ func TestMarkEventsAsCommitted_Empty(t *testing.T) {
 }
 
 func TestLoadFromHistory_Empty(t *testing.T) {
-	agg := NewAggregateRoot("order-1")
+	agg := NewEventCollector("order-1")
 	_ = agg.LoadFromHistory([]event.DomainEvent{})
 
 	if agg.Version() != 0 {
@@ -152,7 +152,7 @@ func TestValidate_Valid(t *testing.T) {
 }
 
 func TestValidate_EmptyID(t *testing.T) {
-	agg := NewAggregateRoot("")
+	agg := NewEventCollector("")
 	err := agg.Validate()
 	if err == nil {
 		t.Fatal("expected error for empty ID")
@@ -163,7 +163,7 @@ func TestValidate_EmptyID(t *testing.T) {
 }
 
 func TestValidate_NegativeVersion(t *testing.T) {
-	agg := NewAggregateRoot("order-1")
+	agg := NewEventCollector("order-1")
 	agg.SetSnapshotVersion(-1)
 	err := agg.Validate()
 	if err == nil {
@@ -342,36 +342,6 @@ func TestAggregateRoot_OrderLifecycle(t *testing.T) {
 	err := rebuilt.Validate()
 	if err != nil {
 		t.Errorf("expected valid rebuilt aggregate, got: %v", err)
-	}
-}
-
-func TestApply_WithoutApplier_ReturnsError(t *testing.T) {
-	agg := NewAggregateRoot("order-1")
-	evt := &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())}
-
-	err := agg.Apply(evt)
-	if err == nil {
-		t.Fatal("expected error when Apply is called without applier")
-	}
-	if err.Error() != "AggregateRoot: applier not set, use NewAggregateRootWithApplier(id, self) or NewEventCollector(id)" {
-		t.Errorf("unexpected error message: %s", err.Error())
-	}
-	if len(agg.UncommittedEvents()) != 0 {
-		t.Errorf("expected 0 uncommitted events after failed Apply, got %d", len(agg.UncommittedEvents()))
-	}
-	if agg.Version() != 0 {
-		t.Errorf("expected version 0 after failed Apply, got %d", agg.Version())
-	}
-}
-
-func TestLoadFromHistory_WithoutApplier_ReturnsError(t *testing.T) {
-	agg := NewAggregateRoot("order-1")
-
-	err := agg.LoadFromHistory([]event.DomainEvent{
-		&testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())},
-	})
-	if err == nil {
-		t.Fatal("expected error when LoadFromHistory is called without applier")
 	}
 }
 
