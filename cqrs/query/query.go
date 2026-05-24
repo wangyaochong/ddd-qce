@@ -37,6 +37,19 @@ func Dispatch[T Query, R any](ctx context.Context, bus QueryBus, q T) (R, error)
 		var zero R
 		return zero, err
 	}
+	typed, err := typeAssert[R](result, q)
+	if err != nil {
+		var zero R
+		return zero, err
+	}
+	return typed, nil
+}
+
+func typeAssert[R any](result any, q any) (R, error) {
+	if result == nil {
+		var zero R
+		return zero, nil
+	}
 	typed, ok := result.(R)
 	if !ok {
 		var zero R
