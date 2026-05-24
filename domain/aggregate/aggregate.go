@@ -63,7 +63,7 @@ func (a *AggregateRoot) GetAggregateRoot() *AggregateRoot {
 	return a
 }
 
-func (a *AggregateRoot) GetVersion() int {
+func (a *AggregateRoot) Version() int {
 	return a.version
 }
 
