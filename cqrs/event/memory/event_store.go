@@ -11,10 +11,11 @@ import (
 )
 
 type EventStore[T event.DomainEvent] struct {
-	mu      sync.RWMutex
-	events  map[string][]T
-	pool    sync.Pool
-	newFunc func() T
+	mu          sync.RWMutex
+	events      map[string][]T
+	pool        sync.Pool
+	newFunc     func() T
+	shallowCopy bool
 }
 
 type EventStoreOption[T event.DomainEvent] func(*EventStore[T])
@@ -26,12 +27,21 @@ func WithFactory[T event.DomainEvent](factory func() T) EventStoreOption[T] {
 func NewEventStore[T event.DomainEvent](opts ...EventStoreOption[T]) (*EventStore[T], error) {
 	var zero T
 	t := reflect.TypeOf(zero)
-	if t == nil || t.Kind() != reflect.Ptr {
-		return nil, fmt.Errorf("EventStore[T]: T must be a pointer type, got %v", t)
-	}
 
 	s := &EventStore[T]{
 		events: make(map[string][]T),
+	}
+
+	if t == nil {
+		s.shallowCopy = true
+		for _, opt := range opts {
+			opt(s)
+		}
+		return s, nil
+	}
+
+	if t.Kind() != reflect.Ptr {
+		return nil, fmt.Errorf("EventStore[T]: T must be a pointer type, got %v", t)
 	}
 
 	for _, opt := range opts {
@@ -105,8 +115,15 @@ func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersi
 		return []T{}, nil
 	}
 
-	result := make([]T, len(events[afterVersion:]))
-	for i, e := range events[afterVersion:] {
+	slice := events[afterVersion:]
+	if s.shallowCopy {
+		result := make([]T, len(slice))
+		copy(result, slice)
+		return result, nil
+	}
+
+	result := make([]T, len(slice))
+	for i, e := range slice {
 		copied, err := s.copyEvent(e)
 		if err != nil {
 			return nil, fmt.Errorf("copy event at index %d: %w", i, err)
