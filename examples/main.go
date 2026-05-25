@@ -14,11 +14,11 @@ import (
 	jobmemory "github.com/ddd-qce/core/job/memory"
 	"github.com/ddd-qce/core/trace"
 
-	"github.com/ddd-qce/example/command"
-	"github.com/ddd-qce/example/event"
-	"github.com/ddd-qce/example/job"
-	"github.com/ddd-qce/example/query"
-	"github.com/ddd-qce/example/traceexample"
+	"github.com/ddd-qce/examples/command"
+	"github.com/ddd-qce/examples/event"
+	"github.com/ddd-qce/examples/job"
+	"github.com/ddd-qce/examples/query"
+	"github.com/ddd-qce/examples/traceexample"
 )
 
 type SimpleMetricsRecorder struct{}
