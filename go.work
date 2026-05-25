@@ -3,7 +3,7 @@ go 1.26.0
 use (
 	.
 	./cmd/ddd
-	./example
 	./exampleapp
+	./examples
 	./it
 )
