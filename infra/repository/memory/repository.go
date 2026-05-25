@@ -35,13 +35,13 @@ func (r *InMemoryRepository[T]) Save(_ context.Context, agg T) error {
 
 	root := agg.GetAggregateRoot()
 
-	if existing, ok := r.store[root.GetID()]; ok {
+	if existing, ok := r.store[root.ID()]; ok {
 		if root.Version() <= existing.version {
-			return &rep.OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
+			return &rep.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
 		}
 	}
 
-	r.store[root.GetID()] = &aggregateRecord[T]{
+	r.store[root.ID()] = &aggregateRecord[T]{
 		agg:     agg,
 		version: root.Version(),
 	}
@@ -58,7 +58,6 @@ func (r *InMemoryRepository[T]) FindByID(_ context.Context, id string) (T, error
 		return zero, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 
-	rec.agg.GetAggregateRoot().SetSnapshotVersion(rec.version)
 	return rec.agg, nil
 }
 
@@ -96,7 +95,7 @@ func (r *InMemoryEventSourcedRepository[T]) Save(_ context.Context, agg T) error
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.store[root.GetID()] = &aggregateRecord[T]{
+	r.store[root.ID()] = &aggregateRecord[T]{
 		agg:     agg,
 		version: root.Version(),
 	}
@@ -114,7 +113,5 @@ func (r *InMemoryEventSourcedRepository[T]) Load(_ context.Context, id string) (
 		return zero, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 
-	rec.agg.GetAggregateRoot().SetSnapshotVersion(rec.version)
 	return rec.agg, nil
 }
-

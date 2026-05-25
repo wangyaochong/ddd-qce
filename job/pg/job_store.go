@@ -43,11 +43,15 @@ func (s *PgJobStore) Create(ctx context.Context, job *jobcore.Job) error {
 	if commandType == "" {
 		commandType = jobcore.TypeName(job.Command)
 	}
+	resultData, err := corepg.JSONOrNull(job.GetResult())
+	if err != nil {
+		return fmt.Errorf("marshal result: %w", err)
+	}
 	_, err = q.ExecContext(ctx,
 		`INSERT INTO ddd_jobs (id, command, command_type, status, result, result_type, error, created_at, started_at, completed_at, timeout_ns, retry_count, max_retries)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 		job.ID, cmdData, commandType, string(job.GetStatus()),
-		corepg.JSONOrNull(job.GetResult()), corepg.NullString(job.GetResultType()),
+		resultData, corepg.NullString(job.GetResultType()),
 		corepg.NullString(job.GetError()),
 		job.CreatedAt, corepg.NullTime(job.GetStartedAt()), corepg.NullTime(job.GetCompletedAt()),
 		job.Timeout.Nanoseconds(), job.RetryCount, job.MaxRetries,
@@ -118,10 +122,14 @@ func (s *PgJobStore) Update(ctx context.Context, job *jobcore.Job) error {
 	if resultType == "" && job.GetResult() != nil {
 		resultType = jobcore.TypeName(job.GetResult())
 	}
-	_, err := q.ExecContext(ctx,
+	resultData, err := corepg.JSONOrNull(job.GetResult())
+	if err != nil {
+		return fmt.Errorf("marshal result: %w", err)
+	}
+	_, err = q.ExecContext(ctx,
 		`UPDATE ddd_jobs SET status=$2, result=$3, result_type=$4, error=$5, started_at=$6, completed_at=$7, timeout_ns=$8, retry_count=$9, max_retries=$10
 		 WHERE id=$1`,
-		job.ID, string(job.GetStatus()), corepg.JSONOrNull(job.GetResult()), corepg.NullString(resultType), corepg.NullString(job.GetError()),
+		job.ID, string(job.GetStatus()), resultData, corepg.NullString(resultType), corepg.NullString(job.GetError()),
 		corepg.NullTime(job.GetStartedAt()), corepg.NullTime(job.GetCompletedAt()),
 		job.Timeout.Nanoseconds(), job.RetryCount, job.MaxRetries,
 	)

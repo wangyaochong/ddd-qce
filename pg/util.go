@@ -20,13 +20,13 @@ func NullTime(t time.Time) any {
 	return t
 }
 
-func JSONOrNull(v any) any {
+func JSONOrNull(v any) ([]byte, error) {
 	if v == nil {
-		return nil
+		return nil, nil
 	}
 	data, err := json.Marshal(v)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"_marshal_error":%q}`, err.Error()))
+		return nil, fmt.Errorf("marshal JSON: %w", err)
 	}
-	return data
+	return data, nil
 }

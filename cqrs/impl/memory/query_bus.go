@@ -135,18 +135,3 @@ func makeQueryInvoker(handler any, handlerType reflect.Type) (queryInvoker, erro
 		return nil, err
 	}, nil
 }
-
-// Deprecated: Use query.Dispatch instead. memory.Dispatch will be removed in a future version.
-func Dispatch[T query.Query, R any](ctx context.Context, bus *QueryBus, q T) (R, error) {
-	result, err := bus.Execute(ctx, q)
-	if err != nil {
-		var zero R
-		return zero, err
-	}
-	typedResult, ok := result.(R)
-	if !ok {
-		var zero R
-		return zero, fmt.Errorf("result type mismatch for query type: %s", reflect.TypeOf(q))
-	}
-	return typedResult, nil
-}

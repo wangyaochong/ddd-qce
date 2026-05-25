@@ -6,7 +6,7 @@ import (
 
 func TestNewEntityWithID(t *testing.T) {
 	e := NewEntityWithID()
-	if e.GetID() == "" {
+	if e.ID() == "" {
 		t.Error("expected auto-generated ID to be non-empty")
 	}
 	if e.IsEmpty() {
@@ -16,12 +16,12 @@ func TestNewEntityWithID(t *testing.T) {
 
 func TestNewEntityWithID_UUIDHexFormat(t *testing.T) {
 	e := NewEntityWithID()
-	if len(e.GetID()) != 32 {
-		t.Errorf("expected UUID hex format (32 chars), got %d chars: %s", len(e.GetID()), e.GetID())
+	if len(e.ID()) != 32 {
+		t.Errorf("expected UUID hex format (32 chars), got %d chars: %s", len(e.ID()), e.ID())
 	}
-	for _, c := range e.GetID() {
+	for _, c := range e.ID() {
 		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
-			t.Errorf("expected lowercase hex chars only, got '%c' in %s", c, e.GetID())
+			t.Errorf("expected lowercase hex chars only, got '%c' in %s", c, e.ID())
 			break
 		}
 	}
@@ -31,10 +31,10 @@ func TestNewEntityWithID_Uniqueness(t *testing.T) {
 	ids := make(map[string]bool)
 	for i := 0; i < 100; i++ {
 		e := NewEntityWithID()
-		if ids[e.GetID()] {
-			t.Errorf("generated duplicate ID: %s", e.GetID())
+		if ids[e.ID()] {
+			t.Errorf("generated duplicate ID: %s", e.ID())
 		}
-		ids[e.GetID()] = true
+		ids[e.ID()] = true
 	}
 }
 

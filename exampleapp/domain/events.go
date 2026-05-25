@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type OrderPlacedEvent struct {

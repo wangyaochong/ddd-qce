@@ -102,7 +102,7 @@ import (
 
 	"github.com/ddd-qce/core/domain/aggregate"
 	"github.com/ddd-qce/core/domain/entity"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type {{.Name}}Status string
@@ -156,7 +156,7 @@ func New{{.Name}}(id, userID string, items []*{{.Name}}Item) (*{{.Name}}, error)
 	}
 	o.TotalAmount = o.calculateTotal()
 	if err := o.Apply(&{{.Name}}CreatedEvent{
-		BaseEvent:   event.NewBaseEvent(o.GetID(), time.Now()),
+		BaseEvent:   event.NewBaseEvent(o.ID(), time.Now()),
 		UserID:      o.UserID,
 		TotalAmount: o.TotalAmount,
 	}); err != nil {
@@ -190,7 +190,7 @@ func (o *{{.Name}}) Confirm() error {
 		return fmt.Errorf("{{.NameLower}} can only be confirmed from pending status")
 	}
 	if err := o.Apply(&{{.Name}}ConfirmedEvent{
-		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
+		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
 	}); err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func (o *{{.Name}}) Cancel() error {
 		return fmt.Errorf("cannot cancel shipped {{.NameLower}}")
 	}
 	if err := o.Apply(&{{.Name}}CancelledEvent{
-		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
+		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
 	}); err != nil {
 		return err
 	}
@@ -239,7 +239,7 @@ func (o *{{.Name}}) calculateTotal() float64 {
 var domainEventsTmpl = `package domain
 
 import (
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type {{.Name}}CreatedEvent struct {
@@ -269,7 +269,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 func Test{{.Name}}Aggregate_Create(t *testing.T) {
@@ -336,7 +336,7 @@ func Test{{.Name}}Aggregate_When(t *testing.T) {
 var appCommandsTmpl = `package application
 
 import (
-	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/cmd"
 	"github.com/ddd-qce/core/cqrs/query"
 )
 
@@ -397,9 +397,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/cmd"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
-	domainevent "github.com/ddd-qce/core/domain/event"
+	domainevent "github.com/ddd-qce/core/cqrs/event"
 	"{{.Module}}/domain"
 )
 
@@ -429,12 +429,12 @@ func (h *Create{{.Name}}Handler) Handle(ctx context.Context, cmd *Create{{.Name}
 	}
 
 	cqrsevent.Dispatch[*domain.{{.Name}}CreatedEvent](ctx, h.eventBus, &domain.{{.Name}}CreatedEvent{
-		BaseEvent:   domainevent.NewBaseEvent({{.NameLower}}.GetID(), time.Now()),
+		BaseEvent:   domainevent.NewBaseEvent({{.NameLower}}.ID(), time.Now()),
 		UserID:      {{.NameLower}}.UserID,
 		TotalAmount: {{.NameLower}}.TotalAmount,
 	})
 
-	return &Create{{.Name}}Result{ {{.Name}}ID: {{.NameLower}}.GetID(), TotalAmount: {{.NameLower}}.TotalAmount}, nil
+	return &Create{{.Name}}Result{ {{.Name}}ID: {{.NameLower}}.ID(), TotalAmount: {{.NameLower}}.TotalAmount}, nil
 }
 
 var _ command.CommandHandler[*Create{{.Name}}Command, *Create{{.Name}}Result] = (*Create{{.Name}}Handler)(nil)
@@ -490,7 +490,7 @@ func to{{.Name}}View(o *domain.{{.Name}}) *Get{{.Name}}Result {
 	items := make([]{{.Name}}ViewItem, len(o.Items))
 	for i, item := range o.Items {
 		items[i] = {{.Name}}ViewItem{
-			ProductID:   item.GetID(),
+			ProductID:   item.ID(),
 			ProductName: item.ProductName,
 			Price:       item.Price,
 			Quantity:    item.Quantity,
@@ -498,7 +498,7 @@ func to{{.Name}}View(o *domain.{{.Name}}) *Get{{.Name}}Result {
 		}
 	}
 	result := &Get{{.Name}}Result{
-		{{.Name}}ID:     o.GetID(),
+		{{.Name}}ID:     o.ID(),
 		UserID:      o.UserID,
 		Status:      string(o.Status),
 		TotalAmount: o.TotalAmount,
@@ -540,7 +540,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/repository"
 	"{{.Module}}/domain"
 )
@@ -564,7 +564,7 @@ func New{{.Name}}Repository() *{{.Name}}Repository {
 func (r *{{.Name}}Repository) Save(ctx context.Context, {{.NameLower}} *domain.{{.Name}}) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.{{.NamePluralLower}}[{{.NameLower}}.GetID()] = {{.NameLower}}
+	r.{{.NamePluralLower}}[{{.NameLower}}.ID()] = {{.NameLower}}
 	return nil
 }
 
@@ -601,12 +601,12 @@ func (r *{{.Name}}Repository) FindAll() []*domain.{{.Name}} {
 var _ repository.Repository[*domain.{{.Name}}] = (*{{.Name}}Repository)(nil)
 
 type {{.Name}}EventSourcedRepository struct {
-	eventStore      event.EventStore[event.DomainEvent]
+	eventStore      event.EventSourceStore[event.DomainEvent]
 	{{.NameLower}}Repo {{.Name}}RepositoryAdapter
 }
 
 func New{{.Name}}EventSourcedRepository(
-	eventStore event.EventStore[event.DomainEvent],
+	eventStore event.EventSourceStore[event.DomainEvent],
 	{{.NameLower}}Repo {{.Name}}RepositoryAdapter,
 ) *{{.Name}}EventSourcedRepository {
 	return &{{.Name}}EventSourcedRepository{
@@ -618,7 +618,7 @@ func New{{.Name}}EventSourcedRepository(
 func (r *{{.Name}}EventSourcedRepository) Save(ctx context.Context, {{.NameLower}} *domain.{{.Name}}) error {
 	uncommitted := {{.NameLower}}.UncommittedEvents()
 	if len(uncommitted) > 0 {
-		if err := r.eventStore.Append(ctx, {{.NameLower}}.GetID(), {{.NameLower}}.Version()-len(uncommitted), uncommitted); err != nil {
+		if err := r.eventStore.Append(ctx, {{.NameLower}}.ID(), {{.NameLower}}.Version()-len(uncommitted), uncommitted); err != nil {
 			return err
 		}
 		{{.NameLower}}.MarkEventsAsCommitted()

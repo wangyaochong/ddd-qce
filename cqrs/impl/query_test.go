@@ -1,14 +1,16 @@
-package query
+package impl
 
 import (
 	"context"
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/ddd-qce/core/cqrs/query"
 )
 
 type testQuery struct {
-	BaseQuery
+	query.BaseQuery
 	UserID string
 }
 
@@ -38,7 +40,7 @@ func (h *testQueryHandler) Handle(ctx context.Context, q *testQuery) (*testQuery
 }
 
 type testFailingQuery struct {
-	BaseQuery
+	query.BaseQuery
 }
 
 type testFailingQueryResult struct{}
@@ -50,13 +52,12 @@ func (h *testFailingQueryHandler) Handle(ctx context.Context, q *testFailingQuer
 }
 
 type testQueryWithoutBase struct {
+	query.BaseQuery
 	Key string
 }
 
-func (testQueryWithoutBase) isQuery() {}
-
 type testListQuery struct {
-	BaseQuery
+	query.BaseQuery
 	Page int
 }
 
@@ -71,15 +72,15 @@ func (h *testListQueryHandler) Handle(ctx context.Context, q *testListQuery) (*t
 }
 
 func TestBaseQuery_ImplementsQuery(t *testing.T) {
-	var _ Query = (*testQuery)(nil)
-	var _ Query = (*testFailingQuery)(nil)
-	var _ Query = (*testQueryWithoutBase)(nil)
-	var _ Query = BaseQuery{}
+	var _ query.Query = (*testQuery)(nil)
+	var _ query.Query = (*testFailingQuery)(nil)
+	var _ query.Query = (*testQueryWithoutBase)(nil)
+	var _ query.Query = query.BaseQuery{}
 }
 
 func TestQueryNameOf_PointerType(t *testing.T) {
 	q := &testQuery{UserID: "1"}
-	name := QueryNameOf(q)
+	name := query.QueryNameOf(q)
 	if name != "testQuery" {
 		t.Errorf("expected 'testQuery', got '%s'", name)
 	}
@@ -87,7 +88,7 @@ func TestQueryNameOf_PointerType(t *testing.T) {
 
 func TestQueryNameOf_ValueType(t *testing.T) {
 	q := testQuery{UserID: "1"}
-	name := QueryNameOf(q)
+	name := query.QueryNameOf(q)
 	if name != "testQuery" {
 		t.Errorf("expected 'testQuery', got '%s'", name)
 	}
@@ -102,10 +103,10 @@ func TestQueryNameOf_DifferentTypes(t *testing.T) {
 		{&testFailingQuery{}, "testFailingQuery"},
 		{&testQueryWithoutBase{}, "testQueryWithoutBase"},
 		{testQuery{}, "testQuery"},
-		{BaseQuery{}, "BaseQuery"},
+		{query.BaseQuery{}, "BaseQuery"},
 	}
 	for _, tt := range tests {
-		got := QueryNameOf(tt.query)
+		got := query.QueryNameOf(tt.query)
 		if got != tt.want {
 			t.Errorf("QueryNameOf(%T) = '%s', want '%s'", tt.query, got, tt.want)
 		}
@@ -155,45 +156,45 @@ func TestQueryHandler_Error(t *testing.T) {
 }
 
 func TestQueryHandler_InterfaceSatisfaction(t *testing.T) {
-	var _ QueryHandler[*testQuery, *testQueryResult] = &testQueryHandler{}
-	var _ QueryHandler[*testFailingQuery, *testFailingQueryResult] = &testFailingQueryHandler{}
-	var _ QueryHandler[*testListQuery, *testListResult] = &testListQueryHandler{}
+	var _ query.QueryHandler[*testQuery, *testQueryResult] = &testQueryHandler{}
+	var _ query.QueryHandler[*testFailingQuery, *testFailingQueryResult] = &testFailingQueryHandler{}
+	var _ query.QueryHandler[*testListQuery, *testListResult] = &testListQueryHandler{}
 }
 
 func TestQuery_InterfaceEnforcement(t *testing.T) {
 	q := &testQuery{UserID: "1"}
-	var _ Query = q
+	var _ query.Query = q
 
-	if _, ok := any(q).(Query); !ok {
+	if _, ok := any(q).(query.Query); !ok {
 		t.Error("testQuery should implement Query interface")
 	}
 
 	plain := &struct{ Key string }{Key: "not-a-query"}
-	if _, ok := any(plain).(Query); ok {
+	if _, ok := any(plain).(query.Query); ok {
 		t.Error("plain struct should NOT implement Query interface")
 	}
 }
 
 func TestQueryNameOf_UnexportedType(t *testing.T) {
 	type internalQuery struct {
-		BaseQuery
+		query.BaseQuery
 		Filter string
 	}
 	q := &internalQuery{Filter: "test"}
-	name := QueryNameOf(q)
+	name := query.QueryNameOf(q)
 	if name != "internalQuery" {
 		t.Errorf("expected 'internalQuery', got '%s'", name)
 	}
 }
 
 func TestBaseQuery_MarkerMethod(t *testing.T) {
-	var q Query = BaseQuery{}
-	q.isQuery()
+	var q query.Query = query.BaseQuery{}
+	_ = q
 }
 
 func TestQueryNameOf_ReflectTypeConsistency(t *testing.T) {
 	q := &testQuery{UserID: "1"}
-	ptrName := QueryNameOf(q)
+	ptrName := query.QueryNameOf(q)
 
 	var zero *testQuery
 	typeName := reflect.TypeOf(zero).Elem().Name()
@@ -218,9 +219,7 @@ func TestQueryHandler_ContextPropagation(t *testing.T) {
 
 func TestQuery_WithCustomIsQuery(t *testing.T) {
 	type customQuery struct{ id int }
-	// customQuery does NOT embed BaseQuery, so it doesn't implement Query
-	// unless isQuery() is added. This test verifies the marker interface pattern.
-	if _, ok := any(&customQuery{}).(Query); ok {
+	if _, ok := any(&customQuery{}).(query.Query); ok {
 		t.Error("type without isQuery() should NOT satisfy Query")
 	}
 }

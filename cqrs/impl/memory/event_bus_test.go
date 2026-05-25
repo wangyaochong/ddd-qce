@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type testUserEvent struct {
@@ -60,7 +60,7 @@ func (h *testErrorEventHandlerV2) Handle(ctx context.Context, evt *testUserEvent
 
 func TestEventBus_SubscribeAndPublish(t *testing.T) {
 	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
-	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
@@ -73,8 +73,8 @@ func TestEventBus_MultipleHandlers(t *testing.T) {
 	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
 	sub1 := &testUserEventHandler{}
 	sub2 := &testUserEventHandler{}
-	RegisterHandler[*testUserEvent](bus, sub1)
-	RegisterHandler[*testUserEvent](bus, sub2)
+	RegisterEvent[*testUserEvent](bus, sub1)
+	RegisterEvent[*testUserEvent](bus, sub2)
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
@@ -90,8 +90,8 @@ func TestEventBus_MultipleHandlers(t *testing.T) {
 func TestEventBus_HandlerError(t *testing.T) {
 	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
 	okHandler := &testUserEventHandler{}
-	RegisterHandler[*testUserEvent](bus, okHandler)
-	RegisterHandler[*testUserEvent](bus, &testErrorEventHandler{})
+	RegisterEvent[*testUserEvent](bus, okHandler)
+	RegisterEvent[*testUserEvent](bus, &testErrorEventHandler{})
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
@@ -107,7 +107,7 @@ func TestEventBus_HandlerError(t *testing.T) {
 func TestEventBus_Concurrent(t *testing.T) {
 	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
 	handler := &testUserEventHandler{}
-	RegisterHandler[*testUserEvent](bus, handler)
+	RegisterEvent[*testUserEvent](bus, handler)
 
 	ctx := context.Background()
 	var wg sync.WaitGroup
@@ -135,7 +135,7 @@ func TestEventBus_Concurrent(t *testing.T) {
 
 func TestEventBus_NilChain(t *testing.T) {
 	bus := NewEventBus()
-	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
@@ -153,7 +153,7 @@ func TestEventBus_WithAspects(t *testing.T) {
 	})
 
 	bus := NewEventBus(WithBusAspectChain(chain))
-	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
@@ -174,14 +174,14 @@ func TestEventBus_MultipleEventTypes(t *testing.T) {
 	userHandler := &testUserEventHandler{}
 	orderHandler := &testOrderEventHandler{}
 
-	RegisterHandler[*testUserEvent](bus, userHandler)
-	RegisterHandler[*testOrderEvent](bus, orderHandler)
+	RegisterEvent[*testUserEvent](bus, userHandler)
+	RegisterEvent[*testOrderEvent](bus, orderHandler)
 
 	ctx := context.Background()
 
-	Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("u1", time.Now())})
-	Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{BaseEvent: event.NewBaseEvent("o1", time.Now())})
-	Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("u2", time.Now())})
+	event.Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("u1", time.Now())})
+	event.Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{BaseEvent: event.NewBaseEvent("o1", time.Now())})
+	event.Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("u2", time.Now())})
 
 	if userHandler.callCount != 2 {
 		t.Errorf("expected userHandler called 2 times, got %d", userHandler.callCount)
@@ -194,10 +194,10 @@ func TestEventBus_MultipleEventTypes(t *testing.T) {
 func TestEventBus_DifferentEventTypesIsolated(t *testing.T) {
 	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
 	handler := &testUserEventHandler{}
-	RegisterHandler[*testUserEvent](bus, handler)
+	RegisterEvent[*testUserEvent](bus, handler)
 
 	ctx := context.Background()
-	err := Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+	err := event.Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -212,12 +212,12 @@ func TestEventBus_PublishRoutesCorrectly(t *testing.T) {
 	userHandler := &testUserEventHandler{}
 	orderHandler := &testOrderEventHandler{}
 
-	RegisterHandler[*testUserEvent](bus, userHandler)
-	RegisterHandler[*testOrderEvent](bus, orderHandler)
+	RegisterEvent[*testUserEvent](bus, userHandler)
+	RegisterEvent[*testOrderEvent](bus, orderHandler)
 
 	ctx := context.Background()
 
-	err := Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+	err := event.Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestEventBus_PublishRoutesCorrectly(t *testing.T) {
 		t.Error("orderHandler should not have been called")
 	}
 
-	err = Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+	err = event.Dispatch[*testOrderEvent](ctx, bus, &testOrderEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -240,11 +240,11 @@ func TestEventBus_PublishRoutesCorrectly(t *testing.T) {
 func TestEventBus_DuplicateSubscription_ReturnsError(t *testing.T) {
 	bus := NewEventBus()
 	handler := &testUserEventHandler{}
-	if err := RegisterHandler[*testUserEvent](bus, handler); err != nil {
+	if err := RegisterEvent[*testUserEvent](bus, handler); err != nil {
 		t.Fatalf("first subscription should succeed: %v", err)
 	}
 
-	err := RegisterHandler[*testUserEvent](bus, handler)
+	err := RegisterEvent[*testUserEvent](bus, handler)
 	if err == nil {
 		t.Fatal("expected error for duplicate subscription")
 	}
@@ -252,10 +252,10 @@ func TestEventBus_DuplicateSubscription_ReturnsError(t *testing.T) {
 
 func TestEventBus_NilChainGroup(t *testing.T) {
 	bus := NewEventBus()
-	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
-	err := Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+	err := event.Dispatch[*testUserEvent](ctx, bus, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -285,8 +285,8 @@ type multiError interface{ Unwrap() []error }
 
 func TestEventBus_MultipleHandlerErrors(t *testing.T) {
 	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
-	RegisterHandler[*testUserEvent](bus, &testErrorEventHandler{})
-	RegisterHandler[*testUserEvent](bus, &testErrorEventHandlerV2{})
+	RegisterEvent[*testUserEvent](bus, &testErrorEventHandler{})
+	RegisterEvent[*testUserEvent](bus, &testErrorEventHandlerV2{})
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
@@ -306,7 +306,7 @@ func TestEventBus_MultipleHandlerErrors(t *testing.T) {
 
 func TestEventBus_SingleErrorNotMultiError(t *testing.T) {
 	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
-	RegisterHandler[*testUserEvent](bus, &testErrorEventHandler{})
+	RegisterEvent[*testUserEvent](bus, &testErrorEventHandler{})
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
@@ -329,9 +329,9 @@ func TestEventBus_AllHandlersCalledConcurrently(t *testing.T) {
 	h1 := &testUserEventHandler{}
 	h2 := &testUserEventHandler{}
 	h3 := &testUserEventHandler{}
-	RegisterHandler[*testUserEvent](bus, h1)
-	RegisterHandler[*testUserEvent](bus, h2)
-	RegisterHandler[*testUserEvent](bus, h3)
+	RegisterEvent[*testUserEvent](bus, h1)
+	RegisterEvent[*testUserEvent](bus, h2)
+	RegisterEvent[*testUserEvent](bus, h3)
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
@@ -368,9 +368,9 @@ func (h *testSlowEventHandler) Handle(ctx context.Context, evt *testUserEvent) e
 func TestEventBus_ConcurrentHandlersFaster(t *testing.T) {
 	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
 	delay := 50 * time.Millisecond
-	RegisterHandler[*testUserEvent](bus, &testSlowEventHandler{duration: delay, id: 1})
-	RegisterHandler[*testUserEvent](bus, &testSlowEventHandler{duration: delay, id: 2})
-	RegisterHandler[*testUserEvent](bus, &testSlowEventHandler{duration: delay, id: 3})
+	RegisterEvent[*testUserEvent](bus, &testSlowEventHandler{duration: delay, id: 1})
+	RegisterEvent[*testUserEvent](bus, &testSlowEventHandler{duration: delay, id: 2})
+	RegisterEvent[*testUserEvent](bus, &testSlowEventHandler{duration: delay, id: 3})
 
 	ctx := context.Background()
 	start := time.Now()
@@ -395,9 +395,9 @@ func TestEventBus_WithAspects_MultipleHandlers(t *testing.T) {
 	})
 
 	bus := NewEventBus(WithBusAspectChain(chain))
-	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
-	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
-	RegisterHandler[*testUserEvent](bus, &testUserEventHandler{})
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})

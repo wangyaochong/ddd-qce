@@ -2,15 +2,45 @@ package event
 
 import (
 	"context"
-
-	"github.com/ddd-qce/core/domain/event"
+	"reflect"
+	"time"
 )
 
-type EventBus interface {
-	SubscribeHandler(handler any) error
-	Publish(ctx context.Context, evt event.DomainEvent) error
+type BaseEvent struct {
+	aggregateID string
+	occurredAt  time.Time
 }
 
-func Dispatch[T event.DomainEvent](ctx context.Context, bus EventBus, evt T) error {
-	return bus.Publish(ctx, evt)
+func NewBaseEvent(aggregateID string, occurredAt time.Time) BaseEvent {
+	return BaseEvent{aggregateID: aggregateID, occurredAt: occurredAt}
+}
+
+func (e BaseEvent) AggregateID() string   { return e.aggregateID }
+func (e BaseEvent) OccurredAt() time.Time { return e.occurredAt }
+
+func (e *BaseEvent) SetBaseEvent(aggregateID string, occurredAt time.Time) {
+	e.aggregateID = aggregateID
+	e.occurredAt = occurredAt
+}
+
+func EventTypeOf(event any) string {
+	t := reflect.TypeOf(event)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t.Name()
+}
+
+type DomainEvent interface {
+	AggregateID() string
+	OccurredAt() time.Time
+}
+
+type EventHandler[T DomainEvent] interface {
+	Handle(ctx context.Context, event T) error
+}
+
+type EventSourceStore[T DomainEvent] interface {
+	Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error
+	Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error)
 }

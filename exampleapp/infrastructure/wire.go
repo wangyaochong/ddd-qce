@@ -6,13 +6,13 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
-	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/cmd"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
-	domainevent "github.com/ddd-qce/core/domain/event"
+	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	domainevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/infra"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
@@ -30,7 +30,7 @@ type AppContext struct {
 
 	OrderRepo        application.OrderRepositoryAdapter
 	EventSourcedRepo *application.OrderEventSourcedRepository
-	EventStore       domainevent.EventStore[domainevent.DomainEvent]
+	EventStore       domainevent.EventSourceStore[domainevent.DomainEvent]
 	Inventory        *domain.Inventory
 
 	MetricsRecorder *AppMetricsRecorder
@@ -58,10 +58,11 @@ func WireAppWithConfig(cfg *Config) (*AppContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	return WireAppWithStore(store)
+	recoveryEnabled := cfg.StoreType == StoreTypePostgreSQL
+	return WireAppWithStore(store, recoveryEnabled)
 }
 
-func WireAppWithStore(store *StoreComponents) (*AppContext, error) {
+func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext, error) {
 	backend := store.Backend
 
 	logger := NewAppLogger()
@@ -125,9 +126,15 @@ func WireAppWithStore(store *StoreComponents) (*AppContext, error) {
 		return nil, fmt.Errorf("register OrderCancelledInventoryHandler: %w", err)
 	}
 
-	jobManager := jobmemory.NewJobManager(backend.JobStore, cmdBus, jobmemory.WithStoreErrorHandler(func(ctx context.Context, storeErr *jobcore.StoreError) {
-		logger.Error("job store error: %v", storeErr)
-	}))
+	jobManagerOpts := []jobmemory.JobManagerOption{
+		jobmemory.WithStoreErrorHandler(func(ctx context.Context, storeErr *jobcore.StoreError) {
+			logger.Error("job store error: %v", storeErr)
+		}),
+	}
+	if recoveryEnabled {
+		jobManagerOpts = append(jobManagerOpts, jobmemory.WithRecovery())
+	}
+	jobManager := jobmemory.NewJobManager(backend.JobStore, cmdBus, jobManagerOpts...)
 
 	return &AppContext{
 		Chain:            chain,

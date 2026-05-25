@@ -1,4 +1,4 @@
-package event_test
+package impl
 
 import (
 	"context"
@@ -7,12 +7,11 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/cqrs/event"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	domainevent "github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/impl/memory"
 )
 
 type testEvent struct {
-	domainevent.BaseEvent
+	event.BaseEvent
 }
 
 type testEventHandler struct {
@@ -25,12 +24,12 @@ func (h *testEventHandler) Handle(ctx context.Context, evt *testEvent) error {
 }
 
 func TestEventBus_InterfaceSatisfied(t *testing.T) {
-	var _ event.EventBus = eventmemory.NewEventBus()
+	var _ event.EventBus = memory.NewEventBus()
 }
 
 func TestEventBus_SubscribeAndPublish(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	bus := memory.NewEventBus(memory.WithBusAspectChain(chain))
 
 	var _ event.EventBus = bus
 
@@ -38,7 +37,7 @@ func TestEventBus_SubscribeAndPublish(t *testing.T) {
 	bus.SubscribeHandler(handler)
 
 	ctx := context.Background()
-	err := event.Dispatch[*testEvent](ctx, bus, &testEvent{BaseEvent: domainevent.NewBaseEvent("agg-1", time.Now())})
+	err := event.Dispatch[*testEvent](ctx, bus, &testEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,5 +47,5 @@ func TestEventBus_SubscribeAndPublish(t *testing.T) {
 }
 
 func TestEventHandler_ImplementsDomainEventHandler(t *testing.T) {
-	var _ domainevent.EventHandler[*testEvent] = &testEventHandler{}
+	var _ event.EventHandler[*testEvent] = &testEventHandler{}
 }

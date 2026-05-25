@@ -7,29 +7,30 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 
 	ddderror "github.com/ddd-qce/core/error"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	corepg "github.com/ddd-qce/core/pg"
 )
 
-type EventStore[T event.DomainEvent] struct {
+type EventSourceStore[T event.DomainEvent] struct {
 	db      *sql.DB
 	pool    sync.Pool
 	newFunc func() T
 }
 
-type EventStoreOption[T event.DomainEvent] func(*EventStore[T])
+type EventSourceStoreOption[T event.DomainEvent] func(*EventSourceStore[T])
 
-func WithFactory[T event.DomainEvent](factory func() T) EventStoreOption[T] {
-	return func(s *EventStore[T]) { s.newFunc = factory }
+func WithFactory[T event.DomainEvent](factory func() T) EventSourceStoreOption[T] {
+	return func(s *EventSourceStore[T]) { s.newFunc = factory }
 }
 
-func NewEventStore[T event.DomainEvent](db *sql.DB, opts ...EventStoreOption[T]) (*EventStore[T], error) {
+func NewEventSourceStore[T event.DomainEvent](db *sql.DB, opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
 	var zero T
 	t := reflect.TypeOf(zero)
 
-	s := &EventStore[T]{
+	s := &EventSourceStore[T]{
 		db: db,
 	}
 
@@ -39,13 +40,13 @@ func NewEventStore[T event.DomainEvent](db *sql.DB, opts ...EventStoreOption[T])
 
 	if t == nil {
 		if s.newFunc == nil {
-			return nil, fmt.Errorf("PgEventStore[T]: WithFactory is required when T is an interface type")
+			return nil, fmt.Errorf("PgEventSourceStore[T]: WithFactory is required when T is an interface type")
 		}
 		return s, nil
 	}
 
 	if t.Kind() != reflect.Ptr {
-		return nil, fmt.Errorf("PgEventStore[T]: T must be a pointer type, got %v", t)
+		return nil, fmt.Errorf("PgEventSourceStore[T]: T must be a pointer type, got %v", t)
 	}
 
 	if s.newFunc != nil {
@@ -60,7 +61,7 @@ func NewEventStore[T event.DomainEvent](db *sql.DB, opts ...EventStoreOption[T])
 
 	if v := s.pool.Get(); v != nil {
 		if _, ok := v.(T); !ok {
-			return nil, fmt.Errorf("PgEventStore[T]: pool New returned unexpected type %T, expected %T", v, zero)
+			return nil, fmt.Errorf("PgEventSourceStore[T]: pool New returned unexpected type %T, expected %T", v, zero)
 		}
 		s.pool.Put(v)
 	}
@@ -75,19 +76,19 @@ func isUniqueViolation(err error) bool {
 	return false
 }
 
-func (s *EventStore[T]) alloc() (T, error) {
+func (s *EventSourceStore[T]) alloc() (T, error) {
 	if s.newFunc != nil {
 		return s.newFunc(), nil
 	}
 	v, ok := s.pool.Get().(T)
 	if !ok {
 		var zero T
-		return zero, fmt.Errorf("PgEventStore[T]: pool returned unexpected type, expected %T", zero)
+		return zero, fmt.Errorf("PgEventSourceStore[T]: pool returned unexpected type, expected %T", zero)
 	}
 	return v, nil
 }
 
-func (s *EventStore[T]) Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error {
+func (s *EventSourceStore[T]) Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error {
 	q := corepg.GetQuerier(ctx, s.db)
 	for i, evt := range events {
 		data, err := json.Marshal(evt)
@@ -110,10 +111,10 @@ func (s *EventStore[T]) Append(ctx context.Context, aggregateID string, expected
 	return nil
 }
 
-func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error) {
+func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error) {
 	q := corepg.GetQuerier(ctx, s.db)
 	rows, err := q.QueryContext(ctx,
-		`SELECT event_data FROM ddd_domain_events
+		`SELECT event_data, aggregate_id, occurred_at FROM ddd_domain_events
 		 WHERE aggregate_id = $1 AND version > $2
 		 ORDER BY version`,
 		aggregateID, afterVersion,
@@ -126,7 +127,9 @@ func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersi
 	result := make([]T, 0)
 	for rows.Next() {
 		var data []byte
-		if err := rows.Scan(&data); err != nil {
+		var aggID string
+		var occurredAt time.Time
+		if err := rows.Scan(&data, &aggID, &occurredAt); err != nil {
 			return nil, fmt.Errorf("scan event: %w", err)
 		}
 		evt, err := s.alloc()
@@ -136,10 +139,33 @@ func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersi
 		if err := json.Unmarshal(data, evt); err != nil {
 			return nil, fmt.Errorf("unmarshal event: %w", err)
 		}
+		restoreBaseEvent(evt, aggID, occurredAt)
 		result = append(result, evt)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate events: %w", err)
 	}
 	return result, nil
+}
+
+func restoreBaseEvent(evt any, aggregateID string, occurredAt time.Time) {
+	v := reflect.ValueOf(evt)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return
+	}
+	field := v.FieldByName("BaseEvent")
+	if !field.IsValid() || field.Kind() != reflect.Struct {
+		return
+	}
+	setter := field.Addr().MethodByName("SetBaseEvent")
+	if !setter.IsValid() {
+		return
+	}
+	setter.Call([]reflect.Value{
+		reflect.ValueOf(aggregateID),
+		reflect.ValueOf(occurredAt),
+	})
 }

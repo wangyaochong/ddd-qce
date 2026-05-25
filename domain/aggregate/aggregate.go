@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ddd-qce/core/domain/entity"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type EventApplier interface {
@@ -58,7 +58,7 @@ func (a *AggregateRoot) Equals(other *AggregateRoot) bool {
 	if a == nil || other == nil {
 		return a == other
 	}
-	return a.GetID() == other.GetID()
+	return a.ID() == other.ID()
 }
 
 func (a *AggregateRoot) Version() int {

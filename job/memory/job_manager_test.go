@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/command"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+	"github.com/ddd-qce/core/cqrs/cmd"
+	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
 )
 
 type testLongCommand struct {
-	command.BaseCommand
+	cmd.BaseCommand
 	Duration time.Duration
 }
 
@@ -674,4 +674,79 @@ func TestJobManager_StoreErrorHandler_NoHandler(t *testing.T) {
 	}
 
 	time.Sleep(300 * time.Millisecond)
+}
+
+func TestJobManager_Recovery_PendingReExecuted(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestCommandBus(10 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus, WithRecovery())
+
+	ctx := context.Background()
+
+	pendingJob := jobcore.NewJob("pending-recover-test", &testLongCommand{Duration: 10 * time.Millisecond})
+	pendingJob.SetStatus(jobcore.JobStatusPending)
+	if err := store.Create(ctx, pendingJob); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	status, err := manager.GetStatus(ctx, "pending-recover-test")
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.GetStatus() != jobcore.JobStatusCompleted {
+		t.Errorf("expected completed after recovery, got %s", status.GetStatus())
+	}
+}
+
+func TestJobManager_Recovery_RunningMarkedFailed(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestCommandBus(10 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus, WithRecovery())
+
+	ctx := context.Background()
+
+	runningJob := jobcore.NewJob("running-recover-test", &testLongCommand{Duration: 10 * time.Millisecond})
+	runningJob.SetStatus(jobcore.JobStatusRunning)
+	if err := store.Create(ctx, runningJob); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	status, err := manager.GetStatus(ctx, "running-recover-test")
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.GetStatus() != jobcore.JobStatusFailed {
+		t.Errorf("expected failed after recovery, got %s", status.GetStatus())
+	}
+	if status.GetError() == "" {
+		t.Error("expected error message for recovered running job")
+	}
+}
+
+func TestJobManager_Recovery_NoRecoveryOption(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestCommandBus(10 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+
+	pendingJob := jobcore.NewJob("no-recovery-test", &testLongCommand{Duration: 10 * time.Millisecond})
+	pendingJob.SetStatus(jobcore.JobStatusPending)
+	if err := store.Create(ctx, pendingJob); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	status, err := manager.GetStatus(ctx, "no-recovery-test")
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.GetStatus() != jobcore.JobStatusPending {
+		t.Errorf("expected pending (no recovery), got %s", status.GetStatus())
+	}
 }

@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/command"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+	"github.com/ddd-qce/core/cqrs/cmd"
+	eventbus "github.com/ddd-qce/core/cqrs/event"
+	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/query"
-	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
-	"github.com/ddd-qce/core/domain/event"
+	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type User struct {
@@ -125,7 +126,7 @@ func (h *testCreateUserHandler) Handle(ctx context.Context, cmd *testCreateUserC
 	if err := h.repo.Save(user); err != nil {
 		return nil, err
 	}
-	eventmemory.Dispatch[*testUserCreatedEvent](ctx, h.eventBus, &testUserCreatedEvent{
+	eventbus.Dispatch(ctx, h.eventBus, &testUserCreatedEvent{
 		BaseEvent: event.NewBaseEvent(user.ID, time.Now()),
 		Name:            user.Name,
 	})
@@ -229,10 +230,10 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 
 	commandmemory.RegisterCommand(cmdBus, createHandler)
 	commandmemory.RegisterCommand(cmdBus, updateHandler)
-	eventmemory.RegisterHandler[*testUserCreatedEvent](eventBus, eventHandler)
+	eventmemory.RegisterEvent[*testUserCreatedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, getHandler)
 
-	result, err := commandmemory.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, cmdBus, &testCreateUserCommand{
+	result, err := cmd.Dispatch(ctx, cmdBus, &testCreateUserCommand{
 		UserID: "user-001",
 		Name:   "张三",
 		Email:  "zhangsan@example.com",
@@ -244,7 +245,7 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 		t.Error("user created event handler was not called")
 	}
 
-	_, err = commandmemory.Dispatch[*testUpdateUserCommand, *testUpdateUserResult](ctx, cmdBus, &testUpdateUserCommand{
+	_, err = cmd.Dispatch(ctx, cmdBus, &testUpdateUserCommand{
 		UserID: result.UserID,
 		Name:   "张三更新",
 	})
@@ -252,7 +253,7 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 		t.Fatalf("update user failed: %v", err)
 	}
 
-	qResult, err := querymemory.Dispatch[*testGetUserQuery, *testGetUserResult](ctx, qBus, &testGetUserQuery{
+	qResult, err := query.Dispatch(ctx, qBus, &testGetUserQuery{
 		UserID: result.UserID,
 	})
 	if err != nil {

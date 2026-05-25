@@ -10,12 +10,12 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
-	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/cmd"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	domainevent "github.com/ddd-qce/core/domain/event"
+	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	domainevent "github.com/ddd-qce/core/cqrs/event"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
 	"github.com/ddd-qce/core/trace"
@@ -114,8 +114,8 @@ func TestEventSourcingFullCycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("load failed: %v", err)
 		}
-		if loaded.GetID() != "ORD-ES-FULL" {
-			t.Errorf("expected ORD-ES-FULL, got %s", loaded.GetID())
+		if loaded.ID() != "ORD-ES-FULL" {
+			t.Errorf("expected ORD-ES-FULL, got %s", loaded.ID())
 		}
 		if loaded.UserID != "user-001" {
 			t.Errorf("expected user-001, got %s", loaded.UserID)
@@ -248,7 +248,7 @@ func TestRepositoryDelete(t *testing.T) {
 		if err != nil {
 			t.Fatalf("find failed: %v", err)
 		}
-		if found.GetID() != "ORD-DEL" {
+		if found.ID() != "ORD-DEL" {
 			t.Error("order not found")
 		}
 		app.OrderRepo.Delete(ctx, "ORD-DEL")

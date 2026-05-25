@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/command"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+	"github.com/ddd-qce/core/cqrs/cmd"
+	eventbus "github.com/ddd-qce/core/cqrs/event"
+	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/query"
-	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
-	"github.com/ddd-qce/core/domain/event"
+	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type testOrder struct {
@@ -87,10 +88,10 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 	queryHandler := &testGetOrderHandler{orders: orders}
 
 	commandmemory.RegisterCommand(cmdBus, &testCreateOrderHandler{})
-	eventmemory.RegisterHandler[*testOrderCreatedEvent](eventBus, eventHandler)
+	eventmemory.RegisterEvent[*testOrderCreatedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, queryHandler)
 
-	result, err := commandmemory.Dispatch[*testCreateOrderCommand, *testCreateOrderResult](ctx, cmdBus, &testCreateOrderCommand{
+	result, err := cmd.Dispatch(ctx, cmdBus, &testCreateOrderCommand{
 		UserID: "user-001",
 		Amount: 99.99,
 	})
@@ -108,7 +109,7 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 		Status: "created",
 	}
 
-	err = eventmemory.Dispatch[*testOrderCreatedEvent](ctx, eventBus, &testOrderCreatedEvent{
+	err = eventbus.Dispatch(ctx, eventBus, &testOrderCreatedEvent{
 		BaseEvent: event.NewBaseEvent(result.OrderID, time.Now()),
 		UserID:          "user-001",
 		Amount:          99.99,
@@ -120,7 +121,7 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 		t.Error("event handler was not called")
 	}
 
-	qResult, err := querymemory.Dispatch[*testGetOrderQuery, *testGetOrderResult](ctx, qBus, &testGetOrderQuery{
+	qResult, err := query.Dispatch(ctx, qBus, &testGetOrderQuery{
 		OrderID: result.OrderID,
 	})
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/repository"
 )
 
@@ -42,8 +42,8 @@ func TestRepositoryContract[T aggregate.AggregateRef](t *testing.T, repo reposit
 		if err != nil {
 			t.Fatalf("FindByID: %v", err)
 		}
-		if found.GetAggregateRoot().GetID() != "contract-1" {
-			t.Errorf("GetID() = %q, want %q", found.GetAggregateRoot().GetID(), "contract-1")
+		if found.GetAggregateRoot().ID() != "contract-1" {
+			t.Errorf("GetID() = %q, want %q", found.GetAggregateRoot().ID(), "contract-1")
 		}
 	})
 
@@ -127,8 +127,8 @@ func TestRepositoryContract[T aggregate.AggregateRef](t *testing.T, repo reposit
 		if err != nil {
 			t.Fatalf("FindByID after update: %v", err)
 		}
-		if again.GetAggregateRoot().GetID() != "contract-update" {
-			t.Errorf("GetID() = %q, want %q", again.GetAggregateRoot().GetID(), "contract-update")
+		if again.GetAggregateRoot().ID() != "contract-update" {
+			t.Errorf("GetID() = %q, want %q", again.GetAggregateRoot().ID(), "contract-update")
 		}
 	})
 }
@@ -150,8 +150,8 @@ func TestEventSourcingRepositoryContract[T aggregate.AggregateRef](t *testing.T,
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
-		if loaded.GetAggregateRoot().GetID() != "es-contract-1" {
-			t.Errorf("GetID() = %q, want %q", loaded.GetAggregateRoot().GetID(), "es-contract-1")
+		if loaded.GetAggregateRoot().ID() != "es-contract-1" {
+			t.Errorf("GetID() = %q, want %q", loaded.GetAggregateRoot().ID(), "es-contract-1")
 		}
 		if loaded.GetAggregateRoot().Version() != 1 {
 			t.Errorf("Version() = %d, want %d", loaded.GetAggregateRoot().Version(), 1)

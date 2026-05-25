@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/trace"
 )
 

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 func TestOrderAggregate_Place(t *testing.T) {
@@ -144,8 +144,8 @@ func TestOrderAggregate_When(t *testing.T) {
 
 func TestOrderItem_EntityBasics(t *testing.T) {
 	item := NewOrderItem("p1", "Laptop", 999, 2)
-	if item.GetID() != "p1" {
-		t.Errorf("expected p1, got %s", item.GetID())
+	if item.ID() != "p1" {
+		t.Errorf("expected p1, got %s", item.ID())
 	}
 	if item.Subtotal() != 1998 {
 		t.Errorf("expected 1998, got %.2f", item.Subtotal())

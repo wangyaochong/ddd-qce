@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	pgevent "github.com/ddd-qce/core/cqrs/event/pg"
+	pgevent "github.com/ddd-qce/core/cqrs/impl/pg"
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	pgrepo "github.com/ddd-qce/core/infra/repository/pg"
 	rep "github.com/ddd-qce/core/infra/repository"
 	"github.com/ddd-qce/core/domain/repository/repositorytest"
@@ -42,7 +42,7 @@ type testOrderJSON struct {
 
 func (o *testOrder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(testOrderJSON{
-		ID:     o.GetID(),
+		ID:     o.ID(),
 		Name:   o.Name,
 		Amount: o.Amount,
 	})
@@ -66,8 +66,8 @@ type testOrderEvent struct {
 func (e *testOrderEvent) AggregateID() string   { return e.BaseEvent.AggregateID() }
 func (e *testOrderEvent) OccurredAt() time.Time { return e.BaseEvent.OccurredAt() }
 
-func newEventStore(db *sql.DB) *pgevent.EventStore[event.DomainEvent] {
-	store, err := pgevent.NewEventStore[event.DomainEvent](
+func newEventStore(db *sql.DB) *pgevent.EventSourceStore[event.DomainEvent] {
+	store, err := pgevent.NewEventSourceStore[event.DomainEvent](
 		db,
 		pgevent.WithFactory[event.DomainEvent](func() event.DomainEvent {
 			return &testOrderEvent{}
@@ -99,7 +99,7 @@ func TestPgEventSourcedRepository_Contract(t *testing.T) {
 	repositorytest.TestEventSourcingRepositoryContract(t, repo,
 		func(id string) *testOrder { return newTestOrder(id) },
 		func(agg *testOrder) {
-			agg.Apply(&testOrderEvent{BaseEvent: event.NewBaseEvent(agg.GetID(), time.Now())})
+			agg.Apply(&testOrderEvent{BaseEvent: event.NewBaseEvent(agg.ID(), time.Now())})
 		},
 	)
 }
@@ -121,8 +121,8 @@ func TestPgRepository_SaveAndFindByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByID failed: %v", err)
 	}
-	if found.GetID() != "order-1" {
-		t.Errorf("expected ID 'order-1', got %s", found.GetID())
+	if found.ID() != "order-1" {
+		t.Errorf("expected ID 'order-1', got %s", found.ID())
 	}
 	if found.Name != "test order" {
 		t.Errorf("expected Name 'test order', got %s", found.Name)
@@ -272,8 +272,8 @@ func TestPgEventSourcedRepository_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	if loaded.GetID() != "order-es-1" {
-		t.Errorf("expected ID 'order-es-1', got %s", loaded.GetID())
+	if loaded.ID() != "order-es-1" {
+		t.Errorf("expected ID 'order-es-1', got %s", loaded.ID())
 	}
 	if loaded.Version() != 1 {
 		t.Errorf("expected version 1, got %d", loaded.Version())
@@ -336,8 +336,8 @@ func TestPgEventSourcedRepository_Snapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	if loaded.GetID() != "order-snap" {
-		t.Errorf("expected ID 'order-snap', got %s", loaded.GetID())
+	if loaded.ID() != "order-snap" {
+		t.Errorf("expected ID 'order-snap', got %s", loaded.ID())
 	}
 	if loaded.Version() != 6 {
 		t.Errorf("expected version 6 after load, got %d", loaded.Version())

@@ -6,7 +6,7 @@ import (
 
 	"github.com/ddd-qce/core/domain/aggregate"
 	"github.com/ddd-qce/core/domain/entity"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type OrderStatus string
@@ -64,7 +64,7 @@ func NewOrder(id, userID string, items []*OrderItem) (*Order, error) {
 	}
 	o.TotalAmount = o.calculateTotal()
 	if err := o.Apply(&OrderPlacedEvent{
-		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
+		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
 		UserID:          o.UserID,
 		TotalAmount:     o.TotalAmount,
 		Items:           o.ItemNames(),
@@ -106,10 +106,10 @@ func (o *Order) When(evt event.DomainEvent) {
 
 func (o *Order) ConfirmPayment() error {
 	if o.Status != OrderStatusPending {
-		return fmt.Errorf("order %s cannot be confirmed payment (status: %s)", o.GetID(), o.Status)
+		return fmt.Errorf("order %s cannot be confirmed payment (status: %s)", o.ID(), o.Status)
 	}
 	if err := o.Apply(&PaymentConfirmedEvent{
-		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
+		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
 	}); err != nil {
 		return err
 	}
@@ -118,10 +118,10 @@ func (o *Order) ConfirmPayment() error {
 
 func (o *Order) Ship() error {
 	if o.Status != OrderStatusPaid {
-		return fmt.Errorf("order %s cannot be shipped (status: %s)", o.GetID(), o.Status)
+		return fmt.Errorf("order %s cannot be shipped (status: %s)", o.ID(), o.Status)
 	}
 	if err := o.Apply(&OrderShippedEvent{
-		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
+		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
 	}); err != nil {
 		return err
 	}
@@ -130,13 +130,13 @@ func (o *Order) Ship() error {
 
 func (o *Order) Cancel(reason string) error {
 	if o.Status == OrderStatusCancelled {
-		return fmt.Errorf("order %s already cancelled", o.GetID())
+		return fmt.Errorf("order %s already cancelled", o.ID())
 	}
 	if o.Status == OrderStatusShipped {
-		return fmt.Errorf("order %s already shipped, cannot cancel", o.GetID())
+		return fmt.Errorf("order %s already shipped, cannot cancel", o.ID())
 	}
 	if err := o.Apply(&OrderCancelledEvent{
-		BaseEvent: event.NewBaseEvent(o.GetID(), time.Now()),
+		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
 		Reason:          reason,
 	}); err != nil {
 		return err

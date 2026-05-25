@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/cmd"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
-	domainevent "github.com/ddd-qce/core/domain/event"
+	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	domainevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/exampleapp/domain"
 )
 
@@ -200,8 +200,8 @@ func TestOrderRepository_CRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find failed: %v", err)
 	}
-	if found.GetID() != "ORD-CRUD" {
-		t.Errorf("expected ORD-CRUD, got %s", found.GetID())
+	if found.ID() != "ORD-CRUD" {
+		t.Errorf("expected ORD-CRUD, got %s", found.ID())
 	}
 	if err := repo.Delete(ctx, "ORD-CRUD"); err != nil {
 		t.Fatalf("delete failed: %v", err)
@@ -215,7 +215,7 @@ func TestOrderRepository_CRUD(t *testing.T) {
 func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 	_ = aspect.NewAspectChain()
 	repo := NewOrderRepository()
-	eventStore, err := eventmemory.NewEventStore[domainevent.DomainEvent]()
+	eventStore, err := eventmemory.NewEventSourceStore[domainevent.DomainEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -233,8 +233,8 @@ func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
-	if loaded.GetID() != "ORD-ES1" {
-		t.Errorf("expected ORD-ES1, got %s", loaded.GetID())
+	if loaded.ID() != "ORD-ES1" {
+		t.Errorf("expected ORD-ES1, got %s", loaded.ID())
 	}
 	if loaded.UserID != "user-001" {
 		t.Errorf("expected user-001, got %s", loaded.UserID)
@@ -244,7 +244,7 @@ func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 func TestEventSourcedRepo_LoadFromHistory(t *testing.T) {
 	_ = aspect.NewAspectChain()
 	repo := NewOrderRepository()
-	eventStore, err := eventmemory.NewEventStore[domainevent.DomainEvent]()
+	eventStore, err := eventmemory.NewEventSourceStore[domainevent.DomainEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestEventSourcedRepo_LoadFromHistory(t *testing.T) {
 
 func TestEventSourcedRepo_MultipleEventTypes(t *testing.T) {
 	repo := NewOrderRepository()
-	eventStore, err := eventmemory.NewEventStore[domainevent.DomainEvent]()
+	eventStore, err := eventmemory.NewEventSourceStore[domainevent.DomainEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type testDomainEvent struct {
@@ -13,8 +13,8 @@ type testDomainEvent struct {
 
 func TestNewEventCollector_Initial(t *testing.T) {
 	agg := NewEventCollector("order-1")
-	if agg.GetID() != "order-1" {
-		t.Errorf("expected ID 'order-1', got '%s'", agg.GetID())
+	if agg.ID() != "order-1" {
+		t.Errorf("expected ID 'order-1', got '%s'", agg.ID())
 	}
 	if agg.Version() != 0 {
 		t.Errorf("expected version 0, got %d", agg.Version())

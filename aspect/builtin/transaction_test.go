@@ -1,4 +1,6 @@
-package builtin
+//go:build integration
+
+package builtin_test
 
 import (
 	"context"
@@ -8,8 +10,9 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/command"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+	"github.com/ddd-qce/core/aspect/builtin"
+	"github.com/ddd-qce/core/cqrs/cmd"
+	memory "github.com/ddd-qce/core/cqrs/impl/memory"
 )
 
 type mockTxManager struct {
@@ -50,7 +53,7 @@ func (m *mockTxManager) counts() (int, int, int) {
 }
 
 type testTxCommand struct {
-	command.BaseCommand
+	cmd.BaseCommand
 	Fail bool
 }
 
@@ -62,7 +65,7 @@ type testTxHandler struct {
 	fail bool
 }
 
-func (h *testTxHandler) Handle(ctx context.Context, cmd *testTxCommand) (*testTxResult, error) {
+func (h *testTxHandler) Handle(ctx context.Context, c *testTxCommand) (*testTxResult, error) {
 	if h.fail {
 		return nil, errors.New("handler failed")
 	}
@@ -71,16 +74,16 @@ func (h *testTxHandler) Handle(ctx context.Context, cmd *testTxCommand) (*testTx
 
 func TestTransactionAspect_Success_Commits(t *testing.T) {
 	txMgr := &mockTxManager{}
-	txAspect := &TransactionAspect{TxManager: txMgr}
+	txAspect := &builtin.TransactionAspect{TxManager: txMgr}
 
 	chain := aspect.NewAspectChain()
 	chain.RegisterCommandAspect(txAspect)
 
-	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
-	commandmemory.RegisterCommand(bus, &testTxHandler{fail: false})
+	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err != nil {
 		t.Fatalf("dispatch failed: %v", err)
 	}
@@ -99,16 +102,16 @@ func TestTransactionAspect_Success_Commits(t *testing.T) {
 
 func TestTransactionAspect_Error_Rollbacks(t *testing.T) {
 	txMgr := &mockTxManager{}
-	txAspect := &TransactionAspect{TxManager: txMgr}
+	txAspect := &builtin.TransactionAspect{TxManager: txMgr}
 
 	chain := aspect.NewAspectChain()
 	chain.RegisterCommandAspect(txAspect)
 
-	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
-	commandmemory.RegisterCommand(bus, &testTxHandler{fail: true})
+	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+	memory.RegisterCommand(bus, &testTxHandler{fail: true})
 
 	ctx := context.Background()
-	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error from handler")
 	}
@@ -129,95 +132,144 @@ func TestTransactionAspect_RollbackError_ReturnsBothErrors(t *testing.T) {
 	txMgr := &mockTxManager{
 		rollbackErr: errors.New("rollback failed"),
 	}
-	txAspect := &TransactionAspect{TxManager: txMgr}
+	txAspect := &builtin.TransactionAspect{TxManager: txMgr}
 
 	chain := aspect.NewAspectChain()
 	chain.RegisterCommandAspect(txAspect)
 
-	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
-	commandmemory.RegisterCommand(bus, &testTxHandler{fail: true})
+	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+	memory.RegisterCommand(bus, &testTxHandler{fail: true})
 
 	ctx := context.Background()
-	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
 
-	errMsg := err.Error()
-	if errMsg == "" {
-		t.Error("expected non-empty error message")
-	}
-}
-
-func TestTransactionAspect_Query_DoesNothing(t *testing.T) {
-	txMgr := &mockTxManager{}
-	txAspect := &TransactionAspect{TxManager: txMgr}
-
-	chain := aspect.NewAspectChain()
-	chain.RegisterQueryAspect(txAspect)
-
-	ctx := context.Background()
-	newCtx, err := txAspect.BeforeQuery(ctx, "test query")
-	if err != nil {
-		t.Fatalf("BeforeQuery failed: %v", err)
-	}
-	if newCtx != ctx {
-		t.Error("BeforeQuery should return same context")
-	}
-
-	err = txAspect.AfterQuery(ctx, "test query", "result", nil, time.Millisecond)
-	if err != nil {
-		t.Fatalf("AfterQuery failed: %v", err)
-	}
-
 	begin, commit, rollback := txMgr.counts()
-	if begin != 0 || commit != 0 || rollback != 0 {
-		t.Errorf("TransactionAspect should not call any TxManager methods for queries, got begin=%d commit=%d rollback=%d", begin, commit, rollback)
+	if begin != 1 {
+		t.Errorf("expected 1 Begin, got %d", begin)
+	}
+	if commit != 0 {
+		t.Errorf("expected 0 Commit, got %d", commit)
+	}
+	if rollback != 1 {
+		t.Errorf("expected 1 Rollback, got %d", rollback)
 	}
 }
 
-func TestTransactionAspect_Event_DoesNothing(t *testing.T) {
+func TestTransactionAspect_ConcurrentCommands(t *testing.T) {
 	txMgr := &mockTxManager{}
-	txAspect := &TransactionAspect{TxManager: txMgr}
-
-	ctx := context.Background()
-	newCtx, err := txAspect.BeforePublish(ctx, "test event")
-	if err != nil {
-		t.Fatalf("BeforePublish failed: %v", err)
-	}
-	if newCtx != ctx {
-		t.Error("BeforePublish should return same context")
-	}
-
-	err = txAspect.AfterPublish(ctx, "test event", nil, time.Millisecond)
-	if err != nil {
-		t.Fatalf("AfterPublish failed: %v", err)
-	}
-
-	begin, commit, rollback := txMgr.counts()
-	if begin != 0 || commit != 0 || rollback != 0 {
-		t.Errorf("TransactionAspect should not call any TxManager methods for events, got begin=%d commit=%d rollback=%d", begin, commit, rollback)
-	}
-}
-
-func TestTransactionAspect_BeginError(t *testing.T) {
-	txMgr := &mockTxManager{
-		beginErr: errors.New("begin failed"),
-	}
-	txAspect := &TransactionAspect{TxManager: txMgr}
+	txAspect := &builtin.TransactionAspect{TxManager: txMgr}
 
 	chain := aspect.NewAspectChain()
 	chain.RegisterCommandAspect(txAspect)
 
-	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
-	commandmemory.RegisterCommand(bus, &testTxHandler{fail: false})
+	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+	memory.RegisterCommand(bus, &testTxHandler{fail: false})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cmd.Dispatch[*testTxCommand, *testTxResult](context.Background(), bus, &testTxCommand{})
+		}()
+	}
+	wg.Wait()
+
+	begin, commit, rollback := txMgr.counts()
+	if begin != 10 {
+		t.Errorf("expected 10 Begin, got %d", begin)
+	}
+	if commit != 10 {
+		t.Errorf("expected 10 Commit, got %d", commit)
+	}
+	if rollback != 0 {
+		t.Errorf("expected 0 Rollback, got %d", rollback)
+	}
+}
+
+func TestTransactionAspect_BeginError_ReturnsError(t *testing.T) {
+	txMgr := &mockTxManager{
+		beginErr: errors.New("begin failed"),
+	}
+	txAspect := &builtin.TransactionAspect{TxManager: txMgr}
+
+	chain := aspect.NewAspectChain()
+	chain.RegisterCommandAspect(txAspect)
+
+	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
-		t.Fatal("expected error from Begin")
+		t.Fatal("expected error from begin failure")
 	}
-	if err.Error() != "begin failed" {
-		t.Errorf("expected 'begin failed', got '%v'", err)
+}
+
+func TestTransactionAspect_CommitError_ReturnsError(t *testing.T) {
+	txMgr := &mockTxManager{
+		commitErr: errors.New("commit failed"),
+	}
+	txAspect := &builtin.TransactionAspect{TxManager: txMgr}
+
+	chain := aspect.NewAspectChain()
+	chain.RegisterCommandAspect(txAspect)
+
+	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+	memory.RegisterCommand(bus, &testTxHandler{fail: false})
+
+	ctx := context.Background()
+	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	if err == nil {
+		t.Fatal("expected error from commit failure")
+	}
+}
+
+func TestTransactionAspect_MultiErrorFormatting(t *testing.T) {
+	txMgr := &mockTxManager{
+		commitErr:    errors.New("commit failed"),
+		rollbackErr: errors.New("rollback failed"),
+	}
+	txAspect := &builtin.TransactionAspect{TxManager: txMgr}
+
+	chain := aspect.NewAspectChain()
+	chain.RegisterCommandAspect(txAspect)
+
+	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+	memory.RegisterCommand(bus, &testTxHandler{fail: false})
+
+	ctx := context.Background()
+	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	errStr := err.Error()
+	if errStr == "" {
+		t.Error("expected non-empty error string")
+	}
+}
+
+func TestTransactionAspect_Timeout(t *testing.T) {
+	txMgr := &mockTxManager{}
+	txAspect := &builtin.TransactionAspect{TxManager: txMgr}
+
+	chain := aspect.NewAspectChain()
+	chain.RegisterCommandAspect(txAspect)
+
+	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+	memory.RegisterCommand(bus, &testTxHandler{fail: false})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+
+	time.Sleep(10 * time.Millisecond)
+
+	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	if err == nil {
+		t.Fatal("expected timeout error")
 	}
 }

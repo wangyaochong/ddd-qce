@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/cmd"
 	"github.com/ddd-qce/core/cqrs/query"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 	"github.com/ddd-qce/exampleapp/application"

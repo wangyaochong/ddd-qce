@@ -23,8 +23,8 @@ type testGetUserResult struct {
 
 type testGetUserHandler struct{}
 
-func (h *testGetUserHandler) Handle(ctx context.Context, query *testGetUserQuery) (*testGetUserResult, error) {
-	return &testGetUserResult{ID: query.UserID, Name: "test"}, nil
+func (h *testGetUserHandler) Handle(ctx context.Context, q *testGetUserQuery) (*testGetUserResult, error) {
+	return &testGetUserResult{ID: q.UserID, Name: "test"}, nil
 }
 
 type testListUsersQuery struct {
@@ -38,7 +38,7 @@ type testListUsersResult struct {
 
 type testListUsersHandler struct{}
 
-func (h *testListUsersHandler) Handle(ctx context.Context, query *testListUsersQuery) (*testListUsersResult, error) {
+func (h *testListUsersHandler) Handle(ctx context.Context, q *testListUsersQuery) (*testListUsersResult, error) {
 	return &testListUsersResult{Count: 10}, nil
 }
 
@@ -50,7 +50,7 @@ type testErrorQueryResult struct{}
 
 type testErrorQueryHandler struct{}
 
-func (h *testErrorQueryHandler) Handle(ctx context.Context, query *testErrorQuery) (*testErrorQueryResult, error) {
+func (h *testErrorQueryHandler) Handle(ctx context.Context, q *testErrorQuery) (*testErrorQueryResult, error) {
 	return nil, errors.New("query handler error")
 }
 
@@ -65,9 +65,9 @@ type testSlowQueryResult struct {
 
 type testSlowQueryHandler struct{}
 
-func (h *testSlowQueryHandler) Handle(ctx context.Context, query *testSlowQuery) (*testSlowQueryResult, error) {
+func (h *testSlowQueryHandler) Handle(ctx context.Context, q *testSlowQuery) (*testSlowQueryResult, error) {
 	select {
-	case <-time.After(query.Duration):
+	case <-time.After(q.Duration):
 		return &testSlowQueryResult{Done: true}, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -80,7 +80,7 @@ func TestQueryBus_Ask(t *testing.T) {
 	RegisterQuery(bus, &testGetUserHandler{})
 
 	ctx := context.Background()
-	result, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
+	result, err := query.Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -95,7 +95,7 @@ func TestQueryBus_Ask_NoHandler(t *testing.T) {
 	bus := NewQueryBus(WithQueryBusAspectChain(chain))
 
 	ctx := context.Background()
-	_, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
+	_, err := query.Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
 
 	if err == nil {
 		t.Fatal("expected error for unregistered query type")
@@ -110,7 +110,7 @@ func TestQueryBus_MultipleHandlers(t *testing.T) {
 
 	ctx := context.Background()
 
-	r1, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "1"})
+	r1, err := query.Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "1"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestQueryBus_MultipleHandlers(t *testing.T) {
 		t.Errorf("unexpected result: %v", r1)
 	}
 
-	r2, err := Dispatch[*testListUsersQuery, *testListUsersResult](ctx, bus, &testListUsersQuery{Page: 1})
+	r2, err := query.Dispatch[*testListUsersQuery, *testListUsersResult](ctx, bus, &testListUsersQuery{Page: 1})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestQueryBus_HandlerError(t *testing.T) {
 	RegisterQuery(bus, &testErrorQueryHandler{})
 
 	ctx := context.Background()
-	_, err := Dispatch[*testErrorQuery, *testErrorQueryResult](ctx, bus, &testErrorQuery{})
+	_, err := query.Dispatch[*testErrorQuery, *testErrorQueryResult](ctx, bus, &testErrorQuery{})
 
 	if err == nil {
 		t.Fatal("expected error from handler")
@@ -156,7 +156,7 @@ func TestQueryBus_Concurrent(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			_, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: string(rune(id))})
+			_, err := query.Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: string(rune(id))})
 			if err != nil {
 				errs <- err
 			}
@@ -176,7 +176,7 @@ func TestQueryBus_NilChain(t *testing.T) {
 	RegisterQuery(bus, &testGetUserHandler{})
 
 	ctx := context.Background()
-	result, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
+	result, err := query.Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -200,7 +200,7 @@ func TestQueryBus_WithAspects(t *testing.T) {
 	RegisterQuery(bus, &testGetUserHandler{})
 
 	ctx := context.Background()
-	_, err := Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
+	_, err := query.Dispatch[*testGetUserQuery, *testGetUserResult](ctx, bus, &testGetUserQuery{UserID: "123"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

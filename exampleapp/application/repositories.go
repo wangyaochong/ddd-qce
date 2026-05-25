@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/repository"
 	"github.com/ddd-qce/exampleapp/domain"
 )
@@ -29,7 +29,7 @@ func NewOrderRepository() *OrderRepository {
 func (r *OrderRepository) Save(ctx context.Context, order *domain.Order) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.orders[order.GetID()] = order
+	r.orders[order.ID()] = order
 	return nil
 }
 
@@ -66,12 +66,12 @@ func (r *OrderRepository) FindAll() []*domain.Order {
 var _ repository.Repository[*domain.Order] = (*OrderRepository)(nil)
 
 type OrderEventSourcedRepository struct {
-	eventStore event.EventStore[event.DomainEvent]
+	eventStore event.EventSourceStore[event.DomainEvent]
 	orderRepo  OrderRepositoryAdapter
 }
 
 func NewOrderEventSourcedRepository(
-	eventStore event.EventStore[event.DomainEvent],
+	eventStore event.EventSourceStore[event.DomainEvent],
 	orderRepo OrderRepositoryAdapter,
 ) *OrderEventSourcedRepository {
 	return &OrderEventSourcedRepository{
@@ -83,7 +83,7 @@ func NewOrderEventSourcedRepository(
 func (r *OrderEventSourcedRepository) Save(ctx context.Context, order *domain.Order) error {
 	uncommitted := order.UncommittedEvents()
 	if len(uncommitted) > 0 {
-		if err := r.eventStore.Append(ctx, order.GetID(), order.Version()-len(uncommitted), uncommitted); err != nil {
+		if err := r.eventStore.Append(ctx, order.ID(), order.Version()-len(uncommitted), uncommitted); err != nil {
 			return err
 		}
 		order.MarkEventsAsCommitted()

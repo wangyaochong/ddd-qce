@@ -10,7 +10,7 @@ import (
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
 	ddderror "github.com/ddd-qce/core/error"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	eventbus "github.com/ddd-qce/core/cqrs/event"
 )
 
@@ -168,13 +168,8 @@ func (b *EventBus) HandlerCount(evtType reflect.Type) int {
 	return len(b.handlers[evtType])
 }
 
-func RegisterHandler[T event.DomainEvent](bus *EventBus, handler event.EventHandler[T]) error {
+func RegisterEvent[T event.DomainEvent](bus *EventBus, handler event.EventHandler[T]) error {
 	return bus.SubscribeHandler(handler)
-}
-
-// Deprecated: Use event.Dispatch instead. memory.Dispatch will be removed in a future version.
-func Dispatch[T event.DomainEvent](ctx context.Context, bus *EventBus, evt T) error {
-	return bus.Publish(ctx, evt)
 }
 
 func extractEventHandlerEventType(handlerType reflect.Type) (reflect.Type, bool) {

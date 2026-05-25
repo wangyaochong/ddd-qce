@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ddd-qce/core/cqrs/command"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+	"github.com/ddd-qce/core/cqrs/cmd"
+	eventbus "github.com/ddd-qce/core/cqrs/event"
+	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/query"
-	querymemory "github.com/ddd-qce/core/cqrs/query/memory"
-	"github.com/ddd-qce/core/domain/event"
+	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/trace"
 )
 
@@ -32,7 +33,7 @@ type PlaceOrderHandler struct {
 func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) (*PlaceOrderResult, error) {
 	orderID := "ORD-" + time.Now().Format("20060102150405")
 
-	eventmemory.Dispatch[*OrderPlacedEvent](ctx, h.eventBus, &OrderPlacedEvent{
+	eventbus.Dispatch(ctx, h.eventBus, &OrderPlacedEvent{
 		BaseEvent: event.NewBaseEvent(orderID, time.Now()),
 		UserID:          cmd.UserID,
 		Product:         cmd.Product,
@@ -56,12 +57,12 @@ type OrderPlacedEventHandler struct {
 func (h *OrderPlacedEventHandler) Handle(ctx context.Context, event *OrderPlacedEvent) error {
 	fmt.Printf("  [EventHandler] Processing OrderPlaced for order %s\n", event.AggregateID())
 
-	commandmemory.Dispatch[*SendNotificationCommand, *SendNotificationResult](ctx, h.cmdBus, &SendNotificationCommand{
+	cmd.Dispatch(ctx, h.cmdBus, &SendNotificationCommand{
 		UserID:  event.UserID,
 		Message: fmt.Sprintf("Order %s placed: %s ($%.2f)", event.AggregateID(), event.Product, event.Amount),
 	})
 
-	commandmemory.Dispatch[*UpdateInventoryCommand, *UpdateInventoryResult](ctx, h.cmdBus, &UpdateInventoryCommand{
+	cmd.Dispatch(ctx, h.cmdBus, &UpdateInventoryCommand{
 		Product:  event.Product,
 		Quantity: 1,
 	})
@@ -124,7 +125,7 @@ func RegisterHandlers(cmdBus *commandmemory.CommandBus, eventBus *eventmemory.Ev
 	commandmemory.RegisterCommand(cmdBus, &SendNotificationHandler{})
 	commandmemory.RegisterCommand(cmdBus, &UpdateInventoryHandler{})
 
-	eventmemory.RegisterHandler[*OrderPlacedEvent](eventBus, &OrderPlacedEventHandler{cmdBus: cmdBus})
+	eventmemory.RegisterEvent[*OrderPlacedEvent](eventBus, &OrderPlacedEventHandler{cmdBus: cmdBus})
 
 	querymemory.RegisterQuery(qBus, &GetOrderStatusHandler{})
 }
@@ -138,7 +139,7 @@ func RunExample(ctx context.Context, cmdBus *commandmemory.CommandBus, eventBus 
 	fmt.Println()
 	fmt.Println("=== PlaceOrder (Command → Event → Commands) ===")
 
-	result, err := commandmemory.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
+	result, err := cmd.Dispatch(ctx, cmdBus, &PlaceOrderCommand{
 		UserID:  "user-001",
 		Product: "Laptop",
 		Amount:  999.99,
@@ -150,7 +151,7 @@ func RunExample(ctx context.Context, cmdBus *commandmemory.CommandBus, eventBus 
 
 	fmt.Println()
 	fmt.Println("=== GetOrderStatus (Query) ===")
-	qResult, err := querymemory.Dispatch[*GetOrderStatusQuery, *GetOrderStatusResult](ctx, qBus, &GetOrderStatusQuery{OrderID: result.OrderID})
+	qResult, err := query.Dispatch(ctx, qBus, &GetOrderStatusQuery{OrderID: result.OrderID})
 	if err != nil {
 		panic(err)
 	}

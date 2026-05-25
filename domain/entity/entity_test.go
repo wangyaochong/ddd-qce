@@ -7,8 +7,8 @@ import (
 
 func TestNewEntity(t *testing.T) {
 	e := NewEntity("user-1")
-	if e.GetID() != "user-1" {
-		t.Errorf("expected ID 'user-1', got '%s'", e.GetID())
+	if e.ID() != "user-1" {
+		t.Errorf("expected ID 'user-1', got '%s'", e.ID())
 	}
 }
 
@@ -97,7 +97,7 @@ func TestEntity_JSONRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(data, &e2); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
-	if e2.GetID() != "user-1" {
-		t.Errorf("expected ID 'user-1' after round trip, got '%s'", e2.GetID())
+	if e2.ID() != "user-1" {
+		t.Errorf("expected ID 'user-1' after round trip, got '%s'", e2.ID())
 	}
 }

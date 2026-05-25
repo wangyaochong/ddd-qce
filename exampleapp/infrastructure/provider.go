@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/ddd-qce/core/infra"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	eventpg "github.com/ddd-qce/core/cqrs/event/pg"
-	domainevent "github.com/ddd-qce/core/domain/event"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	eventpg "github.com/ddd-qce/core/cqrs/impl/pg"
+	domainevent "github.com/ddd-qce/core/cqrs/event"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/ddd-qce/exampleapp/application"
@@ -16,7 +16,7 @@ import (
 
 type StoreComponents struct {
 	Backend      *infra.Backend
-	EventStore   domainevent.EventStore[domainevent.DomainEvent]
+	EventStore   domainevent.EventSourceStore[domainevent.DomainEvent]
 	OrderRepo    application.OrderRepositoryAdapter
 	DB           *sql.DB
 }
@@ -47,8 +47,8 @@ func newMemoryProvider() (*StoreComponents, error) {
 	}, nil
 }
 
-func newMemoryEventStore() (domainevent.EventStore[domainevent.DomainEvent], error) {
-	return eventmemory.NewEventStore[domainevent.DomainEvent]()
+func newMemoryEventStore() (domainevent.EventSourceStore[domainevent.DomainEvent], error) {
+	return eventmemory.NewEventSourceStore[domainevent.DomainEvent]()
 }
 
 func newPgProvider(dsn string) (*StoreComponents, error) {
@@ -67,7 +67,7 @@ func newPgProvider(dsn string) (*StoreComponents, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
-	eventStore, err := eventpg.NewEventStore[domainevent.DomainEvent](db)
+	eventStore, err := eventpg.NewEventSourceStore[domainevent.DomainEvent](db)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create pg event store: %w", err)

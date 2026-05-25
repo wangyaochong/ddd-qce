@@ -9,8 +9,8 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	"github.com/ddd-qce/core/domain/event"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/event"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )
@@ -171,7 +171,7 @@ func (h *testEventHandler) Handle(ctx context.Context, evt *testDomainEvent) err
 }
 
 func TestEventStore_Reflect(t *testing.T) {
-	store, err := eventmemory.NewEventStore[*testDomainEvent]()
+	store, err := eventmemory.NewEventSourceStore[*testDomainEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestEventStore_Reflect(t *testing.T) {
 }
 
 func TestEventStoreWithFactory(t *testing.T) {
-	store, err := eventmemory.NewEventStore[*testDomainEvent](eventmemory.WithFactory[*testDomainEvent](func() *testDomainEvent {
+	store, err := eventmemory.NewEventSourceStore[*testDomainEvent](eventmemory.WithFactory[*testDomainEvent](func() *testDomainEvent {
 		return &testDomainEvent{}
 	}))
 	if err != nil {
@@ -205,7 +205,7 @@ func TestEventStoreWithFactory(t *testing.T) {
 }
 
 func TestEventStore_Versioning(t *testing.T) {
-	store, err := eventmemory.NewEventStore[*testDomainEvent]()
+	store, err := eventmemory.NewEventSourceStore[*testDomainEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}

@@ -1,4 +1,4 @@
-package eventtest
+package impl
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	ddderror "github.com/ddd-qce/core/error"
 )
 
@@ -22,7 +22,7 @@ func NewTestEvent(aggID, data string) *TestEvent {
 	}
 }
 
-func TestEventStoreContract(t *testing.T, newStore func() event.EventStore[*TestEvent]) {
+func TestEventStoreContract(t *testing.T, newStore func() event.EventSourceStore[*TestEvent]) {
 	t.Helper()
 
 	t.Run("AppendAndLoad", func(t *testing.T) {

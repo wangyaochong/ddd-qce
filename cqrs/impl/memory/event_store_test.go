@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ddd-qce/core/domain/event"
-	"github.com/ddd-qce/core/cqrs/event/eventtest"
+	"github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/impl"
 )
 
-var _ event.EventStore[*testStoreEvent] = (*EventStore[*testStoreEvent])(nil)
+var _ event.EventSourceStore[*testStoreEvent] = (*EventSourceStore[*testStoreEvent])(nil)
 
 type testStoreEvent struct {
 	event.BaseEvent
@@ -17,7 +17,7 @@ type testStoreEvent struct {
 }
 
 func TestEventStore_AppendAndLoad(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent]()
+	store, err := NewEventSourceStore[*testStoreEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestEventStore_AppendAndLoad(t *testing.T) {
 }
 
 func TestEventStore_LoadAfterVersion(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent]()
+	store, err := NewEventSourceStore[*testStoreEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestEventStore_LoadAfterVersion(t *testing.T) {
 }
 
 func TestEventStore_LoadNonExistentAggregate(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent]()
+	store, err := NewEventSourceStore[*testStoreEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestEventStore_LoadNonExistentAggregate(t *testing.T) {
 }
 
 func TestEventStore_AppendMultipleEvents(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent]()
+	store, err := NewEventSourceStore[*testStoreEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestEventStore_AppendMultipleEvents(t *testing.T) {
 }
 
 func TestEventStore_ConcurrencyConflict(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent]()
+	store, err := NewEventSourceStore[*testStoreEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestEventStore_ConcurrencyConflict(t *testing.T) {
 }
 
 func TestEventStore_MultipleAggregates(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent]()
+	store, err := NewEventSourceStore[*testStoreEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestEventStore_MultipleAggregates(t *testing.T) {
 }
 
 func TestEventStore_ConcurrentAppend(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent]()
+	store, err := NewEventSourceStore[*testStoreEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestEventStore_ConcurrentAppend(t *testing.T) {
 }
 
 func TestEventStore_LoadReturnsCopy(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent]()
+	store, err := NewEventSourceStore[*testStoreEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestEventStore_LoadReturnsCopy(t *testing.T) {
 }
 
 func TestEventStore_LoadAfterVersionBeyondRange(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent]()
+	store, err := NewEventSourceStore[*testStoreEvent]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -276,14 +276,14 @@ type testValueEvent struct {
 }
 
 func TestEventStore_NonPointerTypeReturnsError(t *testing.T) {
-	_, err := NewEventStore[testValueEvent]()
+	_, err := NewEventSourceStore[testValueEvent]()
 	if err == nil {
 		t.Fatal("expected error for non-pointer type T")
 	}
 }
 
 func TestEventStore_WithFactory(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent](WithFactory[*testStoreEvent](func() *testStoreEvent {
+	store, err := NewEventSourceStore[*testStoreEvent](WithFactory[*testStoreEvent](func() *testStoreEvent {
 		return &testStoreEvent{}
 	}))
 	if err != nil {
@@ -318,8 +318,8 @@ func TestEventStore_WithFactory(t *testing.T) {
 }
 
 func TestEventStore_Contract(t *testing.T) {
-	eventtest.TestEventStoreContract(t, func() event.EventStore[*eventtest.TestEvent] {
-		store, err := NewEventStore[*eventtest.TestEvent]()
+	impl.TestEventStoreContract(t, func() event.EventSourceStore[*impl.TestEvent] {
+		store, err := NewEventSourceStore[*impl.TestEvent]()
 		if err != nil {
 			t.Fatalf("create event store: %v", err)
 		}
@@ -328,7 +328,7 @@ func TestEventStore_Contract(t *testing.T) {
 }
 
 func TestEventStore_WithFactory_LoadReturnsCopy(t *testing.T) {
-	store, err := NewEventStore[*testStoreEvent](WithFactory[*testStoreEvent](func() *testStoreEvent {
+	store, err := NewEventSourceStore[*testStoreEvent](WithFactory[*testStoreEvent](func() *testStoreEvent {
 		return &testStoreEvent{}
 	}))
 	if err != nil {

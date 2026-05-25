@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/infra/infratest"
 	"github.com/ddd-qce/exampleapp/domain"
 )
@@ -77,8 +77,8 @@ func testProviderContract(t *testing.T, store *StoreComponents) {
 		if err != nil {
 			t.Fatalf("find failed: %v", err)
 		}
-		if found.GetID() != "contract-ord-1" {
-			t.Errorf("expected contract-ord-1, got %s", found.GetID())
+		if found.ID() != "contract-ord-1" {
+			t.Errorf("expected contract-ord-1, got %s", found.ID())
 		}
 	})
 }

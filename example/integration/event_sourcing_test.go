@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-	"github.com/ddd-qce/core/domain/event"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type orderCreated struct {
@@ -49,11 +49,11 @@ func (s *OrderState) ApplyCancelled(event *orderCancelled) {
 func TestEventSourcing_CreateApplySaveLoadReplay(t *testing.T) {
 	ctx := context.Background()
 
-	createdStore, err := eventmemory.NewEventStore[*orderCreated]()
+	createdStore, err := eventmemory.NewEventSourceStore[*orderCreated]()
 	if err != nil {
 		t.Fatalf("create created store: %v", err)
 	}
-	confirmedStore, err := eventmemory.NewEventStore[*orderConfirmed]()
+	confirmedStore, err := eventmemory.NewEventSourceStore[*orderConfirmed]()
 	if err != nil {
 		t.Fatalf("create confirmed store: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestEventSourcing_CreateApplySaveLoadReplay(t *testing.T) {
 
 func TestEventSourcing_MultipleAggregates(t *testing.T) {
 	ctx := context.Background()
-	store, err := eventmemory.NewEventStore[*orderCreated]()
+	store, err := eventmemory.NewEventSourceStore[*orderCreated]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestEventSourcing_MultipleAggregates(t *testing.T) {
 
 func TestEventSourcing_Versioning(t *testing.T) {
 	ctx := context.Background()
-	store, err := eventmemory.NewEventStore[*orderCreated]()
+	store, err := eventmemory.NewEventSourceStore[*orderCreated]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
@@ -187,15 +187,15 @@ func TestEventSourcing_Versioning(t *testing.T) {
 
 func TestEventSourcing_FullReplay(t *testing.T) {
 	ctx := context.Background()
-	createdStore, err := eventmemory.NewEventStore[*orderCreated]()
+	createdStore, err := eventmemory.NewEventSourceStore[*orderCreated]()
 	if err != nil {
 		t.Fatalf("create created store: %v", err)
 	}
-	confirmedStore, err := eventmemory.NewEventStore[*orderConfirmed]()
+	confirmedStore, err := eventmemory.NewEventSourceStore[*orderConfirmed]()
 	if err != nil {
 		t.Fatalf("create confirmed store: %v", err)
 	}
-	cancelledStore, err := eventmemory.NewEventStore[*orderCancelled]()
+	cancelledStore, err := eventmemory.NewEventSourceStore[*orderCancelled]()
 	if err != nil {
 		t.Fatalf("create cancelled store: %v", err)
 	}

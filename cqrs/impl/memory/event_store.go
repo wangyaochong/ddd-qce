@@ -7,10 +7,10 @@ import (
 	"sync"
 
 	ddderror "github.com/ddd-qce/core/error"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
-type EventStore[T event.DomainEvent] struct {
+type EventSourceStore[T event.DomainEvent] struct {
 	mu          sync.RWMutex
 	events      map[string][]T
 	pool        sync.Pool
@@ -18,17 +18,17 @@ type EventStore[T event.DomainEvent] struct {
 	shallowCopy bool
 }
 
-type EventStoreOption[T event.DomainEvent] func(*EventStore[T])
+type EventSourceStoreOption[T event.DomainEvent] func(*EventSourceStore[T])
 
-func WithFactory[T event.DomainEvent](factory func() T) EventStoreOption[T] {
-	return func(s *EventStore[T]) { s.newFunc = factory }
+func WithFactory[T event.DomainEvent](factory func() T) EventSourceStoreOption[T] {
+	return func(s *EventSourceStore[T]) { s.newFunc = factory }
 }
 
-func NewEventStore[T event.DomainEvent](opts ...EventStoreOption[T]) (*EventStore[T], error) {
+func NewEventSourceStore[T event.DomainEvent](opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
 	var zero T
 	t := reflect.TypeOf(zero)
 
-	s := &EventStore[T]{
+	s := &EventSourceStore[T]{
 		events: make(map[string][]T),
 	}
 
@@ -41,7 +41,7 @@ func NewEventStore[T event.DomainEvent](opts ...EventStoreOption[T]) (*EventStor
 	}
 
 	if t.Kind() != reflect.Ptr {
-		return nil, fmt.Errorf("EventStore[T]: T must be a pointer type, got %v", t)
+		return nil, fmt.Errorf("EventSourceStore[T]: T must be a pointer type, got %v", t)
 	}
 
 	for _, opt := range opts {
@@ -60,7 +60,7 @@ func NewEventStore[T event.DomainEvent](opts ...EventStoreOption[T]) (*EventStor
 
 	if v := s.pool.Get(); v != nil {
 		if _, ok := v.(T); !ok {
-			return nil, fmt.Errorf("EventStore[T]: pool New returned unexpected type %T, expected %T", v, zero)
+			return nil, fmt.Errorf("EventSourceStore[T]: pool New returned unexpected type %T, expected %T", v, zero)
 		}
 		s.pool.Put(v)
 	}
@@ -68,19 +68,19 @@ func NewEventStore[T event.DomainEvent](opts ...EventStoreOption[T]) (*EventStor
 	return s, nil
 }
 
-func (s *EventStore[T]) alloc() (T, error) {
+func (s *EventSourceStore[T]) alloc() (T, error) {
 	if s.newFunc != nil {
 		return s.newFunc(), nil
 	}
 	v, ok := s.pool.Get().(T)
 	if !ok {
 		var zero T
-		return zero, fmt.Errorf("EventStore[T]: pool returned unexpected type, expected %T", zero)
+		return zero, fmt.Errorf("EventSourceStore[T]: pool returned unexpected type, expected %T", zero)
 	}
 	return v, nil
 }
 
-func (s *EventStore[T]) copyEvent(src T) (T, error) {
+func (s *EventSourceStore[T]) copyEvent(src T) (T, error) {
 	dst, err := s.alloc()
 	if err != nil {
 		var zero T
@@ -90,7 +90,7 @@ func (s *EventStore[T]) copyEvent(src T) (T, error) {
 	return dst, nil
 }
 
-func (s *EventStore[T]) Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error {
+func (s *EventSourceStore[T]) Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -116,7 +116,7 @@ func (s *EventStore[T]) Append(ctx context.Context, aggregateID string, expected
 	return nil
 }
 
-func (s *EventStore[T]) Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error) {
+func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

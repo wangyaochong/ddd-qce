@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type TestAggregate struct {
@@ -44,7 +44,7 @@ func NewInMemoryRepository() *InMemoryRepository {
 func (r *InMemoryRepository) Save(ctx context.Context, agg *TestAggregate) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.aggregates[agg.GetID()] = agg
+	r.aggregates[agg.ID()] = agg
 	return nil
 }
 
@@ -80,7 +80,7 @@ func (r *InMemoryEventSourcingRepository) Save(ctx context.Context, agg *TestAgg
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	events := agg.UncommittedEvents()
-	r.events[agg.GetID()] = append(r.events[agg.GetID()], events...)
+	r.events[agg.ID()] = append(r.events[agg.ID()], events...)
 	agg.MarkEventsAsCommitted()
 	return nil
 }
@@ -112,8 +112,8 @@ func TestRepository_SaveAndFindByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on find: %v", err)
 	}
-	if loaded.GetID() != "agg-001" {
-		t.Errorf("expected ID 'agg-001', got %s", loaded.GetID())
+	if loaded.ID() != "agg-001" {
+		t.Errorf("expected ID 'agg-001', got %s", loaded.ID())
 	}
 	if loaded.Name != "Test Aggregate" {
 		t.Errorf("expected name 'Test Aggregate', got %s", loaded.Name)
@@ -166,8 +166,8 @@ func TestEventSourcingRepository_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on load: %v", err)
 	}
-	if loaded.GetID() != "agg-003" {
-		t.Errorf("expected ID 'agg-003', got %s", loaded.GetID())
+	if loaded.ID() != "agg-003" {
+		t.Errorf("expected ID 'agg-003', got %s", loaded.ID())
 	}
 }
 

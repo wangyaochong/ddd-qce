@@ -9,14 +9,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/cmd"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )
 
 type JobManager struct {
 	store        jobcore.JobStore
-	executor     command.CommandBus
+	executor     cmd.CommandBus
 	mu           sync.Mutex
 	cancelers    map[string]context.CancelFunc
 	jobs         map[string]*jobcore.Job
@@ -26,7 +26,7 @@ type JobManager struct {
 	recovery     bool
 }
 
-func NewJobManager(store jobcore.JobStore, executor command.CommandBus, opts ...JobManagerOption) *JobManager {
+func NewJobManager(store jobcore.JobStore, executor cmd.CommandBus, opts ...JobManagerOption) *JobManager {
 	m := &JobManager{
 		store:     store,
 		executor:  executor,
@@ -37,6 +37,9 @@ func NewJobManager(store jobcore.JobStore, executor command.CommandBus, opts ...
 	for _, opt := range opts {
 		opt(m)
 	}
+	if m.recovery {
+		go m.recoverJobs()
+	}
 	return m
 }
 
@@ -45,6 +48,12 @@ type JobManagerOption func(*JobManager)
 func WithStoreErrorHandler(handler jobcore.StoreErrorHandler) JobManagerOption {
 	return func(m *JobManager) {
 		m.onStoreError = handler
+	}
+}
+
+func WithRecovery() JobManagerOption {
+	return func(m *JobManager) {
+		m.recovery = true
 	}
 }
 
@@ -283,5 +292,32 @@ func (m *JobManager) Shutdown(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+func (m *JobManager) recoverJobs() {
+	ctx := context.Background()
+
+	running, err := m.store.List(ctx, jobcore.JobStatusRunning)
+	if err == nil {
+		for _, job := range running {
+			job.SetStatus(jobcore.JobStatusFailed)
+			job.SetError("process restarted during execution")
+			if updateErr := m.store.Update(ctx, job); updateErr != nil {
+				m.handleStoreError(ctx, job.ID, "recovery_running", updateErr)
+			}
+		}
+	}
+
+	pending, err := m.store.List(ctx, jobcore.JobStatusPending)
+	if err == nil {
+		for _, job := range pending {
+			m.mu.Lock()
+			m.jobs[job.ID] = job
+			m.mu.Unlock()
+
+			m.wg.Add(1)
+			go m.executeJob(job, "", "")
+		}
 	}
 }

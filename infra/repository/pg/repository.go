@@ -10,7 +10,7 @@ import (
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	corepg "github.com/ddd-qce/core/pg"
 	"github.com/ddd-qce/core/infra/repository"
 )
@@ -70,7 +70,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
 		 WHERE ddd_aggregate_snapshots.version < $4`,
-		root.GetID(), r.typeName, data, root.Version(), time.Now(),
+		root.ID(), r.typeName, data, root.Version(), time.Now(),
 	)
 	if err != nil {
 		return err
@@ -80,7 +80,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &repository.OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
+		return &repository.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }
@@ -132,7 +132,7 @@ type AggregateReconstructor[T aggregate.AggregateRef] func(id string) T
 
 type PgEventSourcedRepository[T aggregate.AggregateRef] struct {
 	db            *sql.DB
-	eventStore    event.EventStore[event.DomainEvent]
+	eventStore    event.EventSourceStore[event.DomainEvent]
 	reconstructor AggregateReconstructor[T]
 	serializer    SnapshotSerializer[T]
 	typeName      string
@@ -141,7 +141,7 @@ type PgEventSourcedRepository[T aggregate.AggregateRef] struct {
 
 func NewEventSourcedRepository[T aggregate.AggregateRef](
 	db *sql.DB,
-	eventStore event.EventStore[event.DomainEvent],
+	eventStore event.EventSourceStore[event.DomainEvent],
 	reconstructor AggregateReconstructor[T],
 	opts ...EventSourcedRepoOption[T],
 ) *PgEventSourcedRepository[T] {
@@ -180,7 +180,7 @@ func (r *PgEventSourcedRepository[T]) Save(ctx context.Context, agg T) error {
 	if len(events) == 0 {
 		return nil
 	}
-	if err := r.eventStore.Append(ctx, root.GetID(), root.Version()-len(events), events); err != nil {
+	if err := r.eventStore.Append(ctx, root.ID(), root.Version()-len(events), events); err != nil {
 		return fmt.Errorf("append events: %w", err)
 	}
 	if r.snapshotEvery > 0 && root.Version()%r.snapshotEvery == 0 {
@@ -235,7 +235,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
 		 WHERE ddd_aggregate_snapshots.version < $4`,
-		root.GetID(), r.typeName, data, root.Version(), time.Now(),
+		root.ID(), r.typeName, data, root.Version(), time.Now(),
 	)
 	if err != nil {
 		return err
@@ -245,7 +245,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &repository.OptimisticLockError{AggregateID: root.GetID(), ExpectedVersion: root.Version()}
+		return &repository.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }

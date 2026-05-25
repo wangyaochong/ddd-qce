@@ -8,7 +8,7 @@ import (
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/repository"
 	"github.com/ddd-qce/core/domain/repository/repositorytest"
 	rep "github.com/ddd-qce/core/infra/repository"
@@ -48,8 +48,8 @@ func TestInMemoryRepository_SaveAndFindByID(t *testing.T) {
 		t.Fatalf("FindByID: %v", err)
 	}
 
-	if found.GetID() != "agg-1" {
-		t.Errorf("GetID() = %q, want %q", found.GetID(), "agg-1")
+	if found.ID() != "agg-1" {
+		t.Errorf("GetID() = %q, want %q", found.ID(), "agg-1")
 	}
 	if found.Name != "test-name" {
 		t.Errorf("Name = %q, want %q", found.Name, "test-name")
@@ -186,8 +186,8 @@ func TestInMemoryEventSourcedRepository_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if loaded.GetID() != "es-1" {
-		t.Errorf("GetID() = %q, want %q", loaded.GetID(), "es-1")
+	if loaded.ID() != "es-1" {
+		t.Errorf("GetID() = %q, want %q", loaded.ID(), "es-1")
 	}
 	if loaded.Name != "event-sourced" {
 		t.Errorf("Name = %q, want %q", loaded.Name, "event-sourced")
@@ -223,7 +223,7 @@ func TestInMemoryEventSourcedRepository_Contract(t *testing.T) {
 	repositorytest.TestEventSourcingRepositoryContract(t, repo,
 		func(id string) *testAggregate { return newTestAggregate(id) },
 		func(agg *testAggregate) {
-			agg.Apply(event.NewBaseEvent(agg.GetID(), time.Now()))
+			agg.Apply(event.NewBaseEvent(agg.ID(), time.Now()))
 		},
 	)
 }

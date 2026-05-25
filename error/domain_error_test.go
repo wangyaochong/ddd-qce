@@ -58,6 +58,40 @@ func TestDomainError_CodeAccess(t *testing.T) {
 	}
 }
 
+func TestDomainError_Is_SameCodeDifferentInstances(t *testing.T) {
+	e1 := NewDomainError("NOT_FOUND", "resource not found")
+	e2 := NewDomainError("NOT_FOUND", "another not found")
+	if !errors.Is(e1, e2) {
+		t.Error("errors.Is should match DomainErrors with the same code")
+	}
+}
+
+func TestDomainError_Is_DifferentCode(t *testing.T) {
+	e1 := NewDomainError("NOT_FOUND", "not found")
+	e2 := NewDomainError("ALREADY_EXISTS", "already exists")
+	if errors.Is(e1, e2) {
+		t.Error("errors.Is should not match DomainErrors with different codes")
+	}
+}
+
+func TestDomainError_Is_SentinelErrors(t *testing.T) {
+	err := NewDomainError("NOT_FOUND", "custom not found")
+	if !errors.Is(err, ErrNotFound) {
+		t.Error("errors.Is should match sentinel ErrNotFound by code")
+	}
+	if errors.Is(err, ErrConcurrency) {
+		t.Error("errors.Is should not match sentinel ErrConcurrency")
+	}
+}
+
+func TestDomainError_Is_NonDomainError(t *testing.T) {
+	e := NewDomainError("X", "y")
+	plainErr := errors.New("plain")
+	if errors.Is(e, plainErr) {
+		t.Error("errors.Is should not match non-DomainError")
+	}
+}
+
 func TestDomainError_WithCause_ErrorsIs(t *testing.T) {
 	cause := errors.New("base")
 	e := NewDomainErrorWithCause("X", "y", cause)

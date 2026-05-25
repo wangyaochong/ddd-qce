@@ -34,6 +34,14 @@ func (e *DomainError) Unwrap() error {
 	return e.cause
 }
 
+func (e *DomainError) Is(target error) bool {
+	t, ok := target.(*DomainError)
+	if !ok {
+		return false
+	}
+	return e.code == t.code
+}
+
 func IsDomainError(err error) bool {
 	var de *DomainError
 	return errors.As(err, &de)

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/command"
-	commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+	"github.com/ddd-qce/core/cqrs/cmd"
+	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
 )

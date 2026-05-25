@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/cmd"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
-	domainevent "github.com/ddd-qce/core/domain/event"
+	domainevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/exampleapp/domain"
 )
 
@@ -39,13 +39,13 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 	}
 
 	cqrsevent.Dispatch[*domain.OrderPlacedEvent](ctx, h.eventBus, &domain.OrderPlacedEvent{
-		BaseEvent: domainevent.NewBaseEvent(order.GetID(), time.Now()),
+		BaseEvent: domainevent.NewBaseEvent(order.ID(), time.Now()),
 		UserID:          order.UserID,
 		TotalAmount:     order.TotalAmount,
 		Items:           order.ItemNames(),
 	})
 
-	return &PlaceOrderResult{OrderID: order.GetID(), TotalAmount: order.TotalAmount}, nil
+	return &PlaceOrderResult{OrderID: order.ID(), TotalAmount: order.TotalAmount}, nil
 }
 
 type ConfirmPaymentHandler struct {
@@ -116,7 +116,7 @@ func (h *CancelOrderHandler) Handle(ctx context.Context, cmd *CancelOrderCommand
 	}
 
 	cqrsevent.Dispatch[*domain.OrderCancelledEvent](ctx, h.eventBus, &domain.OrderCancelledEvent{
-		BaseEvent: domainevent.NewBaseEvent(order.GetID(), time.Now()),
+		BaseEvent: domainevent.NewBaseEvent(order.ID(), time.Now()),
 		Reason:          cmd.Reason,
 	})
 
