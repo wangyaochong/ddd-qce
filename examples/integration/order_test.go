@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	eventbus "github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
@@ -205,7 +205,7 @@ func TestOrderAggregate_ConfirmFlow(t *testing.T) {
 	eventmemory.RegisterEvent[*testOrderConfirmedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, statusHandler)
 
-	_, err := cmd.Dispatch(ctx, cmdBus, &testPlaceOrderCommand{
+	_, err := 	command.Dispatch(ctx, cmdBus, &testPlaceOrderCommand{
 		OrderID: "ORD-001",
 		UserID:  "user-001",
 		Items: []OrderItem{
@@ -217,7 +217,7 @@ func TestOrderAggregate_ConfirmFlow(t *testing.T) {
 		t.Fatalf("place order failed: %v", err)
 	}
 
-	_, err = cmd.Dispatch(ctx, cmdBus, &testConfirmOrderCommand{
+	_, err = 	command.Dispatch(ctx, cmdBus, &testConfirmOrderCommand{
 		OrderID: "ORD-001",
 	})
 	if err != nil {

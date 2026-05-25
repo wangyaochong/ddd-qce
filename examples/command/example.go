@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	corecommand "github.com/ddd-qce/core/cqrs/cmd"
+	corecommand "github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 )
 

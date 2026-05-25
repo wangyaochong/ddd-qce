@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	eventbus "github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
@@ -91,7 +91,7 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 	eventmemory.RegisterEvent[*testOrderCreatedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, queryHandler)
 
-	result, err := cmd.Dispatch(ctx, cmdBus, &testCreateOrderCommand{
+	result, err := 	command.Dispatch(ctx, cmdBus, &testCreateOrderCommand{
 		UserID: "user-001",
 		Amount: 99.99,
 	})

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	eventbus "github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
@@ -57,12 +57,12 @@ type OrderPlacedEventHandler struct {
 func (h *OrderPlacedEventHandler) Handle(ctx context.Context, event *OrderPlacedEvent) error {
 	fmt.Printf("  [EventHandler] Processing OrderPlaced for order %s\n", event.AggregateID())
 
-	cmd.Dispatch(ctx, h.cmdBus, &SendNotificationCommand{
+	command.Dispatch(ctx, h.cmdBus, &SendNotificationCommand{
 		UserID:  event.UserID,
 		Message: fmt.Sprintf("Order %s placed: %s ($%.2f)", event.AggregateID(), event.Product, event.Amount),
 	})
 
-	cmd.Dispatch(ctx, h.cmdBus, &UpdateInventoryCommand{
+	command.Dispatch(ctx, h.cmdBus, &UpdateInventoryCommand{
 		Product:  event.Product,
 		Quantity: 1,
 	})
@@ -139,7 +139,7 @@ func RunExample(ctx context.Context, cmdBus *commandmemory.CommandBus, eventBus 
 	fmt.Println()
 	fmt.Println("=== PlaceOrder (Command → Event → Commands) ===")
 
-	result, err := cmd.Dispatch(ctx, cmdBus, &PlaceOrderCommand{
+	result, err := command.Dispatch(ctx, cmdBus, &PlaceOrderCommand{
 		UserID:  "user-001",
 		Product: "Laptop",
 		Amount:  999.99,

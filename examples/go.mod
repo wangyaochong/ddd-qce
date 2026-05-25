@@ -1,4 +1,4 @@
-module github.com/ddd-qce/example
+module github.com/ddd-qce/examples
 
 go 1.26.0
 
