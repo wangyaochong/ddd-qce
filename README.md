@@ -120,7 +120,7 @@ git clone https://github.com/ddd-qce/core.git
 cd core
 
 # 运行完整示例（展示 CQRS、Event、Job、Trace 等全部功能）
-go run example/main.go
+go run examples/main.go
 ```
 
 ## 核心概念
@@ -216,7 +216,7 @@ go run example/main.go
 │   ├── pg_backend.go            # NewPgBackend(db) PostgreSQL 后端工厂
 │   └── /repository/pg           # PgRepository / PgEventSourcedRepository（乐观锁 + 快照）
 │
-├── /example                     # 独立示例模块（module github.com/ddd-qce/example）
+├── /examples                    # 组件级演示（module github.com/ddd-qce/examples）
 ├── /exampleapp                  # 示例应用模块（module github.com/ddd-qce/exampleapp）
 ├── /it                          # 集成测试模块（module github.com/ddd-qce/it，含 pgx 依赖）
 └── /docs                        # 文档
