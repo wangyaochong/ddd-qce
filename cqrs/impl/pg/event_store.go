@@ -14,19 +14,19 @@ import (
 	corepg "github.com/ddd-qce/core/pg"
 )
 
-type EventSourceStore[T event.DomainEvent] struct {
+type EventSourceStore[T event.Event] struct {
 	db      *sql.DB
 	pool    sync.Pool
 	newFunc func() T
 }
 
-type EventSourceStoreOption[T event.DomainEvent] func(*EventSourceStore[T])
+type EventSourceStoreOption[T event.Event] func(*EventSourceStore[T])
 
-func WithFactory[T event.DomainEvent](factory func() T) EventSourceStoreOption[T] {
+func WithFactory[T event.Event](factory func() T) EventSourceStoreOption[T] {
 	return func(s *EventSourceStore[T]) { s.newFunc = factory }
 }
 
-func NewEventSourceStore[T event.DomainEvent](db *sql.DB, opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
+func NewEventSourceStore[T event.Event](db *sql.DB, opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
 	var zero T
 	t := reflect.TypeOf(zero)
 
@@ -89,7 +89,23 @@ func (s *EventSourceStore[T]) alloc() (T, error) {
 }
 
 func (s *EventSourceStore[T]) Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error {
-	q := corepg.GetQuerier(ctx, s.db)
+	if corepg.HasTransaction(ctx) {
+		return s.appendEvents(ctx, corepg.GetQuerier(ctx, s.db), aggregateID, expectedVersion, events)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if err := s.appendEvents(ctx, tx, aggregateID, expectedVersion, events); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *EventSourceStore[T]) appendEvents(ctx context.Context, q corepg.DBTX, aggregateID string, expectedVersion int, events []T) error {
 	for i, evt := range events {
 		data, err := json.Marshal(evt)
 		if err != nil {
@@ -97,9 +113,10 @@ func (s *EventSourceStore[T]) Append(ctx context.Context, aggregateID string, ex
 		}
 		version := expectedVersion + i + 1
 		_, err = q.ExecContext(ctx,
-			`INSERT INTO ddd_domain_events (aggregate_id, event_type, event_data, occurred_at, version)
-			 VALUES ($1, $2, $3, $4, $5)`,
+			`INSERT INTO ddd_domain_events (aggregate_id, event_type, event_data, occurred_at, version, correlation_id, causation_id)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 			evt.AggregateID(), event.EventTypeOf(evt), data, evt.OccurredAt(), version,
+			evt.CorrelationID(), evt.CausationID(),
 		)
 		if err != nil {
 			if isUniqueViolation(err) {
@@ -114,7 +131,7 @@ func (s *EventSourceStore[T]) Append(ctx context.Context, aggregateID string, ex
 func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error) {
 	q := corepg.GetQuerier(ctx, s.db)
 	rows, err := q.QueryContext(ctx,
-		`SELECT event_data, aggregate_id, occurred_at FROM ddd_domain_events
+		`SELECT event_data, aggregate_id, occurred_at, correlation_id, causation_id FROM ddd_domain_events
 		 WHERE aggregate_id = $1 AND version > $2
 		 ORDER BY version`,
 		aggregateID, afterVersion,
@@ -129,7 +146,9 @@ func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afte
 		var data []byte
 		var aggID string
 		var occurredAt time.Time
-		if err := rows.Scan(&data, &aggID, &occurredAt); err != nil {
+		var correlationID string
+		var causationID string
+		if err := rows.Scan(&data, &aggID, &occurredAt, &correlationID, &causationID); err != nil {
 			return nil, fmt.Errorf("scan event: %w", err)
 		}
 		evt, err := s.alloc()
@@ -139,7 +158,7 @@ func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afte
 		if err := json.Unmarshal(data, evt); err != nil {
 			return nil, fmt.Errorf("unmarshal event: %w", err)
 		}
-		restoreBaseEvent(evt, aggID, occurredAt)
+		restoreBaseEvent(evt, aggID, occurredAt, correlationID, causationID)
 		result = append(result, evt)
 	}
 	if err := rows.Err(); err != nil {
@@ -148,7 +167,55 @@ func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afte
 	return result, nil
 }
 
-func restoreBaseEvent(evt any, aggregateID string, occurredAt time.Time) {
+func (s *EventSourceStore[T]) LoadAll(ctx context.Context, afterPosition int64, limit int) ([]event.GlobalEvent[T], error) {
+	q := corepg.GetQuerier(ctx, s.db)
+
+	query := `SELECT id, event_data, aggregate_id, occurred_at, correlation_id, causation_id FROM ddd_domain_events
+			  WHERE id > $1 ORDER BY id ASC`
+	args := []any{afterPosition}
+
+	if limit > 0 {
+		query += ` LIMIT $2`
+		args = append(args, limit)
+	}
+
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query all events: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]event.GlobalEvent[T], 0)
+	for rows.Next() {
+		var id int64
+		var data []byte
+		var aggID string
+		var occurredAt time.Time
+		var correlationID string
+		var causationID string
+		if err := rows.Scan(&id, &data, &aggID, &occurredAt, &correlationID, &causationID); err != nil {
+			return nil, fmt.Errorf("scan event: %w", err)
+		}
+		evt, err := s.alloc()
+		if err != nil {
+			return nil, fmt.Errorf("allocate event: %w", err)
+		}
+		if err := json.Unmarshal(data, evt); err != nil {
+			return nil, fmt.Errorf("unmarshal event: %w", err)
+		}
+		restoreBaseEvent(evt, aggID, occurredAt, correlationID, causationID)
+		result = append(result, event.GlobalEvent[T]{
+			Position: id,
+			Event:    evt,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate events: %w", err)
+	}
+	return result, nil
+}
+
+func restoreBaseEvent(evt any, aggregateID string, occurredAt time.Time, correlationID string, causationID string) {
 	v := reflect.ValueOf(evt)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
@@ -160,12 +227,13 @@ func restoreBaseEvent(evt any, aggregateID string, occurredAt time.Time) {
 	if !field.IsValid() || field.Kind() != reflect.Struct {
 		return
 	}
-	setter := field.Addr().MethodByName("SetBaseEvent")
-	if !setter.IsValid() {
-		return
+	restorer := field.Addr().MethodByName("restore")
+	if restorer.IsValid() {
+		restorer.Call([]reflect.Value{
+			reflect.ValueOf(aggregateID),
+			reflect.ValueOf(occurredAt),
+			reflect.ValueOf(correlationID),
+			reflect.ValueOf(causationID),
+		})
 	}
-	setter.Call([]reflect.Value{
-		reflect.ValueOf(aggregateID),
-		reflect.ValueOf(occurredAt),
-	})
 }
