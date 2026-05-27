@@ -55,6 +55,32 @@ func (e *BaseEvent) restore(aggregateID string, occurredAt time.Time, correlatio
 	e.causationID = causationID
 }
 
+func (e *BaseEvent) setCorrelation(correlationID, causationID string) {
+	e.correlationID = correlationID
+	e.causationID = causationID
+}
+
+func ApplyCorrelation(evt Event, correlationID, causationID string) {
+	v := reflect.ValueOf(evt)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return
+	}
+	field := v.FieldByName("BaseEvent")
+	if !field.IsValid() || field.Kind() != reflect.Struct {
+		return
+	}
+	setter := field.Addr().MethodByName("setCorrelation")
+	if setter.IsValid() {
+		setter.Call([]reflect.Value{
+			reflect.ValueOf(correlationID),
+			reflect.ValueOf(causationID),
+		})
+	}
+}
+
 func (e *BaseEvent) SetBaseEvent(aggregateID string, occurredAt time.Time) {
 	e.aggregateID = aggregateID
 	e.occurredAt = occurredAt

@@ -1,24 +1,27 @@
 package aggregate
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ddd-qce/core/domain/entity"
 	"github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/trace"
 )
 
 type EventApplier interface {
-	When(evt event.DomainEvent)
+	When(evt event.Event) error
 }
 
 type AggregateRef interface {
 	GetAggregateRoot() *AggregateRoot
+	Clone() *AggregateRoot
 }
 
 type AggregateRoot struct {
 	entity.Entity
 	version           int
-	uncommittedEvents []event.DomainEvent
+	uncommittedEvents []event.Event
 	applier           EventApplier
 	skipApplierCheck  bool
 }
@@ -73,7 +76,10 @@ func (a *AggregateRoot) SetSnapshotVersion(v int) {
 
 
 
-func (a *AggregateRoot) Apply(evt event.DomainEvent) error {
+func (a *AggregateRoot) Apply(ctx context.Context, evt event.Event) error {
+	if evt.CorrelationID() == "" {
+		event.ApplyCorrelation(evt, trace.GetTraceID(ctx), trace.GetSpanID(ctx))
+	}
 	if err := a.applyEvent(evt); err != nil {
 		return err
 	}
@@ -81,8 +87,8 @@ func (a *AggregateRoot) Apply(evt event.DomainEvent) error {
 	return nil
 }
 
-func (a *AggregateRoot) UncommittedEvents() []event.DomainEvent {
-	evts := make([]event.DomainEvent, len(a.uncommittedEvents))
+func (a *AggregateRoot) UncommittedEvents() []event.Event {
+	evts := make([]event.Event, len(a.uncommittedEvents))
 	copy(evts, a.uncommittedEvents)
 	return evts
 }
@@ -91,7 +97,7 @@ func (a *AggregateRoot) MarkEventsAsCommitted() {
 	a.uncommittedEvents = nil
 }
 
-func (a *AggregateRoot) LoadFromHistory(events []event.DomainEvent) error {
+func (a *AggregateRoot) LoadFromHistory(events []event.Event) error {
 	for _, evt := range events {
 		if err := a.applyEvent(evt); err != nil {
 			return err
@@ -100,9 +106,11 @@ func (a *AggregateRoot) LoadFromHistory(events []event.DomainEvent) error {
 	return nil
 }
 
-func (a *AggregateRoot) applyEvent(evt event.DomainEvent) error {
+func (a *AggregateRoot) applyEvent(evt event.Event) error {
 	if a.applier != nil {
-		a.applier.When(evt)
+		if err := a.applier.When(evt); err != nil {
+			return fmt.Errorf("AggregateRoot: apply event %T: %w", evt, err)
+		}
 	} else if !a.skipApplierCheck {
 		return fmt.Errorf("AggregateRoot: applier not set, use NewAggregateRootWithApplier(id, self) or NewEventCollector(id)")
 	}
@@ -118,4 +126,52 @@ func (a *AggregateRoot) Validate() error {
 		return fmt.Errorf("aggregate version cannot be negative")
 	}
 	return nil
+}
+
+func (a *AggregateRoot) Clone() *AggregateRoot {
+	if a == nil {
+		return nil
+	}
+	clone := &AggregateRoot{
+		Entity:           *a.Entity.Clone(),
+		version:          a.version,
+		skipApplierCheck: a.skipApplierCheck,
+	}
+	if a.applier != nil {
+		clone.applier = a.applier
+	}
+	clone.uncommittedEvents = make([]event.Event, len(a.uncommittedEvents))
+	copy(clone.uncommittedEvents, a.uncommittedEvents)
+	return clone
+}
+
+type AggregateRootJSON struct {
+	entity.EntityJSON
+	Version          int  `json:"version"`
+	SkipApplierCheck bool `json:"skipApplierCheck"`
+}
+
+func (a *AggregateRoot) ToJSON() AggregateRootJSON {
+	return AggregateRootJSON{
+		EntityJSON:       a.Entity.ToJSON(),
+		Version:          a.version,
+		SkipApplierCheck: a.skipApplierCheck,
+	}
+}
+
+func (a *AggregateRoot) FromJSON(j AggregateRootJSON) {
+	a.Entity.FromJSON(j.EntityJSON)
+	a.version = j.Version
+	a.skipApplierCheck = j.SkipApplierCheck
+}
+
+func (a *AggregateRoot) SetApplier(applier EventApplier) {
+	a.applier = applier
+}
+
+func CloneAggregate[T AggregateRef](agg T) *AggregateRoot {
+	if any(agg) == nil {
+		return nil
+	}
+	return agg.Clone()
 }
