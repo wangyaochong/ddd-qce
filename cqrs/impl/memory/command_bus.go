@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 )
 
 type commandInvoker func(cmd any, ctx context.Context) (any, error)
@@ -19,7 +19,7 @@ type CommandBus struct {
 	mu       sync.RWMutex
 }
 
-var _ cmd.CommandBus = (*CommandBus)(nil)
+var _ command.CommandBus = (*CommandBus)(nil)
 
 type CommandBusOption func(*CommandBus)
 
@@ -39,7 +39,7 @@ func NewCommandBus(opts ...CommandBusOption) *CommandBus {
 	return b
 }
 
-func RegisterCommand[T cmd.Command, R any](bus *CommandBus, handler cmd.CommandHandler[T, R]) error {
+func RegisterCommand[T command.Command, R any](bus *CommandBus, handler command.CommandHandler[T, R]) error {
 	return bus.RegisterHandler(handler)
 }
 

@@ -12,7 +12,7 @@ import (
 )
 
 type TestAggregate struct {
-	*aggregate.AggregateRoot
+	aggregate.AggregateRoot
 	Name    string
 	Version int
 }
@@ -22,8 +22,22 @@ func NewTestAggregate(id, name string) *TestAggregate {
 		Name:    name,
 		Version: 0,
 	}
-	ta.AggregateRoot = aggregate.NewEventCollector(id)
+	ar, err := aggregate.NewAggregateRoot(id)
+	if err != nil {
+		panic(err)
+	}
+	ta.AggregateRoot = *ar
 	return ta
+}
+
+func (a *TestAggregate) When(_ event.Event) error { return nil }
+
+func (a *TestAggregate) Apply(ctx context.Context, evt event.Event) error {
+	return aggregate.ApplyChange(a, ctx, evt)
+}
+
+func (a *TestAggregate) LoadFromHistory(events []event.Event) error {
+	return aggregate.LoadFromHistory(a, events)
 }
 
 type TestEvent struct {
@@ -67,12 +81,12 @@ func (r *InMemoryRepository) Delete(ctx context.Context, id string) error {
 
 type InMemoryEventSourcingRepository struct {
 	mu     sync.Mutex
-	events map[string][]event.DomainEvent
+	events map[string][]event.Event
 }
 
 func NewInMemoryEventSourcingRepository() *InMemoryEventSourcingRepository {
 	return &InMemoryEventSourcingRepository{
-		events: make(map[string][]event.DomainEvent),
+		events: make(map[string][]event.Event),
 	}
 }
 
@@ -153,7 +167,7 @@ func TestEventSourcingRepository_SaveAndLoad(t *testing.T) {
 	repo := NewInMemoryEventSourcingRepository()
 
 	agg := NewTestAggregate("agg-003", "Event Sourced")
-	agg.Apply(&TestEvent{
+	agg.Apply(context.Background(), &TestEvent{
 		BaseEvent: event.NewBaseEvent("agg-003", time.Now()),
 	})
 

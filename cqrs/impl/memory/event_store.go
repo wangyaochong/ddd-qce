@@ -10,21 +10,28 @@ import (
 	"github.com/ddd-qce/core/cqrs/event"
 )
 
-type EventSourceStore[T event.DomainEvent] struct {
-	mu          sync.RWMutex
-	events      map[string][]T
-	pool        sync.Pool
-	newFunc     func() T
-	shallowCopy bool
+type globalEntry[T event.Event] struct {
+	position int64
+	event    T
 }
 
-type EventSourceStoreOption[T event.DomainEvent] func(*EventSourceStore[T])
+type EventSourceStore[T event.Event] struct {
+	mu           sync.RWMutex
+	events       map[string][]T
+	globalEvents []globalEntry[T]
+	nextPosition int64
+	pool         sync.Pool
+	newFunc      func() T
+	shallowCopy  bool
+}
 
-func WithFactory[T event.DomainEvent](factory func() T) EventSourceStoreOption[T] {
+type EventSourceStoreOption[T event.Event] func(*EventSourceStore[T])
+
+func WithFactory[T event.Event](factory func() T) EventSourceStoreOption[T] {
 	return func(s *EventSourceStore[T]) { s.newFunc = factory }
 }
 
-func NewEventSourceStore[T event.DomainEvent](opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
+func NewEventSourceStore[T event.Event](opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
 	var zero T
 	t := reflect.TypeOf(zero)
 
@@ -112,6 +119,11 @@ func (s *EventSourceStore[T]) Append(ctx context.Context, aggregateID string, ex
 			eventToStore = copied
 		}
 		s.events[aggID] = append(s.events[aggID], eventToStore)
+		s.nextPosition++
+		s.globalEvents = append(s.globalEvents, globalEntry[T]{
+			position: s.nextPosition,
+			event:    eventToStore,
+		})
 	}
 	return nil
 }
@@ -141,5 +153,47 @@ func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afte
 		result[i] = copied
 	}
 
+	return result, nil
+}
+
+func (s *EventSourceStore[T]) LoadAll(ctx context.Context, afterPosition int64, limit int) ([]event.GlobalEvent[T], error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	startIdx := len(s.globalEvents)
+	for i, entry := range s.globalEvents {
+		if entry.position > afterPosition {
+			startIdx = i
+			break
+		}
+	}
+
+	if startIdx >= len(s.globalEvents) {
+		return []event.GlobalEvent[T]{}, nil
+	}
+
+	endIdx := len(s.globalEvents)
+	if limit > 0 && startIdx+limit < endIdx {
+		endIdx = startIdx + limit
+	}
+
+	result := make([]event.GlobalEvent[T], endIdx-startIdx)
+	for i := startIdx; i < endIdx; i++ {
+		entry := s.globalEvents[i]
+		var evt T
+		if s.shallowCopy {
+			evt = entry.event
+		} else {
+			copied, err := s.copyEvent(entry.event)
+			if err != nil {
+				return nil, fmt.Errorf("copy event at position %d: %w", entry.position, err)
+			}
+			evt = copied
+		}
+		result[i-startIdx] = event.GlobalEvent[T]{
+			Position: entry.position,
+			Event:    evt,
+		}
+	}
 	return result, nil
 }

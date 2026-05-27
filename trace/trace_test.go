@@ -9,14 +9,14 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	"github.com/ddd-qce/core/cqrs/event"
+	event "github.com/ddd-qce/core/cqrs/event"
 )
 
 type level1Command struct {
-	cmd.BaseCommand
+	command.BaseCommand
 }
 
 type level1Result struct {
@@ -26,7 +26,7 @@ type level1Result struct {
 type level1Handler struct{}
 
 func (h *level1Handler) Handle(ctx context.Context, c *level1Command) (*level1Result, error) {
-	eventbus.Dispatch[*level2Event](ctx, testEventBus, &level2Event{})
+	event.Dispatch[*level2Event](ctx, testEventBus, &level2Event{})
 	return &level1Result{Message: "level1 done"}, nil
 }
 
@@ -35,11 +35,13 @@ type level2Event struct{}
 func (e *level2Event) AggregateID() string   { return "agg-2" }
 func (e *level2Event) EventType() string     { return "Level2Event" }
 func (e *level2Event) OccurredAt() time.Time { return time.Now() }
+func (e *level2Event) CorrelationID() string  { return "" }
+func (e *level2Event) CausationID() string    { return "" }
 
 type level2Handler struct{}
 
 func (h *level2Handler) Handle(ctx context.Context, evt *level2Event) error {
-	cmd.Dispatch[*level3Command, *level3Result](ctx, testCmdBus, &level3Command{})
+	command.Dispatch[*level3Command, *level3Result](ctx, testCmdBus, &level3Command{})
 	return nil
 }
 
@@ -47,7 +49,7 @@ var testCmdBus *commandmemory.CommandBus
 var testEventBus *eventmemory.EventBus
 
 type level3Command struct {
-	cmd.BaseCommand
+	command.BaseCommand
 }
 
 type level3Result struct {
@@ -57,7 +59,7 @@ type level3Result struct {
 type level3Handler struct{}
 
 func (h *level3Handler) Handle(ctx context.Context, c *level3Command) (*level3Result, error) {
-	eventbus.Dispatch[*level4Event](ctx, testEventBus, &level4Event{})
+	event.Dispatch[*level4Event](ctx, testEventBus, &level4Event{})
 	return &level3Result{Message: "level3 done"}, nil
 }
 
@@ -66,16 +68,18 @@ type level4Event struct{}
 func (e *level4Event) AggregateID() string   { return "agg-4" }
 func (e *level4Event) EventType() string     { return "Level4Event" }
 func (e *level4Event) OccurredAt() time.Time { return time.Now() }
+func (e *level4Event) CorrelationID() string  { return "" }
+func (e *level4Event) CausationID() string    { return "" }
 
 type level4Handler struct{}
 
 func (h *level4Handler) Handle(ctx context.Context, evt *level4Event) error {
-	cmd.Dispatch[*level5Command, *level5Result](ctx, testCmdBus, &level5Command{})
+	command.Dispatch[*level5Command, *level5Result](ctx, testCmdBus, &level5Command{})
 	return nil
 }
 
 type level5Command struct {
-	cmd.BaseCommand
+	command.BaseCommand
 }
 
 type level5Result struct {
@@ -94,14 +98,14 @@ func init() {
 	commandmemory.RegisterCommand(testCmdBus, &level1Handler{})
 	commandmemory.RegisterCommand(testCmdBus, &level3Handler{})
 	commandmemory.RegisterCommand(testCmdBus, &level5Handler{})
-	eventmemory.RegisterHandler(testEventBus, &level2Handler{})
-	eventmemory.RegisterHandler(testEventBus, &level4Handler{})
+	eventmemory.RegisterEvent(testEventBus, &level2Handler{})
+	eventmemory.RegisterEvent(testEventBus, &level4Handler{})
 }
 
 func TestCommandBus_WithEventBus(t *testing.T) {
 	ctx := context.Background()
 
-	result, err := cmd.Dispatch[*level1Command, *level1Result](ctx, testCmdBus, &level1Command{})
+	result, err := 	command.Dispatch[*level1Command, *level1Result](ctx, testCmdBus, &level1Command{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -122,10 +126,10 @@ func TestCommandBus_DispatchDeep(t *testing.T) {
 	commandmemory.RegisterCommand(cmdBus, &level5Handler{})
 
 	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
-	eventmemory.RegisterHandler(eventBus, &level2Handler{})
-	eventmemory.RegisterHandler(eventBus, &level4Handler{})
+	eventmemory.RegisterEvent(eventBus, &level2Handler{})
+	eventmemory.RegisterEvent(eventBus, &level4Handler{})
 
-	result, err := cmd.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
+	result, err := 	command.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -164,7 +168,7 @@ func TestCommandBus_ConcurrentDispatch(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			r, e := cmd.Dispatch[*level1Command, *level1Result](ctx, testCmdBus, &level1Command{})
+			r, e := 	command.Dispatch[*level1Command, *level1Result](ctx, testCmdBus, &level1Command{})
 			results[idx] = r
 			errors[idx] = e
 		}(i)
@@ -186,14 +190,14 @@ func TestCommandBus_WithErroringHandler(t *testing.T) {
 	cmdBus := commandmemory.NewCommandBus()
 	commandmemory.RegisterCommand(cmdBus, &errorHandler{})
 
-	_, err := cmd.Dispatch[*errorCommand, *errorResult](context.Background(), cmdBus, &errorCommand{})
+	_, err := 	command.Dispatch[*errorCommand, *errorResult](context.Background(), cmdBus, &errorCommand{})
 	if err == nil {
 		t.Fatal("expected error from erroring handler")
 	}
 }
 
 type errorCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 }
 
 type errorResult struct{}
@@ -209,7 +213,7 @@ func TestCommandBus_DeepNesting(t *testing.T) {
 }
 
 type nested1Command struct {
-	cmd.BaseCommand
+	command.BaseCommand
 }
 
 type nested1Result struct {
@@ -221,12 +225,12 @@ type nestedHandler1 struct {
 }
 
 func (h *nestedHandler1) Handle(ctx context.Context, c *nested1Command) (*nested1Result, error) {
-	cmd.Dispatch[*nested2Command, *nested2Result](ctx, h.bus, &nested2Command{})
+	command.Dispatch[*nested2Command, *nested2Result](ctx, h.bus, &nested2Command{})
 	return &nested1Result{Message: "nested-1"}, nil
 }
 
 type nested2Command struct {
-	cmd.BaseCommand
+	command.BaseCommand
 }
 
 type nested2Result struct {
@@ -238,12 +242,12 @@ type nestedHandler2 struct {
 }
 
 func (h *nestedHandler2) Handle(ctx context.Context, c *nested2Command) (*nested2Result, error) {
-	cmd.Dispatch[*nested3Command, *nested3Result](ctx, h.bus, &nested3Command{})
+	command.Dispatch[*nested3Command, *nested3Result](ctx, h.bus, &nested3Command{})
 	return &nested2Result{Message: "nested-2"}, nil
 }
 
 type nested3Command struct {
-	cmd.BaseCommand
+	command.BaseCommand
 }
 
 type nested3Result struct {

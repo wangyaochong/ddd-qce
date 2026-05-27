@@ -15,6 +15,9 @@ type BaseQuery struct{}
 func (BaseQuery) isQuery() {}
 
 func QueryNameOf(q any) string {
+	if q == nil {
+		return ""
+	}
 	t := reflect.TypeOf(q)
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()

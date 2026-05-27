@@ -128,7 +128,7 @@ func TestPgEventStore_WithFactory(t *testing.T) {
 	}
 }
 
-var _ event.DomainEvent = (*testDomainEvent)(nil)
+var _ event.Event = (*testDomainEvent)(nil)
 
 func TestPgEventStore_Contract(t *testing.T) {
 	db := openTestDBForEventStore(t)

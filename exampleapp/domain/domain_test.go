@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -28,7 +29,7 @@ func TestOrderAggregate_Place(t *testing.T) {
 func TestOrderAggregate_ConfirmPayment(t *testing.T) {
 	order := mustCreateOrder("ORD-001", "user-001")
 	order.MarkEventsAsCommitted()
-	if err := order.ConfirmPayment(); err != nil {
+	if err := order.ConfirmPayment(context.Background()); err != nil {
 		t.Fatalf("confirm payment failed: %v", err)
 	}
 	if order.Status != OrderStatusPaid {
@@ -46,9 +47,9 @@ func TestOrderAggregate_ConfirmPayment(t *testing.T) {
 func TestOrderAggregate_Ship(t *testing.T) {
 	order := mustCreateOrder("ORD-001", "user-001")
 	order.MarkEventsAsCommitted()
-	_ = order.ConfirmPayment()
+	_ = order.ConfirmPayment(context.Background())
 	order.MarkEventsAsCommitted()
-	if err := order.Ship(); err != nil {
+	if err := order.Ship(context.Background()); err != nil {
 		t.Fatalf("ship failed: %v", err)
 	}
 	if order.Status != OrderStatusShipped {
@@ -59,7 +60,7 @@ func TestOrderAggregate_Ship(t *testing.T) {
 func TestOrderAggregate_Cancel(t *testing.T) {
 	order := mustCreateOrder("ORD-001", "user-001")
 	order.MarkEventsAsCommitted()
-	if err := order.Cancel("changed mind"); err != nil {
+	if err := order.Cancel(context.Background(), "changed mind"); err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
 	if order.Status != OrderStatusCancelled {
@@ -77,39 +78,47 @@ func TestOrderAggregate_WithApplier(t *testing.T) {
 	}
 }
 
-func TestOrderAggregate_SetApplier(t *testing.T) {
-	o := &Order{UserID: "u1", Status: OrderStatusPending}
-	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier("ORD-SET", o)
-	_ = o.Apply(&OrderPlacedEvent{BaseEvent: event.NewBaseEvent("ORD-SET", time.Now()), UserID: "u1", TotalAmount: 100})
-	if o.UserID != "u1" {
-		t.Errorf("When not applied via SetApplier, got UserID=%s", o.UserID)
+type eventCollector struct {
+	aggregate.AggregateRoot
+}
+
+func newEventCollector(id string) *eventCollector {
+	c := &eventCollector{}
+	ar, err := aggregate.NewAggregateRoot(id)
+	if err != nil {
+		panic(err)
 	}
-	if o.AggregateRoot.Version() != 1 {
-		t.Errorf("expected version 1, got %d", o.AggregateRoot.Version())
-	}
+	c.AggregateRoot = *ar
+	return c
+}
+
+func (c *eventCollector) When(_ event.Event) error { return nil }
+
+func (c *eventCollector) Apply(ctx context.Context, evt event.Event) error {
+	return aggregate.ApplyChange(c, ctx, evt)
 }
 
 func TestEventCollector_EventsOnly(t *testing.T) {
-	ar := NewOrderEventCollector("COLLECT-001")
-	_ = ar.Apply(&OrderPlacedEvent{BaseEvent: event.NewBaseEvent("COLLECT-001", time.Now()), UserID: "u1", TotalAmount: 50})
-	if len(ar.UncommittedEvents()) != 1 {
-		t.Errorf("expected 1 event, got %d", len(ar.UncommittedEvents()))
+	c := newEventCollector("COLLECT-001")
+	_ = c.Apply(context.Background(), &OrderPlacedEvent{BaseEvent: event.NewBaseEvent("COLLECT-001", time.Now()), UserID: "u1", TotalAmount: 50})
+	if len(c.UncommittedEvents()) != 1 {
+		t.Errorf("expected 1 event, got %d", len(c.UncommittedEvents()))
 	}
-	if ar.Version() != 1 {
-		t.Errorf("expected version 1, got %d", ar.Version())
+	if c.Version() != 1 {
+		t.Errorf("expected version 1, got %d", c.Version())
 	}
 }
 
 func TestOrderAggregate_Validate_EmptyID(t *testing.T) {
 	items := []*OrderItem{NewOrderItem("p1", "Laptop", 999, 1)}
-	_, err := NewOrder("", "user-001", items)
+	_, err := NewOrder(context.Background(), "", "user-001", items)
 	if err == nil {
 		t.Error("expected error for empty ID")
 	}
 }
 
 func TestOrderAggregate_Validate_EmptyItems(t *testing.T) {
-	_, err := NewOrder("ORD-001", "user-001", nil)
+	_, err := NewOrder(context.Background(), "ORD-001", "user-001", nil)
 	if err == nil {
 		t.Error("expected error for empty items")
 	}
@@ -117,20 +126,24 @@ func TestOrderAggregate_Validate_EmptyItems(t *testing.T) {
 
 func TestOrderAggregate_InvalidTransition(t *testing.T) {
 	order := mustCreateOrder("ORD-001", "user-001")
-	if err := order.Ship(); err == nil {
+	if err := order.Ship(context.Background()); err == nil {
 		t.Error("expected error: cannot ship pending order")
 	}
-	_ = order.ConfirmPayment()
-	_ = order.Cancel("test")
-	if err := order.Ship(); err == nil {
+	_ = order.ConfirmPayment(context.Background())
+	_ = order.Cancel(context.Background(), "test")
+	if err := order.Ship(context.Background()); err == nil {
 		t.Error("expected error: cannot ship cancelled order")
 	}
 }
 
 func TestOrderAggregate_When(t *testing.T) {
 	o := &Order{}
-	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier("ORD-WHEN", o)
-	_ = o.LoadFromHistory([]event.DomainEvent{
+	ar, err := aggregate.NewAggregateRoot("ORD-WHEN")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	o.AggregateRoot = *ar
+	_ = o.LoadFromHistory([]event.Event{
 		&OrderPlacedEvent{BaseEvent: event.NewBaseEvent("ORD-WHEN", time.Now()), UserID: "u1", TotalAmount: 200},
 		&PaymentConfirmedEvent{BaseEvent: event.NewBaseEvent("ORD-WHEN", time.Now())},
 	})
@@ -165,7 +178,7 @@ func TestOrderItem_Equals(t *testing.T) {
 }
 
 func TestOrderItem_IsEmpty(t *testing.T) {
-	empty := NewOrderItem("", "", 0, 0)
+	empty := &OrderItem{}
 	notEmpty := NewOrderItem("p1", "Laptop", 999, 1)
 	if !empty.IsEmpty() {
 		t.Error("empty ID should be IsEmpty")
@@ -177,7 +190,7 @@ func TestOrderItem_IsEmpty(t *testing.T) {
 
 func TestDomainEvent_Interface(t *testing.T) {
 	now := time.Now()
-	events := []event.DomainEvent{
+	events := []event.Event{
 		&OrderPlacedEvent{BaseEvent: event.NewBaseEvent("O1", now)},
 		&PaymentConfirmedEvent{BaseEvent: event.NewBaseEvent("O1", now)},
 		&OrderShippedEvent{BaseEvent: event.NewBaseEvent("O1", now)},
@@ -213,7 +226,7 @@ func mustCreateOrder(id, userID string) *Order {
 		NewOrderItem("laptop", "Laptop", 999.99, 1),
 		NewOrderItem("mouse", "Mouse", 29.99, 1),
 	}
-	order, err := NewOrder(id, userID, items)
+	order, err := NewOrder(context.Background(), id, userID, items)
 	if err != nil {
 		panic(err)
 	}

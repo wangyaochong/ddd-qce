@@ -22,7 +22,7 @@ type tracingTestEvent struct {
 }
 
 func TestTracingAspect_NameAndOrder(t *testing.T) {
-	aspect := &TracingAspect{Store: trace.NewInMemoryTraceStore()}
+	aspect := &TracingAspect{store: trace.NewInMemoryTraceStore()}
 
 	if aspect.Name() != "tracing" {
 		t.Errorf("expected name 'tracing', got '%s'", aspect.Name())
@@ -34,7 +34,7 @@ func TestTracingAspect_NameAndOrder(t *testing.T) {
 
 func TestTracingAspect_BeforeCommand_CreatesSpan(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	cmd := &tracingTestCommand{Name: "test"}
@@ -57,7 +57,7 @@ func TestTracingAspect_BeforeCommand_CreatesSpan(t *testing.T) {
 
 func TestTracingAspect_BeforeCommand_ExistingTrace(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	ctx = trace.WithTrace(ctx, "existing-trace", "existing-span")
@@ -76,7 +76,7 @@ func TestTracingAspect_BeforeCommand_ExistingTrace(t *testing.T) {
 
 func TestTracingAspect_AfterCommand_Success(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	cmd := &tracingTestCommand{Name: "test"}
@@ -107,7 +107,7 @@ func TestTracingAspect_AfterCommand_Success(t *testing.T) {
 
 func TestTracingAspect_AfterCommand_Error(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	cmd := &tracingTestCommand{Name: "test"}
@@ -132,7 +132,7 @@ func TestTracingAspect_AfterCommand_Error(t *testing.T) {
 
 func TestTracingAspect_BeforeQuery_CreatesSpan(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	query := &tracingTestQuery{ID: "1"}
@@ -155,7 +155,7 @@ func TestTracingAspect_BeforeQuery_CreatesSpan(t *testing.T) {
 
 func TestTracingAspect_AfterQuery_Success(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	query := &tracingTestQuery{ID: "1"}
@@ -179,7 +179,7 @@ func TestTracingAspect_AfterQuery_Success(t *testing.T) {
 
 func TestTracingAspect_AfterQuery_Error(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	query := &tracingTestQuery{ID: "1"}
@@ -201,7 +201,7 @@ func TestTracingAspect_AfterQuery_Error(t *testing.T) {
 
 func TestTracingAspect_BeforePublish_CreatesSpan(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
@@ -224,7 +224,7 @@ func TestTracingAspect_BeforePublish_CreatesSpan(t *testing.T) {
 
 func TestTracingAspect_AfterPublish_Success(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
@@ -248,7 +248,7 @@ func TestTracingAspect_AfterPublish_Success(t *testing.T) {
 
 func TestTracingAspect_AfterPublish_Error(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
@@ -286,7 +286,7 @@ func TestTracingAspect_TypeName_Value(t *testing.T) {
 
 func TestLoggingAspect_BeforeQuery(t *testing.T) {
 	logger := &mockLogger{}
-	aspect := &LoggingAspect{Logger: logger}
+	aspect := &LoggingAspect{logger: logger}
 
 	ctx := context.Background()
 	query := &tracingTestQuery{ID: "1"}
@@ -306,7 +306,7 @@ func TestLoggingAspect_BeforeQuery(t *testing.T) {
 
 func TestLoggingAspect_BeforeCommand(t *testing.T) {
 	logger := &mockLogger{}
-	aspect := &LoggingAspect{Logger: logger}
+	aspect := &LoggingAspect{logger: logger}
 
 	ctx := context.Background()
 	cmd := &tracingTestCommand{Name: "test"}
@@ -326,7 +326,7 @@ func TestLoggingAspect_BeforeCommand(t *testing.T) {
 
 func TestLoggingAspect_BeforePublish(t *testing.T) {
 	logger := &mockLogger{}
-	aspect := &LoggingAspect{Logger: logger}
+	aspect := &LoggingAspect{logger: logger}
 
 	ctx := context.Background()
 	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
@@ -346,7 +346,7 @@ func TestLoggingAspect_BeforePublish(t *testing.T) {
 
 func TestMetricsAspect_BeforeQuery_NoOp(t *testing.T) {
 	recorder := newMockMetricsRecorder()
-	aspect := &MetricsAspect{Recorder: recorder}
+	aspect := &MetricsAspect{recorder: recorder}
 
 	ctx := context.Background()
 	query := &tracingTestQuery{ID: "1"}
@@ -366,7 +366,7 @@ func TestMetricsAspect_BeforeQuery_NoOp(t *testing.T) {
 
 func TestMetricsAspect_BeforeCommand_NoOp(t *testing.T) {
 	recorder := newMockMetricsRecorder()
-	aspect := &MetricsAspect{Recorder: recorder}
+	aspect := &MetricsAspect{recorder: recorder}
 
 	ctx := context.Background()
 	cmd := &tracingTestCommand{Name: "test"}
@@ -386,7 +386,7 @@ func TestMetricsAspect_BeforeCommand_NoOp(t *testing.T) {
 
 func TestMetricsAspect_BeforePublish_NoOp(t *testing.T) {
 	recorder := newMockMetricsRecorder()
-	aspect := &MetricsAspect{Recorder: recorder}
+	aspect := &MetricsAspect{recorder: recorder}
 
 	ctx := context.Background()
 	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
@@ -406,7 +406,7 @@ func TestMetricsAspect_BeforePublish_NoOp(t *testing.T) {
 
 func TestTracingAspect_FullCommandLifecycle(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
-	aspect := &TracingAspect{Store: store}
+	aspect := &TracingAspect{store: store}
 
 	ctx := context.Background()
 	cmd := &tracingTestCommand{Name: "full-test"}

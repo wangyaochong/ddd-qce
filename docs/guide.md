@@ -147,7 +147,7 @@ package domain
 
 import (
     "github.com/ddd-qce/core/domain/aggregate"
-    "github.com/ddd-qce/core/domain/event"
+    "github.com/ddd-qce/core/cqrs/event"
 )
 
 type Order struct {
@@ -176,7 +176,7 @@ const (
 ### 2. 实现 EventApplier（推荐方式）
 
 ```go
-func (o *Order) When(evt event.DomainEvent) {
+func (o *Order) When(evt event.Event) error {
     switch e := evt.(type) {
     case OrderCreatedEvent:
         o.Items = e.Items
@@ -189,7 +189,7 @@ func (o *Order) When(evt event.DomainEvent) {
     }
 }
 
-func NewOrder(orderID string, items []OrderItem) *Order {
+func NewOrder(ctx context.Context, orderID string, items []OrderItem) *Order {
     order := &Order{
         AggregateRoot: *aggregate.NewAggregateRootWithApplier(orderID, order),
         Items:         items,
@@ -202,10 +202,10 @@ func NewOrder(orderID string, items []OrderItem) *Order {
     }
     order.Total = total
 
-    order.Apply(OrderCreatedEvent{
-        OrderID: orderID,
-        Items:   items,
-        Total:   total,
+    order.Apply(ctx, OrderCreatedEvent{
+        AggregateID: orderID,
+        Items:       items,
+        Total:       total,
     })
 
     return order
@@ -215,21 +215,21 @@ func NewOrder(orderID string, items []OrderItem) *Order {
 ### 3. 聚合根业务方法
 
 ```go
-func (o *Order) Confirm() error {
+func (o *Order) Confirm(ctx context.Context) error {
     if o.Status != OrderStatusPending {
         return fmt.Errorf("order can only be confirmed from pending status")
     }
 
     o.Status = OrderStatusConfirmed
 
-    o.Apply(OrderConfirmedEvent{
-        OrderID: o.ID,
+    o.Apply(ctx, OrderConfirmedEvent{
+        AggregateID: o.ID(),
     })
 
     return nil
 }
 
-func (o *Order) Cancel() error {
+func (o *Order) Cancel(ctx context.Context) error {
     if o.Status == OrderStatusShipped {
         return fmt.Errorf("cannot cancel shipped order")
     }
@@ -237,9 +237,9 @@ func (o *Order) Cancel() error {
     oldStatus := o.Status
     o.Status = OrderStatusCancelled
 
-    o.Apply(OrderCancelledEvent{
-        OrderID:   o.ID,
-        OldStatus: oldStatus,
+    o.Apply(ctx, OrderCancelledEvent{
+        AggregateID: o.ID(),
+        OldStatus:   oldStatus,
     })
 
     return nil
@@ -297,7 +297,7 @@ type OrderRepository struct {
 
 func NewOrderRepository(db *sql.DB) *OrderRepository {
     return &OrderRepository{
-        PgRepository: pg.NewRepository[*Order](db, pg.JSONSerializer[*Order]{}),
+        PgRepository: pg.NewRepository[*Order](db),
     }
 }
 ```
@@ -337,20 +337,26 @@ type EventSourcingRepository[T any] interface {
 import (
     "database/sql"
     cqevent "github.com/ddd-qce/core/cqrs/event"
-    "github.com/ddd-qce/core/cqrs/event/pg"
+    pgevent "github.com/ddd-qce/core/cqrs/event/impl/pg"
     "github.com/ddd-qce/core/infra/repository/pg"
 )
 
-eventStore := pgevent.NewEventStore[event.DomainEvent](db)
+eventStore, err := pgevent.NewEventSourceStore[cqevent.Event](db,
+    pgevent.WithFactory[cqevent.Event](func() cqevent.Event {
+        return &OrderPlacedEvent{}
+    }),
+)
 
 repo := pg.NewEventSourcedRepository[*Order](
     db,
-    (*cqevent.EventStore[event.DomainEvent])(&eventStore), // 需要适配
+    eventStore,
     func(id string) *Order {
-        return &Order{AggregateRoot: *aggregate.NewAggregateRootWithApplier(id, &Order{})}
+        o := &Order{}
+        o.AggregateRoot = *aggregate.NewAggregateRootWithApplier(id, o)
+        return o
     },
-    pg.WithSnapshotEvery[*Order](10),      // 每 10 个事件保存一次快照
-    pg.WithSerializer[*Order](pg.JSONSerializer[*Order]{}),
+    pg.WithSnapshotEvery[*Order](10),
+    pg.WithSerializer[*Order](repository.JSONSerializer[*Order]{}),
 )
 ```
 
@@ -405,7 +411,7 @@ import (
     "context"
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/cqrs/command"
-    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/impl/memory"
 )
 
 func main() {
@@ -501,7 +507,7 @@ import (
     "context"
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/cqrs/query"
-    querymemory "github.com/ddd-qce/core/cqrs/query/memory"
+    querymemory "github.com/ddd-qce/core/cqrs/query/impl/memory"
 )
 
 func main() {
@@ -530,20 +536,22 @@ func main() {
 package event
 
 import (
-    "time"
-    "github.com/ddd-qce/core/domain/event"
+    "github.com/ddd-qce/core/cqrs/event"
 )
 
 type UserCreatedEvent struct {
-    UserID    string
-    Name      string
-    Email     string
-    CreatedAt time.Time
+    event.BaseEvent
+    Name  string
+    Email string
 }
 
-func (e UserCreatedEvent) AggregateID() string   { return e.UserID }
-func (e UserCreatedEvent) EventType() string     { return "UserCreated" }
-func (e UserCreatedEvent) OccurredAt() time.Time { return e.CreatedAt }
+func NewUserCreatedEvent(userID, name, email string) UserCreatedEvent {
+    return UserCreatedEvent{
+        BaseEvent: event.NewDomainEvent(userID),
+        Name:      name,
+        Email:     email,
+    }
+}
 ```
 
 ### 2. 定义 Handler
@@ -577,7 +585,7 @@ import (
     "context"
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/cqrs/event"
-    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/impl/memory"
 )
 
 func main() {
@@ -591,12 +599,7 @@ func main() {
     bus.SubscribeHandler(&UpdateSearchIndexHandler{searchClient: client})
 
     // 发布事件（通过接口级 Dispatch，ctx 在前）
-    err := event.Dispatch[UserCreatedEvent](ctx, bus, UserCreatedEvent{
-        UserID:    "user-123",
-        Name:      "Alice",
-        Email:     "alice@example.com",
-        CreatedAt: time.Now(),
-    })
+    err := event.Dispatch[UserCreatedEvent](ctx, bus, NewUserCreatedEvent("user-123", "Alice", "alice@example.com"))
 }
 ```
 
@@ -615,18 +618,18 @@ event.Dispatch[UserCreatedEvent](ctx, bus, UserCreatedEvent{...})
 event.Dispatch[OrderPlacedEvent](ctx, bus, OrderPlacedEvent{...})
 ```
 
-### 5. EventStore 使用
+### 5. EventSourceStore 使用
 
 ```go
-import eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+import eventmemory "github.com/ddd-qce/core/cqrs/event/impl/memory"
 
 func main() {
     // 创建事件存储
-    store := eventmemory.NewEventStore[UserCreatedEvent]()
+    store := eventmemory.NewEventSourceStore[UserCreatedEvent]()
 
     // 追加事件（4 参数：ctx, aggregateID, expectedVersion, events）
     store.Append(ctx, "user-123", 0, []UserCreatedEvent{
-        {UserID: "user-123", Name: "Alice", Email: "alice@example.com", CreatedAt: time.Now()},
+        NewUserCreatedEvent("user-123", "Alice", "alice@example.com"),
     })
 
     // 加载事件（用于事件溯源重建聚合）
@@ -634,17 +637,19 @@ func main() {
 }
 ```
 
-### 6. PostgreSQL EventStore
+### 6. PostgreSQL EventSourceStore
 
 ```go
-import pgevent "github.com/ddd-qce/core/cqrs/event/pg"
+import pgevent "github.com/ddd-qce/core/cqrs/event/impl/pg"
 
-store := pgevent.NewEventStore[event.DomainEvent](db)
+store, err := pgevent.NewEventSourceStore[MyEvent](db)
 
-// 带工厂函数（用于反序列化优化）
-store := pgevent.NewEventStoreWithFactory[event.DomainEvent](db, func() event.DomainEvent {
-    return &MyDomainEvent{}
-})
+// 带工厂函数（用于反序列化优化，接口类型 T 必须使用）
+store, err := pgevent.NewEventSourceStore[event.Event](db,
+    pgevent.WithFactory[event.Event](func() event.Event {
+        return &MyEvent{}
+    }),
+)
 ```
 
 ---
@@ -772,7 +777,7 @@ import (
     "context"
     "time"
 
-    "github.com/ddd-qce/core/cqrs/aspect"
+    "github.com/ddd-qce/core/aspect"
 )
 
 type MyAuthAspect struct{}
@@ -808,14 +813,14 @@ import (
     "context"
     "github.com/ddd-qce/core/job/core"
     jobmemory "github.com/ddd-qce/core/job/memory"
-    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/impl/memory"
 )
 
 func main() {
     ctx := context.Background()
 
     chain := aspect.NewAspectChain()
-    cBus := commandmemory.NewCommandBus(chain)
+    cBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 
     jobStore := jobmemory.NewJobStore()
     // JobManager 需要 CommandBus 来执行任务
@@ -874,10 +879,12 @@ job, err := jobManager.Submit(ctx, cmd,
 ```go
 import (
     "context"
-    "github.com/ddd-qce/core/trace"
+    "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/aspect/builtin"
-    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+    "github.com/ddd-qce/core/cqrs/command"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/impl/memory"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/impl/memory"
+    "github.com/ddd-qce/core/trace"
 )
 
 func main() {
@@ -888,11 +895,11 @@ func main() {
     chain.RegisterCommandAspect(&builtin.TracingAspect{Store: traceStore})
     chain.RegisterEventAspect(&builtin.TracingAspect{Store: traceStore})
 
-    cBus := commandmemory.NewCommandBus(chain)
+    cBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
     eBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
     // 执行 Command 1
-    commandmemory.Dispatch[CreateUserCommand, string](cBus, ctx, cmd)
+    command.Dispatch[CreateUserCommand, string](ctx, cBus, cmd)
     // ↓ 自动创建 Span (TraceID: xxx, SpanID: aaa)
 
     // Command 1 内部发布 Event
@@ -900,7 +907,7 @@ func main() {
     // ↓ 自动创建 Span (TraceID: xxx, SpanID: bbb, ParentID: aaa)
 
     // Event Handler 内部执行 Command 2
-    commandmemory.Dispatch[SendEmailCommand, struct{}](cBus, ctx, emailCmd)
+    command.Dispatch[SendEmailCommand, struct{}](ctx, cBus, emailCmd)
     // ↓ 自动创建 Span (TraceID: xxx, SpanID: ccc, ParentID: bbb)
 
     // 查看完整调用链
@@ -998,7 +1005,7 @@ backend := infra.NewPgBackend(db)
 // backend.JobStore            — PgJobStore
 // backend.TraceStore          — PgTraceStore
 // backend.MessageStore        — PgMessageStore
-// backend.Migrate             — pg.Migrate 函数
+// backend.Migrator          — pg.Migrator（执行数据库迁移）
 ```
 
 ### 3. 环境变量配置切换
@@ -1029,14 +1036,17 @@ func NewProvider(cfg *Config) (*StoreComponents, error) {
     case "memory":
         return &StoreComponents{
             Backend:    infra.NewMemoryBackend(),
-            EventStore: eventmemory.NewEventStore[domainevent.DomainEvent](),
+            EventStore: eventmemory.NewEventSourceStore[cqevent.Event](),
             OrderRepo:  application.NewOrderRepository(),
         }, nil
     case "postgresql":
         db, _ := sql.Open("pgx", cfg.PostgresURI)
+        eventStore, _ := pgevent.NewEventSourceStore[cqevent.Event](db,
+            pgevent.WithFactory[cqevent.Event](func() cqevent.Event { return &OrderPlacedEvent{} }),
+        )
         return &StoreComponents{
             Backend:    infra.NewPgBackend(db),
-            EventStore: eventpg.NewEventStore[domainevent.DomainEvent](db),
+            EventStore: eventStore,
             OrderRepo:  application.NewOrderRepository(),
             DB:         db,
         }, nil
@@ -1047,9 +1057,9 @@ func NewProvider(cfg *Config) (*StoreComponents, error) {
 ### 4. 数据库迁移
 
 ```go
-// 使用 Backend 的 Migrate 函数
-if backend.Migrate != nil {
-    err := backend.Migrate(db)
+// 使用 Backend 的 Migrator 执行迁移
+if backend.Migrator != nil {
+    err := backend.Migrator.Migrate(ctx)
 }
 
 // 或直接调用
@@ -1099,11 +1109,11 @@ import (
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/aspect/builtin"
     "github.com/ddd-qce/core/cqrs/command"
-    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/impl/memory"
     "github.com/ddd-qce/core/cqrs/event"
-    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/impl/memory"
     "github.com/ddd-qce/core/cqrs/query"
-    querymemory "github.com/ddd-qce/core/cqrs/query/memory"
+    querymemory "github.com/ddd-qce/core/cqrs/query/impl/memory"
     jobmemory "github.com/ddd-qce/core/job/memory"
     "github.com/ddd-qce/core/trace"
 )
@@ -1152,6 +1162,42 @@ func main() {
 ---
 
 ## 十三、最佳实践
+
+### 0. Entity 嵌入规范
+
+所有 Entity/AggregateRoot 嵌入**统一使用值类型**，禁止指针嵌入：
+
+```go
+// ✅ 正确：值类型嵌入
+type Order struct {
+    aggregate.AggregateRoot
+    Items []OrderItem
+}
+
+type Product struct {
+    entity.Entity
+    Name string
+}
+
+type Document struct {
+    entity.AuditableEntity
+    Title string
+}
+
+// ❌ 错误：指针嵌入（运行时行为不同，nil 方法调用会 panic）
+type Order struct {
+    *aggregate.AggregateRoot
+    Items []OrderItem
+}
+```
+
+初始化时对构造函数返回值解引用：
+
+```go
+order := &Order{
+    AggregateRoot: *aggregate.NewAggregateRootWithApplier(id, order),
+}
+```
 
 ### 1. Command 命名规范
 
@@ -1245,71 +1291,3 @@ DDD_STORE_TYPE=memory ./myapp
 ```
 
 PostgreSQL 是唯一的生产运行模式。Memory 模式的价值在于验证架构设计——确保依赖倒置、接口隔离等原则得到遵守。
-
----
-
-## 十四、使用脚手架创建聚合
-
-### 1. 脚手架工具简介
-
-ddd-qce 提供 `ddd new aggregate` 命令，自动生成符合框架约定的聚合骨架代码。
-
-### 2. 安装与使用
-
-```bash
-# 进入你的模块目录
-cd my-ddd-app
-
-# 生成聚合骨架
-go run ./cmd/ddd new aggregate Order --module github.com/myorg/myapp
-```
-
-### 3. 生成的文件
-
-执行命令后，会在当前目录生成以下文件：
-
-```
-domain/
-├── order.go           # 聚合根 + 实体 + 状态常量
-├── order_events.go    # 领域事件定义
-└── order_test.go      # 基础测试用例
-
-application/
-├── order_commands.go    # Command + Result 定义
-├── order_cmd_handler.go # Command Handler
-├── order_query_handler.go # Query Handler
-├── order_event_handler.go # Event Handler
-└── order_repository.go  # Repository 适配器
-```
-
-### 4. 后续步骤
-
-1. 补充业务逻辑（domain/order.go 中的业务方法）
-2. 在 infrastructure/wire.go 中注册 Handler（参考输出的 registration snippet）
-3. 运行测试验证：`go test ./...`
-
-### 5. 示例：创建一个新的 Product 聚合
-
-```bash
-# 1. 创建模块（如果还没有）
-go mod init github.com/myorg/shop
-
-# 2. 添加框架依赖
-go get github.com/ddd-qce/core
-
-# 3. 生成聚合
-go run ./cmd/ddd new aggregate Product --module github.com/myorg/shop
-
-# 4. 查看生成的文件
-ls -la domain/ application/
-```
-
-### 6. 命名规范
-
-- 聚合名称使用 PascalCase：如 `Order`、`Product`、`Inventory`
-- 生成的文件名自动转换为 camelCase：如 `order.go`、`order_events.go`
-- 状态常量使用 `StatusName` 格式：如 `OrderStatusPending`
-
-### 7. 自定义模板
-
-（预留）未来版本将支持自定义模板目录。

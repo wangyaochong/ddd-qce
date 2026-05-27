@@ -9,14 +9,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )
 
 type JobManager struct {
 	store        jobcore.JobStore
-	executor     cmd.CommandBus
+	executor     command.CommandBus
 	mu           sync.Mutex
 	cancelers    map[string]context.CancelFunc
 	jobs         map[string]*jobcore.Job
@@ -26,7 +26,7 @@ type JobManager struct {
 	recovery     bool
 }
 
-func NewJobManager(store jobcore.JobStore, executor cmd.CommandBus, opts ...JobManagerOption) *JobManager {
+func NewJobManager(store jobcore.JobStore, executor command.CommandBus, opts ...JobManagerOption) *JobManager {
 	m := &JobManager{
 		store:     store,
 		executor:  executor,
@@ -301,8 +301,7 @@ func (m *JobManager) recoverJobs() {
 	running, err := m.store.List(ctx, jobcore.JobStatusRunning)
 	if err == nil {
 		for _, job := range running {
-			job.SetStatus(jobcore.JobStatusFailed)
-			job.SetError("process restarted during execution")
+		job.RestoreJobState(jobcore.JobStatusFailed, nil, "", "process restarted during execution", time.Time{}, time.Now())
 			if updateErr := m.store.Update(ctx, job); updateErr != nil {
 				m.handleStoreError(ctx, job.ID, "recovery_running", updateErr)
 			}

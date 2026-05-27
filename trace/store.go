@@ -5,8 +5,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	ddderror "github.com/ddd-qce/core/error"
+)
+
+const (
+	defaultTTL      = 24 * time.Hour
+	defaultMaxSpans = 10000
 )
 
 type TraceStore interface {
@@ -19,12 +25,59 @@ type InMemoryTraceStore struct {
 	mu         sync.RWMutex
 	spans      []*Span
 	traceIndex map[string][]int
+	ttl        time.Duration
+	maxSpans   int
+	stopCh     chan struct{}
 }
 
-func NewInMemoryTraceStore() *InMemoryTraceStore {
-	return &InMemoryTraceStore{
+type InMemoryTraceStoreOption func(*InMemoryTraceStore)
+
+func WithTTL(ttl time.Duration) InMemoryTraceStoreOption {
+	return func(s *InMemoryTraceStore) { s.ttl = ttl }
+}
+
+func WithMaxSpans(n int) InMemoryTraceStoreOption {
+	return func(s *InMemoryTraceStore) { s.maxSpans = n }
+}
+
+func WithBackgroundCleanup(interval time.Duration) InMemoryTraceStoreOption {
+	return func(s *InMemoryTraceStore) {
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					s.mu.Lock()
+					s.evict()
+					s.mu.Unlock()
+				case <-s.stopCh:
+					return
+				}
+			}
+		}()
+	}
+}
+
+func NewInMemoryTraceStore(opts ...InMemoryTraceStoreOption) *InMemoryTraceStore {
+	s := &InMemoryTraceStore{
 		spans:      make([]*Span, 0),
 		traceIndex: make(map[string][]int),
+		ttl:        defaultTTL,
+		maxSpans:   defaultMaxSpans,
+		stopCh:     make(chan struct{}),
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+func (s *InMemoryTraceStore) Close() {
+	select {
+	case <-s.stopCh:
+	default:
+		close(s.stopCh)
 	}
 }
 
@@ -34,7 +87,33 @@ func (s *InMemoryTraceStore) RecordSpan(ctx context.Context, span *Span) error {
 	idx := len(s.spans)
 	s.spans = append(s.spans, span)
 	s.traceIndex[span.TraceID] = append(s.traceIndex[span.TraceID], idx)
+	s.evict()
 	return nil
+}
+
+func (s *InMemoryTraceStore) evict() {
+	cutoff := time.Now().Add(-s.ttl)
+
+	firstValid := 0
+	for firstValid < len(s.spans) && s.spans[firstValid].StartedAt.Before(cutoff) {
+		firstValid++
+	}
+
+	if len(s.spans)-firstValid > s.maxSpans {
+		firstValid = len(s.spans) - s.maxSpans
+	}
+
+	if firstValid > 0 {
+		s.spans = s.spans[firstValid:]
+		s.rebuildIndex()
+	}
+}
+
+func (s *InMemoryTraceStore) rebuildIndex() {
+	s.traceIndex = make(map[string][]int, len(s.spans))
+	for i, span := range s.spans {
+		s.traceIndex[span.TraceID] = append(s.traceIndex[span.TraceID], i)
+	}
 }
 
 func (s *InMemoryTraceStore) GetTrace(ctx context.Context, traceID string) ([]*Span, error) {

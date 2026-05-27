@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/ddd-qce/core/aspect/builtin"
 	jobcore "github.com/ddd-qce/core/job/core"
@@ -68,7 +69,7 @@ func TestMemoryBackend_JobStore(t *testing.T) {
 		ID: "j1", Command: "test",
 		CreatedAt: trace.Span{}.StartedAt, Timeout: 0, MaxRetries: 0,
 	}
-	job.SetStatus(jobcore.JobStatusPending)
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 	if err := b.JobStore.Create(ctx, job); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}

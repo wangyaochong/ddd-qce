@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 )
 
 type testCreateUserCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 	Name string
 }
 
@@ -27,7 +27,7 @@ func (h *testCreateUserHandler) Handle(ctx context.Context, cmd *testCreateUserC
 }
 
 type testDeleteUserCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 	UserID string
 }
 
@@ -42,7 +42,7 @@ func (h *testDeleteUserHandler) Handle(ctx context.Context, cmd *testDeleteUserC
 }
 
 type testErrorCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 }
 
 type testErrorCommandResult struct{}
@@ -54,7 +54,7 @@ func (h *testErrorCommandHandler) Handle(ctx context.Context, cmd *testErrorComm
 }
 
 type testSlowCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 	Duration time.Duration
 }
 
@@ -79,7 +79,7 @@ func TestCommandBus_Dispatch(t *testing.T) {
 	RegisterCommand(bus, &testCreateUserHandler{})
 
 	ctx := context.Background()
-	result, err := cmd.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
+	result, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -94,7 +94,7 @@ func TestCommandBus_Dispatch_NoHandler(t *testing.T) {
 	bus := NewCommandBus(WithCommandBusAspectChain(chain))
 
 	ctx := context.Background()
-	_, err := cmd.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
+	_, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
 
 	if err == nil {
 		t.Fatal("expected error for unregistered command type")
@@ -109,7 +109,7 @@ func TestCommandBus_MultipleHandlers(t *testing.T) {
 
 	ctx := context.Background()
 
-	r1, err := cmd.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "alice"})
+	r1, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "alice"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestCommandBus_MultipleHandlers(t *testing.T) {
 		t.Errorf("unexpected result: %v", r1)
 	}
 
-	r2, err := cmd.Dispatch[*testDeleteUserCommand, *testDeleteUserResult](ctx, bus, &testDeleteUserCommand{UserID: "123"})
+	r2, err := 	command.Dispatch[*testDeleteUserCommand, *testDeleteUserResult](ctx, bus, &testDeleteUserCommand{UserID: "123"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestCommandBus_HandlerError(t *testing.T) {
 	RegisterCommand(bus, &testErrorCommandHandler{})
 
 	ctx := context.Background()
-	_, err := cmd.Dispatch[*testErrorCommand, *testErrorCommandResult](ctx, bus, &testErrorCommand{})
+	_, err := 	command.Dispatch[*testErrorCommand, *testErrorCommandResult](ctx, bus, &testErrorCommand{})
 
 	if err == nil {
 		t.Fatal("expected error from handler")
@@ -155,7 +155,7 @@ func TestCommandBus_Concurrent(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			_, err := cmd.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: string(rune(id))})
+			_, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: string(rune(id))})
 			if err != nil {
 				errs <- err
 			}
@@ -175,7 +175,7 @@ func TestCommandBus_NilChain(t *testing.T) {
 	RegisterCommand(bus, &testCreateUserHandler{})
 
 	ctx := context.Background()
-	result, err := cmd.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
+	result, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -196,7 +196,7 @@ func TestCommandBus_WithContextCancel(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := cmd.Dispatch[*testSlowCommand, *testSlowCommandResult](ctx, bus, &testSlowCommand{Duration: 5 * time.Second})
+	_, err := 	command.Dispatch[*testSlowCommand, *testSlowCommandResult](ctx, bus, &testSlowCommand{Duration: 5 * time.Second})
 
 	if err == nil {
 		t.Fatal("expected context cancelled error")
@@ -220,7 +220,7 @@ func TestCommandBus_WithAspects(t *testing.T) {
 	RegisterCommand(bus, &testCreateUserHandler{})
 
 	ctx := context.Background()
-	_, err := cmd.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
+	_, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

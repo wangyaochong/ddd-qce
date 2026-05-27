@@ -265,9 +265,9 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | IDGenerator | `domain/entity` | ID 生成器类型，DefaultIDGenerator() (UUID hex)，NewEntityWithID() |
 | AggregateRoot | `domain/aggregate` | 聚合根，嵌入 Entity + Version + 事件收集/回溯 + EventApplier |
 | ValueObject[T] | `domain/valueobject` | 泛型值对象，New[T]() / MustNew[T]() / Value() / Equals() / Validate() / DeepEquals() |
-| DomainEvent | `domain/event` | 领域事件接口，AggregateID() / OccurredAt()；EventTypeOf() 包级函数获取事件类型名 |
-| EventHandler[T] | `domain/event` | 泛型事件处理器接口，Handle(ctx, T) error |
-| EventStore[T] | `domain/event` | 事件存储接口，Append(ctx, []T) / Load(ctx, aggregateID, afterVersion) |
+| Event | `cqrs/event` | 领域事件接口，AggregateID() / OccurredAt() / CorrelationID() / CausationID()；EventTypeOf() 包级函数获取事件类型名 |
+| EventHandler[T] | `cqrs/event` | 泛型事件处理器接口，Handle(ctx, T) error |
+| EventSourceStore[T] | `cqrs/event` | 事件存储接口，Append(ctx, aggregateID, expectedVersion, events) / Load(ctx, aggregateID, afterVersion) / LoadAll(ctx, afterPosition, limit) |
 | Repository[T] | `domain/repository` | 仓储接口，Save / FindByID / Delete |
 | EventSourcingRepository[T] | `domain/repository` | 事件溯源仓储接口，Save / Load |
 
@@ -285,20 +285,20 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | Dispatch[T,R] | `cqrs/query` | 接口级泛型调度函数，接受 QueryBus，调用者无需依赖具体实现 |
 | EventBus | `cqrs/event` | 事件总线接口，SubscribeHandler(handler any) error / Publish(ctx, evt) error |
 | Dispatch[T] | `cqrs/event` | 接口级泛型调度函数，接受 EventBus，调用者无需依赖具体实现 |
-| MemoryCommandBus | `cqrs/command/memory` | 内存命令总线，实现 CommandBus 接口，RegisterCommand[T,R](bus, handler) / Dispatch[T,R](ctx, bus, cmd) |
-| MemoryQueryBus | `cqrs/query/memory` | 内存查询总线，实现 QueryBus 接口，RegisterQuery[T,R](bus, handler) / Dispatch[T,R](ctx, bus, q) |
-| MemoryEventBus | `cqrs/event/memory` | 内存事件总线，实现 EventBus 接口，RegisterHandler[T](bus, handler) / Dispatch[T](ctx, bus, evt) |
-| EventStore[T] | `cqrs/event/memory` | 内存事件存储，实现 domain/event.EventStore[T]（支持指针类型和接口类型 T） |
-| EventStore[T] | `cqrs/event/pg` | PostgreSQL 事件存储，实现 domain/event.EventStore[T]（接口类型 T 需 WithFactory） |
+| MemoryCommandBus | `cqrs/command/impl/memory` | 内存命令总线，实现 CommandBus 接口，NewCommandBus(opts ...CommandBusOption) 函数选项模式 |
+| MemoryQueryBus | `cqrs/query/impl/memory` | 内存查询总线，实现 QueryBus 接口，NewQueryBus(opts ...QueryBusOption) 函数选项模式 |
+| MemoryEventBus | `cqrs/event/impl/memory` | 内存事件总线，实现 EventBus 接口，NewEventBus(opts ...EventBusOption) 函数选项模式 |
+| EventSourceStore[T] | `cqrs/event/impl/memory` | 内存事件存储，实现 cqrs/event.EventSourceStore[T]（支持指针类型和接口类型 T） |
+| EventSourceStore[T] | `cqrs/event/impl/pg` | PostgreSQL 事件存储，实现 cqrs/event.EventSourceStore[T]（接口类型 T 需 WithFactory） |
 
 ### 切面层
 
 | 组件 | 包路径 | 说明 |
 |------|--------|------|
 | AspectChain | `aspect` | 切面链，洋葱模型执行，RegisterCommandAspect/QueryAspect/EventAspect |
-| CommandAspect | `cqrs/aspect` | 命令切面接口，BeforeCommand / AfterCommand |
-| QueryAspect | `cqrs/aspect` | 查询切面接口，BeforeQuery / AfterQuery |
-| EventAspect | `cqrs/aspect` | 事件切面接口，BeforePublish / AfterPublish |
+| CommandAspect | `aspect` | 命令切面接口，BeforeCommand / AfterCommand |
+| QueryAspect | `aspect` | 查询切面接口，BeforeQuery / AfterQuery |
+| EventAspect | `aspect` | 事件切面接口，BeforePublish / AfterPublish |
 | TracingAspect | `aspect/builtin` | 链路追踪切面（Order: 0） |
 | TransactionAspect | `aspect/builtin` | 事务管理切面（Order: 10） |
 | LoggingAspect | `aspect/builtin` | 日志记录切面（Order: 50） |
@@ -333,7 +333,7 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 
 | 组件 | 包路径 | 说明 |
 |------|--------|------|
-| Backend | `infra` | 统一后端结构体，TransactionManager + JobStore + TraceStore + MessageStore + Migrate |
+| Backend | `infra` | 统一后端结构体，TransactionManager + JobStore + TraceStore + MessageStore + Migrator |
 | TransactionManager | `infra` | 事务管理器接口，Begin/Commit/Rollback |
 | MemoryTransactionManager | `infra` | 内存事务管理器，支持嵌套（depth + aborted） |
 | NewMemoryBackend() | `infra` | 创建内存后端（全部内存实现） |
@@ -345,7 +345,7 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 | PgTransactionManager | `pg` | PostgreSQL 事务管理器，Savepoint 嵌套事务 |
 | DBTX / GetQuerier | `pg` | 事务内查询器，自动从 ctx 获取当前 tx |
 | Migrate / DropAll | `pg` | 数据库迁移 |
-| NewBackend(db) | `pgx` | 创建 PostgreSQL 后端（组装全部 PG 实现） |
+| NewPgBackend(db) | `infra` | 创建 PostgreSQL 后端（组装全部 PG 实现） |
 
 ### 内置切面优先级
 
@@ -379,14 +379,6 @@ QueryBus → 函数调用         QueryBus → HTTP/gRPC
 
 ---
 
-## 脚手架工具
-
-为了确保 AI 生成代码符合框架约定，降低新用户入门门槛，ddd-qce 提供脚手架工具。
-
-详见 [实战指南 - 使用脚手架创建聚合](guide.md#十四使用脚手架创建聚合)。
-
----
-
 ## 七、存储模式设计哲学
 
 ### PostgreSQL 是生产模式
@@ -402,7 +394,7 @@ DDD_POSTGRES_URI="postgres://user:pass@localhost:5432/mydb" ./exampleapp
 
 Memory 模式**不是**生产降级方案，而是架构设计的验证工具。它的存在价值在于：
 
-1. **验证依赖倒置原则（DIP）**：如果应用层代码能零修改地在 memory 和 postgresql 之间切换，说明应用层确实只依赖接口，不依赖具体实现。一旦应用层偷偷 import 了 `cqrs/command/memory` 包，memory 模式的测试就会暴露这个违规。
+1. **验证依赖倒置原则（DIP）**：如果应用层代码能零修改地在 memory 和 postgresql 之间切换，说明应用层确实只依赖接口，不依赖具体实现。一旦应用层偷偷 import 了 `cqrs/command/impl/memory` 包，memory 模式的测试就会暴露这个违规。
 
 2. **验证接口隔离原则（ISP）**：Handler 通过 `Dispatch[T,R]` 调用 Bus 的 `Execute`，Wire 层调用 Bus 的 `RegisterHandler`。调用者只使用自己需要的方法，Go 隐式接口天然支持更窄的消费者定义。
 
@@ -453,7 +445,7 @@ DDD_STORE_TYPE=memory ./exampleapp
 // infrastructure/provider.go
 type StoreComponents struct {
     Backend      *infra.Backend
-    EventStore   domainevent.EventStore[domainevent.DomainEvent]
+    EventStore   cqevent.EventSourceStore[cqevent.Event]
     OrderRepo    application.OrderRepositoryAdapter
     DB           *sql.DB   // postgresql 模式下非 nil
 }

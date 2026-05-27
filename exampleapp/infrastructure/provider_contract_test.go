@@ -49,7 +49,7 @@ func testProviderContract(t *testing.T, store *StoreComponents) {
 			UserID:      "u1",
 			TotalAmount: 100,
 		}
-		err := store.EventStore.Append(ctx, "contract-agg-1", 0, []event.DomainEvent{evt})
+		err := store.EventStore.Append(ctx, "contract-agg-1", 0, []event.Event{evt})
 		if err != nil {
 			t.Fatalf("append failed: %v", err)
 		}
@@ -64,7 +64,7 @@ func testProviderContract(t *testing.T, store *StoreComponents) {
 
 	t.Run("OrderRepositorySaveAndFind", func(t *testing.T) {
 		ctx := context.Background()
-		order, err := domain.NewOrder("contract-ord-1", "user-001", []*domain.OrderItem{
+		order, err := domain.NewOrder(context.Background(), "contract-ord-1", "user-001", []*domain.OrderItem{
 			domain.NewOrderItem("laptop", "Laptop", 999, 1),
 		})
 		if err != nil {
@@ -97,7 +97,8 @@ func testDSNFromEnv() string {
 	if dsn != "" {
 		return dsn
 	}
-	db, err := sql.Open("pgx", "host=/var/run/postgresql dbname=postgres user=root password=root sslmode=disable")
+	defaultDSN := "host=/var/run/postgresql dbname=postgres user=" + os.Getenv("USER") + " sslmode=disable"
+	db, err := sql.Open("pgx", defaultDSN)
 	if err != nil {
 		return ""
 	}
@@ -105,5 +106,5 @@ func testDSNFromEnv() string {
 	if err := db.Ping(); err != nil {
 		return ""
 	}
-	return "host=/var/run/postgresql dbname=postgres user=root password=root sslmode=disable"
+	return defaultDSN
 }

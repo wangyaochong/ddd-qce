@@ -37,7 +37,7 @@ func TestPgJobStore_CreateAndGet(t *testing.T) {
 		MaxRetries: 3,
 		RetryCount: 0,
 	}
-	job.SetStatus(jobcore.JobStatusPending)
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 
 	if err := store.Create(ctx, job); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -67,11 +67,10 @@ func TestPgJobStore_Update(t *testing.T) {
 		Timeout:    time.Minute,
 		MaxRetries: 3,
 	}
-	job.SetStatus(jobcore.JobStatusPending)
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 	store.Create(ctx, job)
 
-	job.SetStatus(jobcore.JobStatusRunning)
-	job.SetStartedAt(time.Now().Truncate(time.Microsecond))
+	job.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Now().Truncate(time.Microsecond), time.Time{})
 	if err := store.Update(ctx, job); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -91,7 +90,7 @@ func TestPgJobStore_Delete(t *testing.T) {
 		ID: "job-3", Command: "delete-me",
 		CreatedAt: time.Now(), Timeout: time.Minute, MaxRetries: 0,
 	}
-	job.SetStatus(jobcore.JobStatusPending)
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 	store.Create(ctx, job)
 
 	if err := store.Delete(ctx, "job-3"); err != nil {
@@ -126,7 +125,7 @@ func TestPgJobStore_List(t *testing.T) {
 			CreatedAt: time.Now(),
 			Timeout: time.Minute, MaxRetries: 0,
 		}
-		job.SetStatus(jobcore.JobStatusPending)
+		job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 		store.Create(ctx, job)
 	}
 
@@ -190,7 +189,7 @@ func TestPgJobStore_TypedRoundTrip(t *testing.T) {
 		CreatedAt: time.Now().Truncate(time.Microsecond),
 		Timeout:   time.Minute,
 	}
-	job.SetStatus(jobcore.JobStatusPending)
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 
 	if err := store.Create(ctx, job); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -225,11 +224,10 @@ func TestPgJobStore_TypedResultRoundTrip(t *testing.T) {
 		CreatedAt: time.Now().Truncate(time.Microsecond),
 		Timeout:   time.Minute,
 	}
-	job.SetStatus(jobcore.JobStatusPending)
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 	store.Create(ctx, job)
 
-	job.SetStatus(jobcore.JobStatusCompleted)
-	job.SetResult(&testGenReportResult{File: "report.pdf"})
+	job.RestoreJobState(jobcore.JobStatusCompleted, &testGenReportResult{File: "report.pdf"}, "", "", time.Time{}, time.Time{})
 	if err := store.Update(ctx, job); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
@@ -260,7 +258,7 @@ func TestPgJobStore_WithoutRegistry_Fallback(t *testing.T) {
 		CreatedAt: time.Now().Truncate(time.Microsecond),
 		Timeout:   time.Minute,
 	}
-	job.SetStatus(jobcore.JobStatusPending)
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 	store.Create(ctx, job)
 
 	got, err := store.Get(ctx, "job-fallback-1")

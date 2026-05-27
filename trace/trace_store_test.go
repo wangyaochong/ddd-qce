@@ -399,17 +399,156 @@ func TestInMemoryTraceStore_ListTraces_EndTimeFilter(t *testing.T) {
 	}
 }
 
-func TestInMemoryTraceStore_ListTraces_NameContainsNoMatch(t *testing.T) {
-	store := NewInMemoryTraceStore()
+func TestInMemoryTraceStore_Evict_TTL(t *testing.T) {
+	store := NewInMemoryTraceStore(WithTTL(1 * time.Second))
+	defer store.Close()
 	ctx := context.Background()
 
-	store.RecordSpan(ctx, &Span{ID: "s1", TraceID: "t1", Type: SpanTypeCommand, Name: "CreateUser", StartedAt: time.Now()})
+	old := time.Now().Add(-2 * time.Second)
+	store.RecordSpan(ctx, &Span{ID: "s1", TraceID: "t1", Type: SpanTypeCommand, Name: "Old", StartedAt: old})
+	store.RecordSpan(ctx, &Span{ID: "s2", TraceID: "t2", Type: SpanTypeCommand, Name: "New", StartedAt: time.Now()})
 
-	traceIDs, err := store.ListTraces(ctx, TraceFilter{NameContains: "Order"})
+	if len(store.spans) != 1 {
+		t.Errorf("expected 1 span after TTL eviction, got %d", len(store.spans))
+	}
+	if store.spans[0].ID != "s2" {
+		t.Errorf("expected span s2 to remain, got %s", store.spans[0].ID)
+	}
+	if _, ok := store.traceIndex["t1"]; ok {
+		t.Error("expected trace t1 to be removed from index")
+	}
+}
+
+func TestInMemoryTraceStore_Evict_MaxSpans(t *testing.T) {
+	store := NewInMemoryTraceStore(WithMaxSpans(3))
+	defer store.Close()
+	ctx := context.Background()
+
+	now := time.Now()
+	store.RecordSpan(ctx, &Span{ID: "s1", TraceID: "t1", StartedAt: now})
+	store.RecordSpan(ctx, &Span{ID: "s2", TraceID: "t2", StartedAt: now})
+	store.RecordSpan(ctx, &Span{ID: "s3", TraceID: "t3", StartedAt: now})
+	store.RecordSpan(ctx, &Span{ID: "s4", TraceID: "t4", StartedAt: now})
+
+	if len(store.spans) != 3 {
+		t.Errorf("expected 3 spans after max limit, got %d", len(store.spans))
+	}
+	if store.spans[0].ID != "s2" {
+		t.Errorf("expected first span to be s2, got %s", store.spans[0].ID)
+	}
+}
+
+func TestInMemoryTraceStore_Evict_TTLAndMaxSpans(t *testing.T) {
+	store := NewInMemoryTraceStore(WithTTL(1*time.Second), WithMaxSpans(2))
+	defer store.Close()
+	ctx := context.Background()
+
+	old := time.Now().Add(-2 * time.Second)
+	now := time.Now()
+	store.RecordSpan(ctx, &Span{ID: "s1", TraceID: "t1", StartedAt: old})
+	store.RecordSpan(ctx, &Span{ID: "s2", TraceID: "t2", StartedAt: now})
+	store.RecordSpan(ctx, &Span{ID: "s3", TraceID: "t3", StartedAt: now})
+	store.RecordSpan(ctx, &Span{ID: "s4", TraceID: "t4", StartedAt: now})
+
+	if len(store.spans) != 2 {
+		t.Errorf("expected 2 spans after TTL + max limit, got %d", len(store.spans))
+	}
+	if store.spans[0].ID != "s3" {
+		t.Errorf("expected first span to be s3, got %s", store.spans[0].ID)
+	}
+}
+
+func TestInMemoryTraceStore_RebuildIndex(t *testing.T) {
+	store := NewInMemoryTraceStore(WithTTL(1 * time.Second))
+	defer store.Close()
+	ctx := context.Background()
+
+	old := time.Now().Add(-2 * time.Second)
+	now := time.Now()
+	store.RecordSpan(ctx, &Span{ID: "s1", TraceID: "t1", StartedAt: old})
+	store.RecordSpan(ctx, &Span{ID: "s2", TraceID: "t1", StartedAt: now})
+	store.RecordSpan(ctx, &Span{ID: "s3", TraceID: "t2", StartedAt: now})
+
+	spans, err := store.GetTrace(ctx, "t1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(traceIDs) != 0 {
-		t.Errorf("expected 0 traces, got %d", len(traceIDs))
+	if len(spans) != 1 {
+		t.Errorf("expected 1 span for t1 after eviction, got %d", len(spans))
+	}
+	if spans[0].ID != "s2" {
+		t.Errorf("expected span s2 for t1, got %s", spans[0].ID)
+	}
+}
+
+func TestInMemoryTraceStore_DefaultOptions(t *testing.T) {
+	store := NewInMemoryTraceStore()
+	defer store.Close()
+
+	if store.ttl != defaultTTL {
+		t.Errorf("expected default TTL %v, got %v", defaultTTL, store.ttl)
+	}
+	if store.maxSpans != defaultMaxSpans {
+		t.Errorf("expected default maxSpans %d, got %d", defaultMaxSpans, store.maxSpans)
+	}
+}
+
+func TestInMemoryTraceStore_Close_Idempotent(t *testing.T) {
+	store := NewInMemoryTraceStore()
+	store.Close()
+	store.Close()
+}
+
+func TestInMemoryTraceStore_BackgroundCleanup(t *testing.T) {
+	store := NewInMemoryTraceStore(
+		WithTTL(100*time.Millisecond),
+		WithBackgroundCleanup(50*time.Millisecond),
+	)
+	defer store.Close()
+	ctx := context.Background()
+
+	old := time.Now().Add(-200 * time.Millisecond)
+	store.RecordSpan(ctx, &Span{ID: "s1", TraceID: "t1", StartedAt: old})
+
+	time.Sleep(200 * time.Millisecond)
+
+	store.mu.RLock()
+	spanCount := len(store.spans)
+	store.mu.RUnlock()
+
+	if spanCount != 0 {
+		t.Errorf("expected 0 spans after background cleanup, got %d", spanCount)
+	}
+}
+
+func TestInMemoryTraceStore_Evict_EmptyAfterAllExpired(t *testing.T) {
+	store := NewInMemoryTraceStore(WithTTL(1 * time.Second))
+	defer store.Close()
+	ctx := context.Background()
+
+	old := time.Now().Add(-2 * time.Second)
+	store.RecordSpan(ctx, &Span{ID: "s1", TraceID: "t1", StartedAt: old})
+	store.RecordSpan(ctx, &Span{ID: "s2", TraceID: "t2", StartedAt: old})
+
+	if len(store.spans) != 0 {
+		t.Errorf("expected 0 spans after all expired, got %d", len(store.spans))
+	}
+	if len(store.traceIndex) != 0 {
+		t.Errorf("expected empty trace index, got %d entries", len(store.traceIndex))
+	}
+}
+
+func TestInMemoryTraceStore_Evict_PreservesRecent(t *testing.T) {
+	store := NewInMemoryTraceStore(WithTTL(1 * time.Hour), WithMaxSpans(10000))
+	defer store.Close()
+	ctx := context.Background()
+
+	now := time.Now()
+	for i := 0; i < 5; i++ {
+		store.RecordSpan(ctx, &Span{ID: "s", TraceID: "t", StartedAt: now})
+	}
+
+	if len(store.spans) != 5 {
+		t.Errorf("expected 5 spans preserved, got %d", len(store.spans))
 	}
 }

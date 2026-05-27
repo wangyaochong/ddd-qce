@@ -19,7 +19,11 @@ func TestAspectChain_RegisterAll(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	ts := trace.NewInMemoryTraceStore()
 	chain.RegisterCommandAspect(builtin.NewTracingAspect(ts))
-	chain.RegisterCommandAspect(builtin.NewTransactionAspect(NewAppTransactionManager()))
+	ta, err := builtin.NewTransactionAspect(NewAppTransactionManager(builtin.NewNoOpTransactionManager()))
+	if err != nil {
+		t.Fatalf("NewTransactionAspect: %v", err)
+	}
+	chain.RegisterCommandAspect(ta)
 	chain.RegisterCommandAspect(builtin.NewLoggingAspect(NewAppLogger()))
 	chain.RegisterCommandAspect(builtin.NewMetricsAspect(NewAppMetricsRecorder()))
 	chain.RegisterCommandAspect(&customTestAspect{order: 25})
@@ -115,9 +119,14 @@ func TestTracingAspect_Spans(t *testing.T) {
 }
 
 func TestTransactionAspect_BeginCommit(t *testing.T) {
-	txMgr := NewAppTransactionManager()
+	txMgr := NewAppTransactionManager(builtin.NewNoOpTransactionManager())
+
 	chain := aspect.NewAspectChain()
-	chain.RegisterCommandAspect(builtin.NewTransactionAspect(txMgr))
+	ta, err := builtin.NewTransactionAspect(txMgr)
+	if err != nil {
+		t.Fatalf("NewTransactionAspect: %v", err)
+	}
+	chain.RegisterCommandAspect(ta)
 	ctx := context.Background()
 	chain.ExecuteWithCommandAspects(ctx, "cmd", func(ctx context.Context) (interface{}, error) {
 		return "ok", nil
@@ -134,9 +143,13 @@ func TestTransactionAspect_BeginCommit(t *testing.T) {
 }
 
 func TestTransactionAspect_BeginRollback(t *testing.T) {
-	txMgr := NewAppTransactionManager()
+	txMgr := NewAppTransactionManager(builtin.NewNoOpTransactionManager())
 	chain := aspect.NewAspectChain()
-	chain.RegisterCommandAspect(builtin.NewTransactionAspect(txMgr))
+	ta, err := builtin.NewTransactionAspect(txMgr)
+	if err != nil {
+		t.Fatalf("NewTransactionAspect: %v", err)
+	}
+	chain.RegisterCommandAspect(ta)
 	ctx := context.Background()
 	chain.ExecuteWithCommandAspects(ctx, "cmd", func(ctx context.Context) (interface{}, error) {
 		return nil, fmt.Errorf("fail")
@@ -396,7 +409,7 @@ func TestJobOption_WithMaxRetries(t *testing.T) {
 
 func TestJob_Snapshot(t *testing.T) {
 	job := &jobcore.Job{ID: "J1"}
-	job.SetStatus(jobcore.JobStatusRunning)
+	job.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 	snap := job.Snapshot()
 	if snap.ID != "J1" {
 		t.Error("snapshot ID mismatch")
@@ -404,7 +417,7 @@ func TestJob_Snapshot(t *testing.T) {
 	if snap.GetStatus() != jobcore.JobStatusRunning {
 		t.Error("snapshot Status mismatch")
 	}
-	snap.SetStatus(jobcore.JobStatusCompleted)
+	snap.RestoreJobState(jobcore.JobStatusCompleted, nil, "", "", time.Time{}, time.Time{})
 	if job.GetStatus() == jobcore.JobStatusCompleted {
 		t.Error("snapshot should be independent from original")
 	}

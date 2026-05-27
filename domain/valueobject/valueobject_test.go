@@ -1,6 +1,7 @@
 package valueobject
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 )
@@ -125,27 +126,6 @@ func TestValueObject_Value(t *testing.T) {
 	}
 }
 
-func TestValueObject_Validate_Valid(t *testing.T) {
-	vo := MustNew(money{Amount: 100, Currency: "USD"}, validateMoney)
-	if err := vo.Validate(); err != nil {
-		t.Errorf("unexpected validation error: %v", err)
-	}
-}
-
-func TestValueObject_Validate_Invalid(t *testing.T) {
-	vo := ValueObject[money]{value: money{Amount: -1, Currency: ""}, validate: validateMoney}
-	if err := vo.Validate(); err == nil {
-		t.Fatal("expected validation error for manually constructed invalid value")
-	}
-}
-
-func TestValueObject_Validate_NilValidator(t *testing.T) {
-	vo, _ := New(money{Amount: 100, Currency: "USD"}, nil)
-	if err := vo.Validate(); err != nil {
-		t.Errorf("unexpected validation error with nil validator: %v", err)
-	}
-}
-
 func TestValueObject_String(t *testing.T) {
 	vo := MustNew(money{Amount: 100, Currency: "USD"}, validateMoney)
 	s := vo.String()
@@ -167,6 +147,85 @@ func TestValueObject_ImmutableByConvention(t *testing.T) {
 	v.Amount = 999
 	if vo.Value().Amount == 999 {
 		t.Error("Value() should return a copy for value types, original should not be modified")
+	}
+}
+
+func TestValueObject_MarshalJSON_StructType(t *testing.T) {
+	vo := MustNew(money{Amount: 100, Currency: "USD"}, validateMoney)
+	data, err := json.Marshal(vo)
+	if err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
+	}
+	var parsed struct {
+		Value money `json:"value"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("parse marshaled data: %v", err)
+	}
+	if parsed.Value.Amount != 100 || parsed.Value.Currency != "USD" {
+		t.Errorf("expected {100, USD}, got %v", parsed.Value)
+	}
+}
+
+func TestValueObject_MarshalJSON_PrimitiveType(t *testing.T) {
+	vo := MustNew(email("test@example.com"), validateEmail)
+	data, err := json.Marshal(vo)
+	if err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
+	}
+	var parsed struct {
+		Value email `json:"value"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("parse marshaled data: %v", err)
+	}
+	if parsed.Value != "test@example.com" {
+		t.Errorf("expected test@example.com, got %s", parsed.Value)
+	}
+}
+
+func TestValueObject_UnmarshalJSON_RoundTrip(t *testing.T) {
+	original := MustNew(money{Amount: 250, Currency: "EUR"}, validateMoney)
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
+	}
+	var restored ValueObject[money]
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("UnmarshalJSON: %v", err)
+	}
+	if !original.Equals(restored) {
+		t.Errorf("round-trip failed: original=%v, restored=%v", original.Value(), restored.Value())
+	}
+}
+
+func TestValueObject_UnmarshalJSON_ZeroValue(t *testing.T) {
+	var original ValueObject[money]
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("MarshalJSON zero value: %v", err)
+	}
+	var restored ValueObject[money]
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("UnmarshalJSON zero value: %v", err)
+	}
+	if !original.Equals(restored) {
+		t.Errorf("zero value round-trip failed: original=%v, restored=%v", original.Value(), restored.Value())
+	}
+}
+
+func TestValueObject_UnmarshalJSON_NilValidator(t *testing.T) {
+	vo, _ := New(money{Amount: 100, Currency: "USD"}, nil)
+	data, err := json.Marshal(vo)
+	if err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
+	}
+	var restored ValueObject[money]
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("UnmarshalJSON: %v", err)
+	}
+	if !vo.Equals(restored) {
+		t.Errorf("round-trip with nil validator failed: original=%v, restored=%v", vo.Value(), restored.Value())
 	}
 }
 

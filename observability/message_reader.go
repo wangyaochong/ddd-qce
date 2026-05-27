@@ -2,7 +2,6 @@ package observability
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/ddd-qce/core/aspect/builtin"
@@ -25,8 +24,7 @@ type MessageStoreReader interface {
 }
 
 type InMemoryMessageStore struct {
-	inner  *builtin.InMemoryMessageStore
-	mu     sync.RWMutex
+	inner   *builtin.InMemoryMessageStore
 	maxSize int
 }
 
@@ -51,20 +49,14 @@ func NewInMemoryMessageStore(opts ...InMemoryMessageStoreOption) *InMemoryMessag
 }
 
 func (s *InMemoryMessageStore) RecordCommand(ctx context.Context, entry *builtin.CommandEntry) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.inner.RecordCommand(ctx, entry)
 }
 
 func (s *InMemoryMessageStore) RecordQuery(ctx context.Context, entry *builtin.QueryEntry) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.inner.RecordQuery(ctx, entry)
 }
 
 func (s *InMemoryMessageStore) RecordEvent(ctx context.Context, entry *builtin.EventEntry) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	return s.inner.RecordEvent(ctx, entry)
 }
 
@@ -73,12 +65,11 @@ func (s *InMemoryMessageStore) RecordEventHandler(_ context.Context, _ *builtin.
 }
 
 func (s *InMemoryMessageStore) QueryCommands(_ context.Context, filter MessageFilter) ([]builtin.CommandEntry, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	commands := s.inner.GetCommands()
 
 	var result []builtin.CommandEntry
-	for i := len(s.inner.Commands) - 1; i >= 0; i-- {
-		e := s.inner.Commands[i]
+	for i := len(commands) - 1; i >= 0; i-- {
+		e := commands[i]
 		if !matchCommandFilter(e, filter) {
 			continue
 		}
@@ -91,12 +82,11 @@ func (s *InMemoryMessageStore) QueryCommands(_ context.Context, filter MessageFi
 }
 
 func (s *InMemoryMessageStore) QueryQueries(_ context.Context, filter MessageFilter) ([]builtin.QueryEntry, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	queries := s.inner.GetQueries()
 
 	var result []builtin.QueryEntry
-	for i := len(s.inner.Queries) - 1; i >= 0; i-- {
-		e := s.inner.Queries[i]
+	for i := len(queries) - 1; i >= 0; i-- {
+		e := queries[i]
 		if !matchQueryFilter(e, filter) {
 			continue
 		}
@@ -109,12 +99,11 @@ func (s *InMemoryMessageStore) QueryQueries(_ context.Context, filter MessageFil
 }
 
 func (s *InMemoryMessageStore) QueryEvents(_ context.Context, filter MessageFilter) ([]builtin.EventEntry, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	events := s.inner.GetEvents()
 
 	var result []builtin.EventEntry
-	for i := len(s.inner.Events) - 1; i >= 0; i-- {
-		e := s.inner.Events[i]
+	for i := len(events) - 1; i >= 0; i-- {
+		e := events[i]
 		if !matchEventFilter(e, filter) {
 			continue
 		}

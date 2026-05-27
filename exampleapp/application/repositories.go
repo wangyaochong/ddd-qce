@@ -66,16 +66,19 @@ func (r *OrderRepository) FindAll() []*domain.Order {
 var _ repository.Repository[*domain.Order] = (*OrderRepository)(nil)
 
 type OrderEventSourcedRepository struct {
-	eventStore event.EventSourceStore[event.DomainEvent]
+	eventStore event.EventSourceStore[event.Event]
+	eventBus   event.EventBus
 	orderRepo  OrderRepositoryAdapter
 }
 
 func NewOrderEventSourcedRepository(
-	eventStore event.EventSourceStore[event.DomainEvent],
+	eventStore event.EventSourceStore[event.Event],
+	eventBus event.EventBus,
 	orderRepo OrderRepositoryAdapter,
 ) *OrderEventSourcedRepository {
 	return &OrderEventSourcedRepository{
 		eventStore: eventStore,
+		eventBus:   eventBus,
 		orderRepo:  orderRepo,
 	}
 }
@@ -87,6 +90,12 @@ func (r *OrderEventSourcedRepository) Save(ctx context.Context, order *domain.Or
 			return err
 		}
 		order.MarkEventsAsCommitted()
+
+		for _, evt := range uncommitted {
+			if err := r.eventBus.Publish(ctx, evt); err != nil {
+				return fmt.Errorf("publish event %T: %w", evt, err)
+			}
+		}
 	}
 	return r.orderRepo.Save(ctx, order)
 }

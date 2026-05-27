@@ -6,7 +6,7 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
@@ -30,7 +30,7 @@ type AppContext struct {
 
 	OrderRepo        application.OrderRepositoryAdapter
 	EventSourcedRepo *application.OrderEventSourcedRepository
-	EventStore       domainevent.EventSourceStore[domainevent.DomainEvent]
+	EventStore       domainevent.EventSourceStore[domainevent.Event]
 	Inventory        *domain.Inventory
 
 	MetricsRecorder *AppMetricsRecorder
@@ -67,13 +67,17 @@ func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext
 
 	logger := NewAppLogger()
 	metricsRecorder := NewAppMetricsRecorder()
-	txManager := NewAppTransactionManager()
+	txManager := NewAppTransactionManager(backend.TransactionManager)
 
 	chain := aspect.NewAspectChain()
 	chain.RegisterAspect(builtin.NewTracingAspect(backend.TraceStore))
 	chain.RegisterAspect(builtin.NewLoggingAspect(logger))
 	chain.RegisterAspect(builtin.NewMetricsAspect(metricsRecorder))
-	chain.RegisterCommandAspect(builtin.NewTransactionAspect(txManager))
+	ta, err := builtin.NewTransactionAspect(txManager)
+	if err != nil {
+		return nil, fmt.Errorf("create transaction aspect: %w", err)
+	}
+	chain.RegisterCommandAspect(ta)
 
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	queryBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
@@ -82,7 +86,7 @@ func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext
 	inventory := domain.NewInventory()
 	orderRepo := store.OrderRepo
 	eventStore := store.EventStore
-	eventSourcedRepo := application.NewOrderEventSourcedRepository(eventStore, orderRepo)
+	eventSourcedRepo := application.NewOrderEventSourcedRepository(eventStore, eventBus, orderRepo)
 
 	if err := cmdBus.RegisterHandler(application.NewPlaceOrderHandler(orderRepo, eventBus)); err != nil {
 		return nil, fmt.Errorf("register PlaceOrderHandler: %w", err)

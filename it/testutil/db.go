@@ -13,7 +13,7 @@ func OpenTestDB(t *testing.T, dbname string) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("TEST_PG_DSN")
 	if dsn == "" {
-		dsn = "host=/var/run/postgresql dbname=" + dbname + " user=root password=root sslmode=disable"
+		dsn = "host=/var/run/postgresql dbname=" + dbname + " user=" + os.Getenv("USER") + " sslmode=disable"
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {

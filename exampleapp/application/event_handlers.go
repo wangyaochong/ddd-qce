@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	"github.com/ddd-qce/exampleapp/domain"
 )
 

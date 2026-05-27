@@ -2,12 +2,13 @@ package application
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	domainevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/exampleapp/domain"
@@ -28,8 +29,9 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 		items[i] = domain.NewOrderItem(input.ProductID, input.ProductName, input.Price, input.Quantity)
 	}
 
-	orderID := uuid.New().String()
-	order, err := domain.NewOrder(orderID, cmd.UserID, items)
+	uid := uuid.New()
+	orderID := hex.EncodeToString(uid[:])
+	order, err := domain.NewOrder(ctx, orderID, cmd.UserID, items)
 	if err != nil {
 		return nil, err
 	}
@@ -37,13 +39,6 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 	if err := h.repo.Save(ctx, order); err != nil {
 		return nil, err
 	}
-
-	cqrsevent.Dispatch[*domain.OrderPlacedEvent](ctx, h.eventBus, &domain.OrderPlacedEvent{
-		BaseEvent: domainevent.NewBaseEvent(order.ID(), time.Now()),
-		UserID:          order.UserID,
-		TotalAmount:     order.TotalAmount,
-		Items:           order.ItemNames(),
-	})
 
 	return &PlaceOrderResult{OrderID: order.ID(), TotalAmount: order.TotalAmount}, nil
 }
@@ -62,7 +57,7 @@ func (h *ConfirmPaymentHandler) Handle(ctx context.Context, cmd *ConfirmPaymentC
 	if err != nil {
 		return nil, err
 	}
-	if err := order.ConfirmPayment(); err != nil {
+	if err := order.ConfirmPayment(ctx); err != nil {
 		return nil, err
 	}
 	if err := h.repo.Save(ctx, order); err != nil {
@@ -85,7 +80,7 @@ func (h *ShipOrderHandler) Handle(ctx context.Context, cmd *ShipOrderCommand) (*
 	if err != nil {
 		return nil, err
 	}
-	if err := order.Ship(); err != nil {
+	if err := order.Ship(ctx); err != nil {
 		return nil, err
 	}
 	if err := h.repo.Save(ctx, order); err != nil {
@@ -108,17 +103,12 @@ func (h *CancelOrderHandler) Handle(ctx context.Context, cmd *CancelOrderCommand
 	if err != nil {
 		return nil, err
 	}
-	if err := order.Cancel(cmd.Reason); err != nil {
+	if err := order.Cancel(ctx, cmd.Reason); err != nil {
 		return nil, err
 	}
 	if err := h.repo.Save(ctx, order); err != nil {
 		return nil, err
 	}
-
-	cqrsevent.Dispatch[*domain.OrderCancelledEvent](ctx, h.eventBus, &domain.OrderCancelledEvent{
-		BaseEvent: domainevent.NewBaseEvent(order.ID(), time.Now()),
-		Reason:          cmd.Reason,
-	})
 
 	return &CancelOrderResult{Success: true}, nil
 }
@@ -138,7 +128,7 @@ func (h *ReserveInventoryHandler) Handle(ctx context.Context, cmd *ReserveInvent
 	}
 
 	cqrsevent.Dispatch[*domain.InventoryReservedEvent](ctx, h.eventBus, &domain.InventoryReservedEvent{
-		BaseEvent: domainevent.NewBaseEvent(cmd.OrderID, time.Now()),
+		BaseEvent: domainevent.WithCorrelation(ctx, cmd.OrderID),
 		ProductID:       cmd.ProductID,
 		Quantity:        cmd.Quantity,
 	})
@@ -161,7 +151,7 @@ func (h *ReleaseInventoryHandler) Handle(ctx context.Context, cmd *ReleaseInvent
 	}
 
 	cqrsevent.Dispatch[*domain.InventoryReleasedEvent](ctx, h.eventBus, &domain.InventoryReleasedEvent{
-		BaseEvent: domainevent.NewBaseEvent(cmd.OrderID, time.Now()),
+		BaseEvent: domainevent.WithCorrelation(ctx, cmd.OrderID),
 		ProductID:       cmd.ProductID,
 		Quantity:        cmd.Quantity,
 	})

@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
 )
 
 type testCancellableCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 	Duration        time.Duration
 	ShouldFail      bool
 	BlockChan       chan struct{}
@@ -69,7 +69,7 @@ func newTestCancellableCommandBus(duration time.Duration, shouldFail bool, block
 }
 
 type testHookCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 	Duration time.Duration
 }
 
@@ -347,7 +347,7 @@ func TestJobManager_Cancel_JobCompletedBetweenGets(t *testing.T) {
 			return nil, err
 		}
 		if getCount == 2 {
-			job.SetStatus(jobcore.JobStatusCompleted)
+			job.RestoreJobState(jobcore.JobStatusCompleted, nil, "", "", time.Time{}, time.Time{})
 		}
 		return job, nil
 	}
@@ -384,7 +384,7 @@ func TestJobManager_Cancel_JobCancelledBetweenGets(t *testing.T) {
 			return nil, err
 		}
 		if getCount == 2 {
-			job.SetStatus(jobcore.JobStatusCancelled)
+			job.RestoreJobState(jobcore.JobStatusCancelled, nil, "", "", time.Time{}, time.Time{})
 		}
 		return job, nil
 	}

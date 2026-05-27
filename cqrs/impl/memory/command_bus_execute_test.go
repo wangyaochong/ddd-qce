@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 )
 
 type executeTestCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 	Value int
 }
 
@@ -24,7 +24,7 @@ func (h *executeTestHandler) Handle(ctx context.Context, cmd *executeTestCommand
 }
 
 type executeErrorCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 }
 
 type executeErrorResult struct{}
@@ -180,6 +180,6 @@ func TestCommandBus_Execute_WrongCommandType(t *testing.T) {
 
 type interfaceHandler struct{}
 
-func (h *interfaceHandler) Handle(ctx context.Context, cmd cmd.CommandHandler[*executeTestCommand, *executeTestResult]) (*executeTestResult, error) {
+func (h *interfaceHandler) Handle(ctx context.Context, cmd command.CommandHandler[*executeTestCommand, *executeTestResult]) (*executeTestResult, error) {
 	return nil, nil
 }

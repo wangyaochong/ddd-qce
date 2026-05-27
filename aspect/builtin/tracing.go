@@ -10,13 +10,17 @@ import (
 )
 
 type TracingAspect struct {
-	Store  trace.TraceStore
-	Logger Logger
+	store  trace.TraceStore
+	logger Logger
 }
 
 func NewTracingAspect(store trace.TraceStore) *TracingAspect {
-	return &TracingAspect{Store: store}
+	return &TracingAspect{store: store}
 }
+
+func (a *TracingAspect) GetStore() trace.TraceStore  { return a.store }
+func (a *TracingAspect) GetLogger() Logger            { return a.logger }
+func (a *TracingAspect) SetLogger(logger Logger)       { a.logger = logger }
 
 func (a *TracingAspect) Name() string {
 	return "tracing"
@@ -65,9 +69,9 @@ func (a *TracingAspect) AfterCommand(ctx context.Context, cmd any, result any, e
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
-		if err := a.Store.RecordSpan(ctx, span); err != nil {
-			if a.Logger != nil {
-				a.Logger.Error("TracingAspect RecordSpan failed", "error", err)
+		if err := a.store.RecordSpan(ctx, span); err != nil {
+			if a.logger != nil {
+				a.logger.Error("TracingAspect RecordSpan failed", "error", err)
 			}
 		}
 	}
@@ -113,9 +117,9 @@ func (a *TracingAspect) AfterQuery(ctx context.Context, query any, result any, e
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
-		if err := a.Store.RecordSpan(ctx, span); err != nil {
-			if a.Logger != nil {
-				a.Logger.Error("TracingAspect RecordSpan failed", "error", err)
+		if err := a.store.RecordSpan(ctx, span); err != nil {
+			if a.logger != nil {
+				a.logger.Error("TracingAspect RecordSpan failed", "error", err)
 			}
 		}
 	}
@@ -161,9 +165,9 @@ func (a *TracingAspect) AfterPublish(ctx context.Context, event any, err error, 
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
-		if err := a.Store.RecordSpan(ctx, span); err != nil {
-			if a.Logger != nil {
-				a.Logger.Error("TracingAspect RecordSpan failed", "error", err)
+		if err := a.store.RecordSpan(ctx, span); err != nil {
+			if a.logger != nil {
+				a.logger.Error("TracingAspect RecordSpan failed", "error", err)
 			}
 		}
 	}

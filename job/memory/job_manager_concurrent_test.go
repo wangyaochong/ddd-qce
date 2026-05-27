@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
 )
 
 type testConcurrentCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 	Duration time.Duration
 }
 

@@ -91,7 +91,7 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 	eventmemory.RegisterEvent[*testOrderCreatedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, queryHandler)
 
-	result, err := 	command.Dispatch(ctx, cmdBus, &testCreateOrderCommand{
+	result, err := command.Dispatch[*testCreateOrderCommand, *testCreateOrderResult](ctx, cmdBus, &testCreateOrderCommand{
 		UserID: "user-001",
 		Amount: 99.99,
 	})
@@ -121,7 +121,7 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 		t.Error("event handler was not called")
 	}
 
-	qResult, err := query.Dispatch(ctx, qBus, &testGetOrderQuery{
+	qResult, err := query.Dispatch[*testGetOrderQuery, *testGetOrderResult](ctx, qBus, &testGetOrderQuery{
 		OrderID: result.OrderID,
 	})
 	if err != nil {

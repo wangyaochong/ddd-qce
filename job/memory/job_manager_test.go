@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
 )
 
 type testLongCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 	Duration time.Duration
 }
 
@@ -684,7 +684,7 @@ func TestJobManager_Recovery_PendingReExecuted(t *testing.T) {
 	ctx := context.Background()
 
 	pendingJob := jobcore.NewJob("pending-recover-test", &testLongCommand{Duration: 10 * time.Millisecond})
-	pendingJob.SetStatus(jobcore.JobStatusPending)
+	pendingJob.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 	if err := store.Create(ctx, pendingJob); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -708,7 +708,7 @@ func TestJobManager_Recovery_RunningMarkedFailed(t *testing.T) {
 	ctx := context.Background()
 
 	runningJob := jobcore.NewJob("running-recover-test", &testLongCommand{Duration: 10 * time.Millisecond})
-	runningJob.SetStatus(jobcore.JobStatusRunning)
+	runningJob.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 	if err := store.Create(ctx, runningJob); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -735,7 +735,7 @@ func TestJobManager_Recovery_NoRecoveryOption(t *testing.T) {
 	ctx := context.Background()
 
 	pendingJob := jobcore.NewJob("no-recovery-test", &testLongCommand{Duration: 10 * time.Millisecond})
-	pendingJob.SetStatus(jobcore.JobStatusPending)
+	pendingJob.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 	if err := store.Create(ctx, pendingJob); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}

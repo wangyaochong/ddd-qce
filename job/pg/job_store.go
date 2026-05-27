@@ -81,37 +81,41 @@ func (s *PgJobStore) Get(ctx context.Context, id string) (*jobcore.Job, error) {
 		return nil, err
 	}
 	job.CommandType = commandType
-	job.SetStatus(jobcore.JobStatus(status))
 	job.Timeout = time.Duration(timeoutNs)
-	if resultType.Valid {
-		job.SetResultType(resultType.String)
-	}
-	if errStr.Valid {
-		job.SetError(errStr.String)
-	}
+	var startedAtVal, completedAtVal time.Time
 	if startedAt.Valid {
-		job.SetStartedAt(startedAt.Time)
+		startedAtVal = startedAt.Time
 	}
 	if completedAt.Valid {
-		job.SetCompletedAt(completedAt.Time)
+		completedAtVal = completedAt.Time
 	}
-	if len(cmdData) > 0 {
-		cmd, err := s.unmarshalTyped(cmdData, commandType)
-		if err != nil {
-			return nil, fmt.Errorf("unmarshal command: %w", err)
-		}
-		job.Command = cmd
+	var result any
+	var resultTypeStr string
+	if resultType.Valid {
+		resultTypeStr = resultType.String
+	}
+	var errStrVal string
+	if errStr.Valid {
+		errStrVal = errStr.String
 	}
 	if len(resultData) > 0 {
 		resultTypeName := ""
 		if resultType.Valid {
 			resultTypeName = resultType.String
 		}
-		result, err := s.unmarshalTyped(resultData, resultTypeName)
-		if err != nil {
-			return nil, fmt.Errorf("unmarshal result: %w", err)
+		var err2 error
+		result, err2 = s.unmarshalTyped(resultData, resultTypeName)
+		if err2 != nil {
+			return nil, fmt.Errorf("unmarshal result: %w", err2)
 		}
-		job.SetResult(result)
+	}
+	job.RestoreJobState(jobcore.JobStatus(status), result, resultTypeStr, errStrVal, startedAtVal, completedAtVal)
+	if len(cmdData) > 0 {
+		cmd, err := s.unmarshalTyped(cmdData, commandType)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal command: %w", err)
+		}
+		job.Command = cmd
 	}
 	return &job, nil
 }
@@ -161,37 +165,41 @@ func (s *PgJobStore) List(ctx context.Context, status jobcore.JobStatus) ([]*job
 			return nil, err
 		}
 		job.CommandType = commandType
-		job.SetStatus(jobcore.JobStatus(statusStr))
 		job.Timeout = time.Duration(timeoutNs)
-		if resultType.Valid {
-			job.SetResultType(resultType.String)
-		}
-		if errStr.Valid {
-			job.SetError(errStr.String)
-		}
+		var startedAtVal, completedAtVal time.Time
 		if startedAt.Valid {
-			job.SetStartedAt(startedAt.Time)
+			startedAtVal = startedAt.Time
 		}
 		if completedAt.Valid {
-			job.SetCompletedAt(completedAt.Time)
+			completedAtVal = completedAt.Time
 		}
+		var resultTypeStr string
+		if resultType.Valid {
+			resultTypeStr = resultType.String
+		}
+		var errStrVal string
+		if errStr.Valid {
+			errStrVal = errStr.String
+		}
+		var resultVal any
+		if len(resultData) > 0 {
+			resultTypeName := ""
+			if resultType.Valid {
+				resultTypeName = resultType.String
+			}
+			var err2 error
+			resultVal, err2 = s.unmarshalTyped(resultData, resultTypeName)
+			if err2 != nil {
+				return nil, fmt.Errorf("unmarshal result for job %s: %w", job.ID, err2)
+			}
+		}
+		job.RestoreJobState(jobcore.JobStatus(statusStr), resultVal, resultTypeStr, errStrVal, startedAtVal, completedAtVal)
 		if len(cmdData) > 0 {
 			cmd, err := s.unmarshalTyped(cmdData, commandType)
 			if err != nil {
 				return nil, fmt.Errorf("unmarshal command for job %s: %w", job.ID, err)
 			}
 			job.Command = cmd
-		}
-		if len(resultData) > 0 {
-			resultTypeName := ""
-			if resultType.Valid {
-				resultTypeName = resultType.String
-			}
-			result, err := s.unmarshalTyped(resultData, resultTypeName)
-			if err != nil {
-				return nil, fmt.Errorf("unmarshal result for job %s: %w", job.ID, err)
-			}
-			job.SetResult(result)
 		}
 		result = append(result, &job)
 	}

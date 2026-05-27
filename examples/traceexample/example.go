@@ -57,12 +57,12 @@ type OrderPlacedEventHandler struct {
 func (h *OrderPlacedEventHandler) Handle(ctx context.Context, event *OrderPlacedEvent) error {
 	fmt.Printf("  [EventHandler] Processing OrderPlaced for order %s\n", event.AggregateID())
 
-	command.Dispatch(ctx, h.cmdBus, &SendNotificationCommand{
+	command.Dispatch[*SendNotificationCommand, *SendNotificationResult](ctx, h.cmdBus, &SendNotificationCommand{
 		UserID:  event.UserID,
 		Message: fmt.Sprintf("Order %s placed: %s ($%.2f)", event.AggregateID(), event.Product, event.Amount),
 	})
 
-	command.Dispatch(ctx, h.cmdBus, &UpdateInventoryCommand{
+	command.Dispatch[*UpdateInventoryCommand, *UpdateInventoryResult](ctx, h.cmdBus, &UpdateInventoryCommand{
 		Product:  event.Product,
 		Quantity: 1,
 	})
@@ -139,7 +139,7 @@ func RunExample(ctx context.Context, cmdBus *commandmemory.CommandBus, eventBus 
 	fmt.Println()
 	fmt.Println("=== PlaceOrder (Command → Event → Commands) ===")
 
-	result, err := command.Dispatch(ctx, cmdBus, &PlaceOrderCommand{
+	result, err := command.Dispatch[*PlaceOrderCommand, *PlaceOrderResult](ctx, cmdBus, &PlaceOrderCommand{
 		UserID:  "user-001",
 		Product: "Laptop",
 		Amount:  999.99,
@@ -151,7 +151,7 @@ func RunExample(ctx context.Context, cmdBus *commandmemory.CommandBus, eventBus 
 
 	fmt.Println()
 	fmt.Println("=== GetOrderStatus (Query) ===")
-	qResult, err := query.Dispatch(ctx, qBus, &GetOrderStatusQuery{OrderID: result.OrderID})
+	qResult, err := query.Dispatch[*GetOrderStatusQuery, *GetOrderStatusResult](ctx, qBus, &GetOrderStatusQuery{OrderID: result.OrderID})
 	if err != nil {
 		panic(err)
 	}

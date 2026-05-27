@@ -11,7 +11,7 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	memory "github.com/ddd-qce/core/cqrs/impl/memory"
 )
 
@@ -53,7 +53,7 @@ func (m *mockTxManager) counts() (int, int, int) {
 }
 
 type testTxCommand struct {
-	cmd.BaseCommand
+	command.BaseCommand
 	Fail bool
 }
 
@@ -83,7 +83,7 @@ func TestTransactionAspect_Success_Commits(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err != nil {
 		t.Fatalf("dispatch failed: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestTransactionAspect_Error_Rollbacks(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: true})
 
 	ctx := context.Background()
-	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error from handler")
 	}
@@ -141,7 +141,7 @@ func TestTransactionAspect_RollbackError_ReturnsBothErrors(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: true})
 
 	ctx := context.Background()
-	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -173,7 +173,7 @@ func TestTransactionAspect_ConcurrentCommands(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			cmd.Dispatch[*testTxCommand, *testTxResult](context.Background(), bus, &testTxCommand{})
+			command.Dispatch[*testTxCommand, *testTxResult](context.Background(), bus, &testTxCommand{})
 		}()
 	}
 	wg.Wait()
@@ -203,7 +203,7 @@ func TestTransactionAspect_BeginError_ReturnsError(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error from begin failure")
 	}
@@ -222,7 +222,7 @@ func TestTransactionAspect_CommitError_ReturnsError(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error from commit failure")
 	}
@@ -242,7 +242,7 @@ func TestTransactionAspect_MultiErrorFormatting(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -268,7 +268,7 @@ func TestTransactionAspect_Timeout(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	_, err := cmd.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}

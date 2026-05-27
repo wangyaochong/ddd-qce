@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -22,11 +23,48 @@ type testAggregate struct {
 
 func newTestAggregate(id string) *testAggregate {
 	a := &testAggregate{}
-	a.AggregateRoot = *aggregate.NewAggregateRootWithApplier(id, a)
+	ar, err := aggregate.NewAggregateRoot(id)
+	if err != nil {
+		panic(err)
+	}
+	a.AggregateRoot = *ar
 	return a
 }
 
-func (a *testAggregate) When(_ event.DomainEvent) {}
+func (a *testAggregate) When(_ event.Event) error { return nil }
+
+func (a *testAggregate) Apply(ctx context.Context, evt event.Event) error {
+	return aggregate.ApplyChange(a, ctx, evt)
+}
+
+func (a *testAggregate) LoadFromHistory(events []event.Event) error {
+	return aggregate.LoadFromHistory(a, events)
+}
+
+type testAggregateJSON struct {
+	aggregate.AggregateRootJSON
+	Name  string `json:"name"`
+	Count int   `json:"count"`
+}
+
+func (a *testAggregate) MarshalJSON() ([]byte, error) {
+	return json.Marshal(testAggregateJSON{
+		AggregateRootJSON: a.AggregateRoot.ToJSON(),
+		Name:              a.Name,
+		Count:             a.Count,
+	})
+}
+
+func (a *testAggregate) UnmarshalJSON(data []byte) error {
+	var aux testAggregateJSON
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	a.AggregateRoot.FromJSON(aux.AggregateRootJSON)
+	a.Name = aux.Name
+	a.Count = aux.Count
+	return nil
+}
 
 var _ repository.Repository[*testAggregate] = (*InMemoryRepository[*testAggregate])(nil)
 var _ repository.EventSourcingRepository[*testAggregate] = (*InMemoryEventSourcedRepository[*testAggregate])(nil)
@@ -171,7 +209,7 @@ func TestInMemoryEventSourcedRepository_SaveAndLoad(t *testing.T) {
 	agg := newTestAggregate("es-1")
 	agg.Name = "event-sourced"
 	agg.Count = 7
-	if err := agg.Apply(event.NewBaseEvent("es-1", time.Now())); err != nil {
+	if err := agg.Apply(context.Background(), event.NewBaseEvent("es-1", time.Now())); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 
@@ -223,7 +261,7 @@ func TestInMemoryEventSourcedRepository_Contract(t *testing.T) {
 	repositorytest.TestEventSourcingRepositoryContract(t, repo,
 		func(id string) *testAggregate { return newTestAggregate(id) },
 		func(agg *testAggregate) {
-			agg.Apply(event.NewBaseEvent(agg.ID(), time.Now()))
+			agg.Apply(context.Background(), event.NewBaseEvent(agg.ID(), time.Now()))
 		},
 	)
 }
@@ -235,5 +273,85 @@ func TestInMemoryEventSourcedRepository_Save_NoEvents(t *testing.T) {
 	agg := newTestAggregate("es-1")
 	if err := repo.Save(ctx, agg); err != nil {
 		t.Errorf("Save with no uncommitted events should be no-op, got: %v", err)
+	}
+}
+
+func TestInMemoryRepository_DeepCopyIsolation_FindByID(t *testing.T) {
+	repo := NewRepository[*testAggregate]()
+	ctx := context.Background()
+
+	agg := newTestAggregate("iso-1")
+	agg.Name = "original"
+	agg.Count = 10
+	if err := repo.Save(ctx, agg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	found, err := repo.FindByID(ctx, "iso-1")
+	if err != nil {
+		t.Fatalf("FindByID: %v", err)
+	}
+
+	found.Name = "mutated"
+	found.Count = 999
+
+	again, err := repo.FindByID(ctx, "iso-1")
+	if err != nil {
+		t.Fatalf("FindByID second: %v", err)
+	}
+	if again.Name != "original" {
+		t.Errorf("mutation leaked: Name = %q, want %q", again.Name, "original")
+	}
+	if again.Count != 10 {
+		t.Errorf("mutation leaked: Count = %d, want %d", again.Count, 10)
+	}
+}
+
+func TestInMemoryRepository_DeepCopyIsolation_Save(t *testing.T) {
+	repo := NewRepository[*testAggregate]()
+	ctx := context.Background()
+
+	agg := newTestAggregate("iso-2")
+	agg.Name = "original"
+	agg.Count = 10
+	if err := repo.Save(ctx, agg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	agg.Name = "mutated-after-save"
+	agg.Count = 999
+
+	found, err := repo.FindByID(ctx, "iso-2")
+	if err != nil {
+		t.Fatalf("FindByID: %v", err)
+	}
+	if found.Name != "original" {
+		t.Errorf("mutation after Save leaked: Name = %q, want %q", found.Name, "original")
+	}
+	if found.Count != 10 {
+		t.Errorf("mutation after Save leaked: Count = %d, want %d", found.Count, 10)
+	}
+}
+
+func TestInMemoryRepository_DeepCopyIsolation_ApplierSelfReference(t *testing.T) {
+	repo := NewRepository[*testAggregate]()
+	ctx := context.Background()
+
+	agg := newTestAggregate("iso-3")
+	agg.Name = "with-applier"
+	if err := agg.Apply(context.Background(), event.NewBaseEvent("iso-3", time.Now())); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if err := repo.Save(ctx, agg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	found, err := repo.FindByID(ctx, "iso-3")
+	if err != nil {
+		t.Fatalf("FindByID: %v", err)
+	}
+
+	if err := found.Apply(context.Background(), event.NewBaseEvent("iso-3", time.Now())); err != nil {
+		t.Fatalf("Apply on loaded aggregate should work, got: %v", err)
 	}
 }

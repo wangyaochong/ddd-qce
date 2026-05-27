@@ -16,7 +16,7 @@ import (
 
 type StoreComponents struct {
 	Backend      *infra.Backend
-	EventStore   domainevent.EventSourceStore[domainevent.DomainEvent]
+	EventStore   domainevent.EventSourceStore[domainevent.Event]
 	OrderRepo    application.OrderRepositoryAdapter
 	DB           *sql.DB
 }
@@ -47,8 +47,8 @@ func newMemoryProvider() (*StoreComponents, error) {
 	}, nil
 }
 
-func newMemoryEventStore() (domainevent.EventSourceStore[domainevent.DomainEvent], error) {
-	return eventmemory.NewEventSourceStore[domainevent.DomainEvent]()
+func newMemoryEventStore() (domainevent.EventSourceStore[domainevent.Event], error) {
+	return eventmemory.NewEventSourceStore[domainevent.Event]()
 }
 
 func newPgProvider(dsn string) (*StoreComponents, error) {
@@ -67,7 +67,7 @@ func newPgProvider(dsn string) (*StoreComponents, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
-	eventStore, err := eventpg.NewEventSourceStore[domainevent.DomainEvent](db)
+	eventStore, err := eventpg.NewEventSourceStore[domainevent.Event](db)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create pg event store: %w", err)

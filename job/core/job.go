@@ -59,23 +59,17 @@ func (j *Job) GetError() string          { return j.err }
 func (j *Job) GetStartedAt() time.Time   { return j.startedAt }
 func (j *Job) GetCompletedAt() time.Time { return j.completedAt }
 
-// SetStatus sets the job status. Infrastructure-only: for constructing Job objects from persistence.
-func (j *Job) SetStatus(s JobStatus) { j.status = s }
-
-// SetResult sets the job result. Infrastructure-only: for constructing Job objects from persistence.
-func (j *Job) SetResult(r any) { j.result = r }
-
-// SetResultType sets the job result type. Infrastructure-only: for constructing Job objects from persistence.
-func (j *Job) SetResultType(rt string) { j.resultType = rt }
-
-// SetError sets the job error. Infrastructure-only: for constructing Job objects from persistence.
-func (j *Job) SetError(e string) { j.err = e }
-
-// SetStartedAt sets the job start time. Infrastructure-only: for constructing Job objects from persistence.
-func (j *Job) SetStartedAt(t time.Time) { j.startedAt = t }
-
-// SetCompletedAt sets the job completion time. Infrastructure-only: for constructing Job objects from persistence.
-func (j *Job) SetCompletedAt(t time.Time) { j.completedAt = t }
+// RestoreJobState restores job fields from persistence. Only for infrastructure use.
+func (j *Job) RestoreJobState(status JobStatus, result any, resultType string, err string, startedAt, completedAt time.Time) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.status = status
+	j.result = result
+	j.resultType = resultType
+	j.err = err
+	j.startedAt = startedAt
+	j.completedAt = completedAt
+}
 
 // MarkRunning atomically sets the job status to running and records the start time.
 func (j *Job) MarkRunning() {

@@ -1,12 +1,17 @@
 package builtin
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/trace"
 )
 
 type testQuery struct{}
@@ -57,7 +62,7 @@ func (l *mockLogger) Debug(msg string, args ...interface{}) {
 
 func TestMetricsAspect_Query(t *testing.T) {
 	recorder := newMockMetricsRecorder()
-	aspect := &MetricsAspect{Recorder: recorder}
+	aspect := &MetricsAspect{recorder: recorder}
 
 	ctx := context.Background()
 	_ = aspect.AfterQuery(ctx, &testQuery{}, nil, nil, 100*time.Millisecond)
@@ -70,7 +75,7 @@ func TestMetricsAspect_Query(t *testing.T) {
 
 func TestMetricsAspect_QueryError(t *testing.T) {
 	recorder := newMockMetricsRecorder()
-	aspect := &MetricsAspect{Recorder: recorder}
+	aspect := &MetricsAspect{recorder: recorder}
 
 	ctx := context.Background()
 	err := errors.New("query error")
@@ -84,7 +89,7 @@ func TestMetricsAspect_QueryError(t *testing.T) {
 
 func TestMetricsAspect_Command(t *testing.T) {
 	recorder := newMockMetricsRecorder()
-	aspect := &MetricsAspect{Recorder: recorder}
+	aspect := &MetricsAspect{recorder: recorder}
 
 	ctx := context.Background()
 	_ = aspect.AfterCommand(ctx, &testCommand{}, nil, nil, 200*time.Millisecond)
@@ -99,7 +104,7 @@ func TestMetricsAspect_Command(t *testing.T) {
 
 func TestMetricsAspect_Event(t *testing.T) {
 	recorder := newMockMetricsRecorder()
-	aspect := &MetricsAspect{Recorder: recorder}
+	aspect := &MetricsAspect{recorder: recorder}
 
 	ctx := context.Background()
 	_ = aspect.AfterPublish(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, nil, 50*time.Millisecond)
@@ -112,7 +117,7 @@ func TestMetricsAspect_Event(t *testing.T) {
 
 func TestLoggingAspect_Query(t *testing.T) {
 	logger := &mockLogger{}
-	aspect := &LoggingAspect{Logger: logger}
+	aspect := &LoggingAspect{logger: logger}
 
 	ctx := context.Background()
 	_ = aspect.AfterQuery(ctx, &testQuery{}, nil, nil, 100*time.Millisecond)
@@ -124,7 +129,7 @@ func TestLoggingAspect_Query(t *testing.T) {
 
 func TestLoggingAspect_QueryError(t *testing.T) {
 	logger := &mockLogger{}
-	aspect := &LoggingAspect{Logger: logger}
+	aspect := &LoggingAspect{logger: logger}
 
 	ctx := context.Background()
 	_ = aspect.AfterQuery(ctx, &testQuery{}, nil, errors.New("error"), 100*time.Millisecond)
@@ -136,7 +141,7 @@ func TestLoggingAspect_QueryError(t *testing.T) {
 
 func TestLoggingAspect_Command(t *testing.T) {
 	logger := &mockLogger{}
-	aspect := &LoggingAspect{Logger: logger}
+	aspect := &LoggingAspect{logger: logger}
 
 	ctx := context.Background()
 	_ = aspect.AfterCommand(ctx, &testCommand{}, nil, nil, 100*time.Millisecond)
@@ -148,7 +153,7 @@ func TestLoggingAspect_Command(t *testing.T) {
 
 func TestLoggingAspect_Event(t *testing.T) {
 	logger := &mockLogger{}
-	aspect := &LoggingAspect{Logger: logger}
+	aspect := &LoggingAspect{logger: logger}
 
 	ctx := context.Background()
 	_ = aspect.AfterPublish(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, nil, 100*time.Millisecond)
@@ -159,7 +164,7 @@ func TestLoggingAspect_Event(t *testing.T) {
 }
 
 func TestMetricsAspect_NameAndOrder(t *testing.T) {
-	aspect := &MetricsAspect{Recorder: newMockMetricsRecorder()}
+	aspect := &MetricsAspect{recorder: newMockMetricsRecorder()}
 
 	if aspect.Name() != "metrics" {
 		t.Errorf("expected name 'metrics', got '%s'", aspect.Name())
@@ -170,7 +175,7 @@ func TestMetricsAspect_NameAndOrder(t *testing.T) {
 }
 
 func TestLoggingAspect_NameAndOrder(t *testing.T) {
-	aspect := &LoggingAspect{Logger: &mockLogger{}}
+	aspect := &LoggingAspect{logger: &mockLogger{}}
 
 	if aspect.Name() != "logging" {
 		t.Errorf("expected name 'logging', got '%s'", aspect.Name())
@@ -206,7 +211,7 @@ func (m *mockTransactionManager) Rollback(ctx context.Context) error {
 
 func TestTransactionAspect_NameAndOrder(t *testing.T) {
 	txMgr := &mockTransactionManager{}
-	aspect := &TransactionAspect{TxManager: txMgr}
+	aspect := &TransactionAspect{txManager: txMgr}
 
 	if aspect.Name() != "transaction" {
 		t.Errorf("expected name 'transaction', got '%s'", aspect.Name())
@@ -218,7 +223,7 @@ func TestTransactionAspect_NameAndOrder(t *testing.T) {
 
 func TestTransactionAspect_Command_Success(t *testing.T) {
 	txMgr := &mockTransactionManager{}
-	aspect := &TransactionAspect{TxManager: txMgr}
+	aspect := &TransactionAspect{txManager: txMgr}
 
 	ctx := context.Background()
 	err := aspect.AfterCommand(ctx, &testCommand{}, "result", nil, 100*time.Millisecond)
@@ -233,7 +238,7 @@ func TestTransactionAspect_Command_Success(t *testing.T) {
 
 func TestTransactionAspect_Command_ErrorWithRollback(t *testing.T) {
 	txMgr := &mockTransactionManager{}
-	aspect := &TransactionAspect{TxManager: txMgr}
+	aspect := &TransactionAspect{txManager: txMgr}
 
 	ctx := context.Background()
 	cmdErr := errors.New("command failed")
@@ -251,7 +256,7 @@ func TestTransactionAspect_Command_ErrorWithRollbackFailure(t *testing.T) {
 	txMgr := &mockTransactionManager{
 		rollbackErr: errors.New("rollback failed"),
 	}
-	aspect := &TransactionAspect{TxManager: txMgr}
+	aspect := &TransactionAspect{txManager: txMgr}
 
 	ctx := context.Background()
 	cmdErr := errors.New("command failed")
@@ -267,7 +272,7 @@ func TestTransactionAspect_Command_ErrorWithRollbackFailure(t *testing.T) {
 
 func TestLoggingAspect_AfterCommand_Error(t *testing.T) {
 	logger := &mockLogger{}
-	aspect := &LoggingAspect{Logger: logger}
+	aspect := &LoggingAspect{logger: logger}
 
 	ctx := context.Background()
 	_ = aspect.AfterCommand(ctx, &testCommand{}, nil, errors.New("error"), 100*time.Millisecond)
@@ -279,7 +284,7 @@ func TestLoggingAspect_AfterCommand_Error(t *testing.T) {
 
 func TestLoggingAspect_AfterPublish_Error(t *testing.T) {
 	logger := &mockLogger{}
-	aspect := &LoggingAspect{Logger: logger}
+	aspect := &LoggingAspect{logger: logger}
 
 	ctx := context.Background()
 	_ = aspect.AfterPublish(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, errors.New("error"), 100*time.Millisecond)
@@ -291,7 +296,7 @@ func TestLoggingAspect_AfterPublish_Error(t *testing.T) {
 
 func TestMetricsAspect_AfterCommand_Error(t *testing.T) {
 	recorder := newMockMetricsRecorder()
-	aspect := &MetricsAspect{Recorder: recorder}
+	aspect := &MetricsAspect{recorder: recorder}
 
 	ctx := context.Background()
 	_ = aspect.AfterCommand(ctx, &testCommand{}, nil, errors.New("error"), 100*time.Millisecond)
@@ -302,9 +307,19 @@ func TestMetricsAspect_AfterCommand_Error(t *testing.T) {
 	}
 }
 
+func TestNewTransactionAspect_NilReturnsError(t *testing.T) {
+	_, err := NewTransactionAspect(nil)
+	if err == nil {
+		t.Fatal("expected error when TxManager is nil")
+	}
+	if !strings.Contains(err.Error(), "TxManager") || !strings.Contains(err.Error(), "NoOpTransactionManager") {
+		t.Errorf("error message should mention TxManager and NoOpTransactionManager, got: %s", err.Error())
+	}
+}
+
 func TestMetricsAspect_AfterPublish_Error(t *testing.T) {
 	recorder := newMockMetricsRecorder()
-	aspect := &MetricsAspect{Recorder: recorder}
+	aspect := &MetricsAspect{recorder: recorder}
 
 	ctx := context.Background()
 	_ = aspect.AfterPublish(ctx, &testEvent{BaseEvent: event.NewBaseEvent("1", time.Now())}, errors.New("error"), 100*time.Millisecond)
@@ -312,5 +327,59 @@ func TestMetricsAspect_AfterPublish_Error(t *testing.T) {
 	name := "Event/*builtin.testEvent"
 	if _, ok := recorder.errors[name]; !ok {
 		t.Errorf("expected error recorded for %s", name)
+	}
+}
+
+func TestTransactionAspect_NilTxManager_ReturnsError(t *testing.T) {
+	_, err := NewTransactionAspect(nil)
+	if err == nil {
+		t.Fatal("expected error when TxManager is nil")
+	}
+	if !strings.Contains(err.Error(), "TxManager") {
+		t.Errorf("error should mention TxManager, got: %v", err)
+	}
+}
+
+func TestStdLogger_WithContext_TraceInfo(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	}
+
+	ctx := trace.WithTrace(context.Background(), "test-trace-123", "test-span-456")
+	l := logger.WithContext(ctx)
+	l.Info("test message")
+
+	var entry map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("failed to parse log output: %v", err)
+	}
+	if entry["trace_id"] != "test-trace-123" {
+		t.Errorf("expected trace_id=test-trace-123, got %v", entry["trace_id"])
+	}
+	if entry["span_id"] != "test-span-456" {
+		t.Errorf("expected span_id=test-span-456, got %v", entry["span_id"])
+	}
+}
+
+func TestStdLogger_WithContext_NoTraceInfo(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	}
+
+	ctx := context.Background()
+	l := logger.WithContext(ctx)
+	l.Info("test message")
+
+	var entry map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
+		t.Fatalf("failed to parse log output: %v", err)
+	}
+	if _, ok := entry["trace_id"]; ok {
+		t.Error("expected no trace_id when context has no trace info")
+	}
+	if _, ok := entry["span_id"]; ok {
+		t.Error("expected no span_id when context has no trace info")
 	}
 }

@@ -1,13 +1,17 @@
 package entity
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
 
 func TestNewAuditableEntity(t *testing.T) {
 	before := time.Now()
-	e := NewAuditableEntity("user-1")
+	e, err := NewAuditableEntity("user-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	after := time.Now()
 
 	if e.ID() != "user-1" {
@@ -21,15 +25,15 @@ func TestNewAuditableEntity(t *testing.T) {
 	}
 }
 
-func TestNewAuditableEntity_EmptyID(t *testing.T) {
-	e := NewAuditableEntity("")
-	if !e.IsEmpty() {
-		t.Error("expected auditable entity with empty ID to be empty")
+func TestNewAuditableEntity_EmptyID_ReturnsError(t *testing.T) {
+	_, err := NewAuditableEntity("")
+	if err == nil {
+		t.Error("expected error for empty ID")
 	}
 }
 
 func TestAuditableEntity_Touch(t *testing.T) {
-	e := NewAuditableEntity("user-1")
+	e := MustNewAuditableEntity("user-1")
 	originalUpdatedAt := e.UpdatedAt()
 
 	time.Sleep(10 * time.Millisecond)
@@ -41,7 +45,7 @@ func TestAuditableEntity_Touch(t *testing.T) {
 }
 
 func TestAuditableEntity_CreatedAtNotChanged(t *testing.T) {
-	e := NewAuditableEntity("user-1")
+	e := MustNewAuditableEntity("user-1")
 	originalCreatedAt := e.CreatedAt()
 
 	time.Sleep(10 * time.Millisecond)
@@ -53,14 +57,14 @@ func TestAuditableEntity_CreatedAtNotChanged(t *testing.T) {
 }
 
 func TestAuditableEntity_Validate(t *testing.T) {
-	e := NewAuditableEntity("user-1")
+	e := MustNewAuditableEntity("user-1")
 	if err := e.Validate(); err != nil {
 		t.Errorf("expected no error for valid auditable entity, got: %v", err)
 	}
 }
 
 func TestAuditableEntity_Validate_EmptyID(t *testing.T) {
-	e := NewAuditableEntity("")
+	e := &AuditableEntity{}
 	if err := e.Validate(); err == nil {
 		t.Fatal("expected error for empty ID in auditable entity")
 	}
@@ -69,7 +73,10 @@ func TestAuditableEntity_Validate_EmptyID(t *testing.T) {
 func TestNewAuditableEntityFromData(t *testing.T) {
 	ct := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	ut := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
-	e := NewAuditableEntityFromData("user-1", ct, ut)
+	e, err := NewAuditableEntityFromData("user-1", ct, ut)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if e.ID() != "user-1" {
 		t.Errorf("expected ID 'user-1', got '%s'", e.ID())
@@ -79,5 +86,21 @@ func TestNewAuditableEntityFromData(t *testing.T) {
 	}
 	if e.UpdatedAt() != ut {
 		t.Errorf("expected UpdatedAt %v, got %v", ut, e.UpdatedAt())
+	}
+}
+
+func TestAuditableEntity_JSONRoundTrip(t *testing.T) {
+	e := MustNewAuditableEntity("user-1")
+	data, err := e.MarshalJSON()
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var e2 AuditableEntity
+	if err := json.Unmarshal(data, &e2); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if e2.ID() != "user-1" {
+		t.Errorf("expected ID 'user-1', got '%s'", e2.ID())
 	}
 }

@@ -72,12 +72,27 @@ func ApplyCorrelation(evt Event, correlationID, causationID string) {
 	if !field.IsValid() || field.Kind() != reflect.Struct {
 		return
 	}
-	setter := field.Addr().MethodByName("setCorrelation")
-	if setter.IsValid() {
-		setter.Call([]reflect.Value{
-			reflect.ValueOf(correlationID),
-			reflect.ValueOf(causationID),
-		})
+	base, ok := field.Addr().Interface().(*BaseEvent)
+	if ok {
+		base.setCorrelation(correlationID, causationID)
+	}
+}
+
+func RestoreBaseEvent(evt Event, aggregateID string, occurredAt time.Time, correlationID, causationID string) {
+	v := reflect.ValueOf(evt)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return
+	}
+	field := v.FieldByName("BaseEvent")
+	if !field.IsValid() || field.Kind() != reflect.Struct {
+		return
+	}
+	base, ok := field.Addr().Interface().(*BaseEvent)
+	if ok {
+		base.restore(aggregateID, occurredAt, correlationID, causationID)
 	}
 }
 

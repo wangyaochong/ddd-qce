@@ -44,11 +44,11 @@ func TestPersistenceAspect_AfterCommand(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(store.Commands) != 1 {
-		t.Fatalf("expected 1 command entry, got %d", len(store.Commands))
+	if len(store.GetCommands()) != 1 {
+		t.Fatalf("expected 1 command entry, got %d", len(store.GetCommands()))
 	}
 
-	entry := store.Commands[0]
+	entry := store.GetCommands()[0]
 	if entry.CommandType != "persistenceTestCommand" {
 		t.Errorf("expected CommandType 'persistenceTestCommand', got '%s'", entry.CommandType)
 	}
@@ -79,11 +79,11 @@ func TestPersistenceAspect_AfterCommandWithError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(store.Commands) != 1 {
-		t.Fatalf("expected 1 command entry, got %d", len(store.Commands))
+	if len(store.GetCommands()) != 1 {
+		t.Fatalf("expected 1 command entry, got %d", len(store.GetCommands()))
 	}
 
-	entry := store.Commands[0]
+	entry := store.GetCommands()[0]
 	if entry.Error != "command failed" {
 		t.Errorf("expected Error 'command failed', got '%s'", entry.Error)
 	}
@@ -104,7 +104,7 @@ func TestPersistenceAspect_AfterCommandWithTraceContext(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	entry := store.Commands[0]
+	entry := store.GetCommands()[0]
 	if entry.TraceID != "trace-123" {
 		t.Errorf("expected TraceID 'trace-123', got '%s'", entry.TraceID)
 	}
@@ -127,11 +127,11 @@ func TestPersistenceAspect_AfterQuery(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(store.Queries) != 1 {
-		t.Fatalf("expected 1 query entry, got %d", len(store.Queries))
+	if len(store.GetQueries()) != 1 {
+		t.Fatalf("expected 1 query entry, got %d", len(store.GetQueries()))
 	}
 
-	entry := store.Queries[0]
+	entry := store.GetQueries()[0]
 	if entry.QueryType != "persistenceTestQuery" {
 		t.Errorf("expected QueryType 'persistenceTestQuery', got '%s'", entry.QueryType)
 	}
@@ -163,14 +163,14 @@ func TestPersistenceAspect_AfterPublish_Event(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(store.Events) != 1 {
-		t.Fatalf("expected 1 event entry, got %d", len(store.Events))
+	if len(store.GetEvents()) != 1 {
+		t.Fatalf("expected 1 event entry, got %d", len(store.GetEvents()))
 	}
-	if len(store.Handlers) != 0 {
-		t.Fatalf("expected 0 handler entries, got %d", len(store.Handlers))
+	if len(store.GetHandlers()) != 0 {
+		t.Fatalf("expected 0 handler entries, got %d", len(store.GetHandlers()))
 	}
 
-	entry := store.Events[0]
+	entry := store.GetEvents()[0]
 	if entry.AggregateID != "agg-1" {
 		t.Errorf("expected AggregateID 'agg-1', got '%s'", entry.AggregateID)
 	}
@@ -202,14 +202,14 @@ func TestPersistenceAspect_AfterPublish_EventHandler(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(store.Handlers) != 1 {
-		t.Fatalf("expected 1 handler entry, got %d", len(store.Handlers))
+	if len(store.GetHandlers()) != 1 {
+		t.Fatalf("expected 1 handler entry, got %d", len(store.GetHandlers()))
 	}
-	if len(store.Events) != 0 {
-		t.Fatalf("expected 0 event entries, got %d", len(store.Events))
+	if len(store.GetEvents()) != 0 {
+		t.Fatalf("expected 0 event entries, got %d", len(store.GetEvents()))
 	}
 
-	entry := store.Handlers[0]
+	entry := store.GetHandlers()[0]
 	if entry.HandlerType != "MyHandler" {
 		t.Errorf("expected HandlerType 'MyHandler', got '%s'", entry.HandlerType)
 	}
@@ -242,11 +242,11 @@ func TestPersistenceAspect_AfterPublish_EventHandlerWithError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(store.Handlers) != 1 {
-		t.Fatalf("expected 1 handler entry, got %d", len(store.Handlers))
+	if len(store.GetHandlers()) != 1 {
+		t.Fatalf("expected 1 handler entry, got %d", len(store.GetHandlers()))
 	}
 
-	entry := store.Handlers[0]
+	entry := store.GetHandlers()[0]
 	if entry.Status != "error" {
 		t.Errorf("expected Status 'error', got '%s'", entry.Status)
 	}
@@ -270,11 +270,11 @@ func TestPersistenceAspect_AfterPublish_EventWithError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(store.Events) != 1 {
-		t.Fatalf("expected 1 event entry, got %d", len(store.Events))
+	if len(store.GetEvents()) != 1 {
+		t.Fatalf("expected 1 event entry, got %d", len(store.GetEvents()))
 	}
 
-	entry := store.Events[0]
+	entry := store.GetEvents()[0]
 	if entry.Error != "publish failed" {
 		t.Errorf("expected Error 'publish failed', got '%s'", entry.Error)
 	}

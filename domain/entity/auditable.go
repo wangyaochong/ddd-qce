@@ -1,33 +1,71 @@
 package entity
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type AuditableEntity struct {
 	Entity
-	createdAt time.Time `json:"createdAt"`
-	updatedAt time.Time `json:"updatedAt"`
+	createdAt time.Time
+	updatedAt time.Time
 }
 
 func (e *AuditableEntity) CreatedAt() time.Time { return e.createdAt }
 func (e *AuditableEntity) UpdatedAt() time.Time { return e.updatedAt }
 
-func NewAuditableEntity(id string) *AuditableEntity {
+func NewAuditableEntity(id string) (*AuditableEntity, error) {
+	e, err := NewEntity(id)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	return &AuditableEntity{
-		Entity:     *NewEntity(id),
-		createdAt: now,
-		updatedAt: now,
-	}
+		Entity:     *e,
+		createdAt:  now,
+		updatedAt:  now,
+	}, nil
 }
 
-func NewAuditableEntityFromData(id string, createdAt, updatedAt time.Time) *AuditableEntity {
+func NewAuditableEntityFromData(id string, createdAt, updatedAt time.Time) (*AuditableEntity, error) {
+	e, err := NewEntity(id)
+	if err != nil {
+		return nil, err
+	}
 	return &AuditableEntity{
-		Entity:     *NewEntity(id),
+		Entity:     *e,
 		createdAt:  createdAt,
 		updatedAt:  updatedAt,
-	}
+	}, nil
 }
 
 func (e *AuditableEntity) Touch() {
 	e.updatedAt = time.Now()
+}
+
+func (e *AuditableEntity) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		ID        string    `json:"id"`
+		CreatedAt time.Time `json:"createdAt"`
+		UpdatedAt time.Time `json:"updatedAt"`
+	}{
+		ID:        e.id,
+		CreatedAt: e.createdAt,
+		UpdatedAt: e.updatedAt,
+	})
+}
+
+func (e *AuditableEntity) UnmarshalJSON(data []byte) error {
+	var aux struct {
+		ID        string    `json:"id"`
+		CreatedAt time.Time `json:"createdAt"`
+		UpdatedAt time.Time `json:"updatedAt"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	e.id = aux.ID
+	e.createdAt = aux.CreatedAt
+	e.updatedAt = aux.UpdatedAt
+	return nil
 }

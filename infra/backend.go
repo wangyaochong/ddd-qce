@@ -23,6 +23,14 @@ type Backend struct {
 	TraceStore         trace.TraceStore
 	MessageStore       builtin.MessageStore
 	Migrator           Migrator
+	closer             func() error
+}
+
+func (b *Backend) Close() error {
+	if b.closer != nil {
+		return b.closer()
+	}
+	return nil
 }
 
 type BackendOption func(*Backend)
@@ -49,6 +57,10 @@ func WithMessageStore(store builtin.MessageStore) BackendOption {
 
 func WithMigrator(m Migrator) BackendOption {
 	return func(b *Backend) { b.Migrator = m }
+}
+
+func WithCloser(closer func() error) BackendOption {
+	return func(b *Backend) { b.closer = closer }
 }
 
 func NewBackend(opts ...BackendOption) *Backend {

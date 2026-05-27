@@ -216,24 +216,9 @@ func (s *EventSourceStore[T]) LoadAll(ctx context.Context, afterPosition int64, 
 }
 
 func restoreBaseEvent(evt any, aggregateID string, occurredAt time.Time, correlationID string, causationID string) {
-	v := reflect.ValueOf(evt)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
+	e, ok := evt.(event.Event)
+	if !ok {
 		return
 	}
-	field := v.FieldByName("BaseEvent")
-	if !field.IsValid() || field.Kind() != reflect.Struct {
-		return
-	}
-	restorer := field.Addr().MethodByName("restore")
-	if restorer.IsValid() {
-		restorer.Call([]reflect.Value{
-			reflect.ValueOf(aggregateID),
-			reflect.ValueOf(occurredAt),
-			reflect.ValueOf(correlationID),
-			reflect.ValueOf(causationID),
-		})
-	}
+	event.RestoreBaseEvent(e, aggregateID, occurredAt, correlationID, causationID)
 }

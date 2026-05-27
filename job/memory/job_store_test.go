@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"testing"
+	"time"
 
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/job/core/jobtest"
@@ -85,7 +86,7 @@ func TestJobStore_Update(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	job.SetStatus(jobcore.JobStatusRunning)
+	job.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 
 	err = store.Update(ctx, job)
 	if err != nil {
@@ -108,7 +109,7 @@ func TestJobStore_UpdateNotFound(t *testing.T) {
 	job := &jobcore.Job{
 		ID: "nonexistent",
 	}
-	job.SetStatus(jobcore.JobStatusRunning)
+	job.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 
 	err := store.Update(ctx, job)
 	if err == nil {
@@ -158,8 +159,8 @@ func TestJobStore_List(t *testing.T) {
 		jobcore.NewJob("job-3", nil),
 		jobcore.NewJob("job-4", nil),
 	}
-	jobs[1].SetStatus(jobcore.JobStatusRunning)
-	jobs[3].SetStatus(jobcore.JobStatusCompleted)
+	jobs[1].RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
+	jobs[3].RestoreJobState(jobcore.JobStatusCompleted, nil, "", "", time.Time{}, time.Time{})
 
 	for _, job := range jobs {
 		err := store.Create(ctx, job)

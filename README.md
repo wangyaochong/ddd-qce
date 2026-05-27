@@ -11,7 +11,7 @@ DDD-QCE 是一个基于 **CQRS + Event Sourcing + AOP** 的 Go 领域驱动开�
 - **异步 Job**: 支持超时、重试、取消的后台任务系统
 - **泛型安全**: 基于 Go 1.18+ 泛型，类型安全的 Handler 注册与调度
 - **可插拔持久化**: 统一 Backend 抽象，内存实现开箱即用，PostgreSQL 生产就绪
-- **环境变量配置切换**: 通过 `DDD_STORE_TYPE` + `DDD_POSTGRES_URI` 一键切换存储后端，无需改代码
+- **环境变量配置切换**: 通过 `DDD_STORE_TYPE` + `DDD_POSTGRES_URI` 一键切换存储后端，`app.WithAutoBackend()` 开箱即用
 - **乐观锁**: 聚合保存自动版本检查，防止并发冲突
 - **嵌套事务**: 基于 SAVEPOINT 的嵌套事务支持
 - **实体增强**: AuditableEntity（审计）、SoftDeletableEntity（软删除）、IDGenerator（ID 生成）、ValueObject（值对象）
@@ -32,16 +32,15 @@ package main
 import (
     "context"
     "fmt"
-    "time"
 
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/aspect/builtin"
     "github.com/ddd-qce/core/cqrs/command"
     "github.com/ddd-qce/core/cqrs/event"
     "github.com/ddd-qce/core/cqrs/query"
-    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
-    querymemory "github.com/ddd-qce/core/cqrs/query/memory"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/impl/memory"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/impl/memory"
+    querymemory "github.com/ddd-qce/core/cqrs/query/impl/memory"
     "github.com/ddd-qce/core/trace"
 )
 
@@ -71,15 +70,18 @@ func (h *GetUserHandler) Handle(ctx context.Context, q GetUserQuery) (string, er
     return "User: " + q.UserID, nil
 }
 
-// 4. 定义 Event（实现 DomainEvent 接口）
+// 4. 定义 Event（实现 Event 接口）
 type UserCreatedEvent struct {
-    UserID    string
+    event.BaseEvent
     Name      string
-    CreatedAt time.Time
 }
 
-func (e UserCreatedEvent) AggregateID() string   { return e.UserID }
-func (e UserCreatedEvent) OccurredAt() time.Time { return e.CreatedAt }
+func NewUserCreatedEvent(userID, name string) UserCreatedEvent {
+    return UserCreatedEvent{
+        BaseEvent: event.NewDomainEvent(userID),
+        Name:      name,
+    }
+}
 
 type UserCreatedHandler struct{}
 
@@ -91,24 +93,20 @@ func (h *UserCreatedHandler) Handle(ctx context.Context, evt UserCreatedEvent) e
 func main() {
     ctx := context.Background()
 
-    // 创建切面链
     chain := aspect.NewAspectChain()
     chain.RegisterCommandAspect(&builtin.TracingAspect{Store: trace.NewInMemoryTraceStore()})
 
-    // 创建 Bus（具体实现仅在组装时使用）
     cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
     queryBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
     eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
-    // 注册 Handler（通过 Bus 接口方法）
     cmdBus.RegisterHandler(&CreateUserHandler{})
     queryBus.RegisterHandler(&GetUserHandler{})
     eventBus.SubscribeHandler(&UserCreatedHandler{})
 
-    // 执行（通过接口级 Dispatch，ctx 在前）
     command.Dispatch[CreateUserCommand, string](ctx, cmdBus, CreateUserCommand{Name: "Alice", Email: "alice@example.com"})
     query.Dispatch[GetUserQuery, string](ctx, queryBus, GetUserQuery{UserID: "user-123"})
-    event.Dispatch[UserCreatedEvent](ctx, eventBus, UserCreatedEvent{UserID: "user-123", Name: "Alice", CreatedAt: time.Now()})
+    event.Dispatch[UserCreatedEvent](ctx, eventBus, NewUserCreatedEvent("user-123", "Alice"))
 }
 ```
 
@@ -121,6 +119,25 @@ cd core
 
 # 运行完整示例（展示 CQRS、Event、Job、Trace 等全部功能）
 go run examples/main.go
+```
+
+### 环境变量切换存储后端
+
+```go
+app, err := app.NewApp(app.WithAutoBackend())
+```
+
+| 环境变量 | 说明 |
+|----------|------|
+| `DDD_STORE_TYPE` | `memory`（默认）或 `postgres` |
+| `DDD_POSTGRES_URI` | PostgreSQL 连接串，`DDD_STORE_TYPE=postgres` 时必填 |
+
+```bash
+# 内存后端（默认）
+DDD_STORE_TYPE=memory ./your-app
+
+# PostgreSQL 后端
+DDD_STORE_TYPE=postgres DDD_POSTGRES_URI="postgres://user:pass@localhost/db" ./your-app
 ```
 
 ## 核心概念
@@ -165,23 +182,16 @@ go run examples/main.go
 │   ├── /aggregate               # AggregateRoot（嵌入 Entity，版本管理，事件收集）
 │   ├── /entity                  # Entity / AuditableEntity / SoftDeletableEntity / IDGenerator
 │   ├── /valueobject             # ValueObject[T comparable] 值对象
-│   ├── /event                   # DomainEvent 接口 / EventHandler[T] / EventStore[T]
 │   └── /repository              # Repository[T] / EventSourcingRepository[T] 接口
 │
-├── /infra                       # 基础设施层
-│   ├── backend.go               # Backend 结构体 + TransactionManager 接口
-│   ├── memory_backend.go        # NewMemoryBackend() + MemoryTransactionManager
-│   └── /repository/pg           # PgRepository[T] / PgEventSourcedRepository[T]（乐观锁 + 快照）
-│
 ├── /cqrs                        # CQRS 层
-│   ├── /aspect                  # Aspect / CommandAspect / QueryAspect / EventAspect 接口
 │   ├── /command                 # Command / CommandHandler[T,R] / CommandBus 接口 + Dispatch[T,R]
-│   │   └── /memory              # 内存 CommandBus 实现（RegisterHandler 方法）
+│   │   └── /impl/memory         # 内存 CommandBus 实现（RegisterHandler 方法）
 │   ├── /query                   # Query / QueryHandler[T,R] / QueryBus 接口 + Dispatch[T,R]
-│   │   └── /memory              # 内存 QueryBus 实现（Execute + RegisterHandler 方法）
-│   └── /event                   # EventBus 接口 + Dispatch[T]
-│       ├── /memory              # 内存 EventBus / EventStore[T] 实现
-│       └── /pg                  # PostgreSQL EventStore[T]（接口类型 T 需 WithFactory）
+│   │   └── /impl/memory         # 内存 QueryBus 实现（Execute + RegisterHandler 方法）
+│   └── /event                   # Event 接口 / EventHandler[T] / EventBus / EventSourceStore[T] + Dispatch[T]
+│       ├── /impl/memory         # 内存 EventBus / EventSourceStore[T] 实现
+│       └── /impl/pg             # PostgreSQL EventSourceStore[T]（接口类型 T 需 WithFactory）
 │
 ├── /aspect                      # 切面链实现
 │   ├── chain.go                 # AspectChain 洋葱模型执行
@@ -192,6 +202,12 @@ go run examples/main.go
 │       ├── MetricsAspect        # 指标采集（Order: 100）
 │       ├── PersistenceAspect    # 消息持久化（Order: 200）
 │       └── /pg                  # PgMessageStore
+│
+├── /infra                       # 基础设施层
+│   ├── backend.go               # Backend 结构体 + BackendOption 函数选项
+│   ├── memory_backend.go        # NewMemoryBackend() + MemoryTransactionManager
+│   ├── pg_backend.go            # NewPgBackend(db) PostgreSQL 后端工厂
+│   └── /repository/pg           # PgRepository[T] / PgEventSourcedRepository[T]（乐观锁 + 快照）
 │
 ├── /job                         # 异步 Job 系统
 │   ├── /core                    # Job / JobStore / JobManager 接口 + JobOption
@@ -207,14 +223,6 @@ go run examples/main.go
 ├── /pg                          # PostgreSQL 基础设施
 │   ├── transaction.go           # PgTransactionManager（Savepoint 嵌套事务）+ DBTX + GetQuerier
 │   └── migrate.go               # Migrate() / DropAll()
-│
-
-│
-├── /infra                       # 基础设施抽象
-│   ├── backend.go               # Backend 结构体 + TransactionManager 接口
-│   ├── memory_backend.go        # NewMemoryBackend() + MemoryTransactionManager
-│   ├── pg_backend.go            # NewPgBackend(db) PostgreSQL 后端工厂
-│   └── /repository/pg           # PgRepository / PgEventSourcedRepository（乐观锁 + 快照）
 │
 ├── /examples                    # 组件级演示（module github.com/ddd-qce/examples）
 ├── /exampleapp                  # 示例应用模块（module github.com/ddd-qce/exampleapp）

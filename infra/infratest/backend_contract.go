@@ -44,7 +44,7 @@ func TestBackendContract(t *testing.T, b *infra.Backend) {
 			CommandType: "TestCmd",
 			CreatedAt:   time.Now(),
 		}
-		job.SetStatus(jobcore.JobStatusPending)
+		job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 		if err := b.JobStore.Create(ctx, job); err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}

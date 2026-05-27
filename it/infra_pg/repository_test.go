@@ -28,23 +28,35 @@ type testOrder struct {
 
 func newTestOrder(id string) *testOrder {
 	o := &testOrder{}
-	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier(id, o)
+	ar, err := aggregate.NewAggregateRoot(id)
+	if err != nil {
+		panic(err)
+	}
+	o.AggregateRoot = *ar
 	return o
 }
 
-func (o *testOrder) When(evt event.DomainEvent) {}
+func (o *testOrder) When(_ event.Event) error { return nil }
+
+func (o *testOrder) Apply(ctx context.Context, evt event.Event) error {
+	return aggregate.ApplyChange(o, ctx, evt)
+}
+
+func (o *testOrder) LoadFromHistory(events []event.Event) error {
+	return aggregate.LoadFromHistory(o, events)
+}
 
 type testOrderJSON struct {
-	ID     string  `json:"id"`
+	aggregate.AggregateRootJSON
 	Name   string  `json:"name"`
 	Amount float64 `json:"amount"`
 }
 
 func (o *testOrder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(testOrderJSON{
-		ID:     o.ID(),
-		Name:   o.Name,
-		Amount: o.Amount,
+		AggregateRootJSON: o.AggregateRoot.ToJSON(),
+		Name:              o.Name,
+		Amount:            o.Amount,
 	})
 }
 
@@ -53,7 +65,7 @@ func (o *testOrder) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier(aux.ID, o)
+	o.AggregateRoot.FromJSON(aux.AggregateRootJSON)
 	o.Name = aux.Name
 	o.Amount = aux.Amount
 	return nil
@@ -66,10 +78,10 @@ type testOrderEvent struct {
 func (e *testOrderEvent) AggregateID() string   { return e.BaseEvent.AggregateID() }
 func (e *testOrderEvent) OccurredAt() time.Time { return e.BaseEvent.OccurredAt() }
 
-func newEventStore(db *sql.DB) *pgevent.EventSourceStore[event.DomainEvent] {
-	store, err := pgevent.NewEventSourceStore[event.DomainEvent](
+func newEventStore(db *sql.DB) *pgevent.EventSourceStore[event.Event] {
+	store, err := pgevent.NewEventSourceStore[event.Event](
 		db,
-		pgevent.WithFactory[event.DomainEvent](func() event.DomainEvent {
+		pgevent.WithFactory[event.Event](func() event.Event {
 			return &testOrderEvent{}
 		}),
 	)
@@ -99,7 +111,7 @@ func TestPgEventSourcedRepository_Contract(t *testing.T) {
 	repositorytest.TestEventSourcingRepositoryContract(t, repo,
 		func(id string) *testOrder { return newTestOrder(id) },
 		func(agg *testOrder) {
-			agg.Apply(&testOrderEvent{BaseEvent: event.NewBaseEvent(agg.ID(), time.Now())})
+			agg.Apply(context.Background(), &testOrderEvent{BaseEvent: event.NewBaseEvent(agg.ID(), time.Now())})
 		},
 	)
 }
@@ -261,7 +273,7 @@ func TestPgEventSourcedRepository_SaveAndLoad(t *testing.T) {
 	ctx := context.Background()
 
 	order := newTestOrder("order-es-1")
-	order.Apply(&testOrderEvent{BaseEvent: event.NewBaseEvent("order-es-1", time.Now())})
+	order.Apply(context.Background(), &testOrderEvent{BaseEvent: event.NewBaseEvent("order-es-1", time.Now())})
 	order.Name = "created order"
 
 	if err := repo.Save(ctx, order); err != nil {
@@ -312,7 +324,7 @@ func TestPgEventSourcedRepository_Snapshot(t *testing.T) {
 
 	order := newTestOrder("order-snap")
 	for i := 0; i < 6; i++ {
-		order.Apply(&testOrderEvent{BaseEvent: event.NewBaseEvent("order-snap", time.Now())})
+		order.Apply(context.Background(), &testOrderEvent{BaseEvent: event.NewBaseEvent("order-snap", time.Now())})
 	}
 
 	if err := repo.Save(ctx, order); err != nil {

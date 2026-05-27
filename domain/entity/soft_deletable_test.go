@@ -1,12 +1,16 @@
 package entity
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
 
 func TestNewSoftDeletableEntity(t *testing.T) {
-	e := NewSoftDeletableEntity("doc-1")
+	e, err := NewSoftDeletableEntity("doc-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if e.ID() != "doc-1" {
 		t.Errorf("expected ID 'doc-1', got '%s'", e.ID())
 	}
@@ -19,7 +23,7 @@ func TestNewSoftDeletableEntity(t *testing.T) {
 }
 
 func TestSoftDeletableEntity_SoftDelete(t *testing.T) {
-	e := NewSoftDeletableEntity("doc-1")
+	e := mustNewSoftDeletableEntity("doc-1")
 	originalUpdatedAt := e.UpdatedAt()
 
 	e.SoftDelete()
@@ -36,7 +40,7 @@ func TestSoftDeletableEntity_SoftDelete(t *testing.T) {
 }
 
 func TestSoftDeletableEntity_Restore(t *testing.T) {
-	e := NewSoftDeletableEntity("doc-1")
+	e := mustNewSoftDeletableEntity("doc-1")
 	e.SoftDelete()
 	originalUpdatedAt := e.UpdatedAt()
 
@@ -54,21 +58,21 @@ func TestSoftDeletableEntity_Restore(t *testing.T) {
 }
 
 func TestSoftDeletableEntity_Validate(t *testing.T) {
-	e := NewSoftDeletableEntity("doc-1")
+	e := mustNewSoftDeletableEntity("doc-1")
 	if err := e.Validate(); err != nil {
 		t.Errorf("expected no error for valid entity, got: %v", err)
 	}
 }
 
 func TestSoftDeletableEntity_Validate_EmptyID(t *testing.T) {
-	e := NewSoftDeletableEntity("")
+	e := &SoftDeletableEntity{}
 	if err := e.Validate(); err == nil {
 		t.Fatal("expected error for empty ID")
 	}
 }
 
 func TestSoftDeletableEntity_EmbedsAuditable(t *testing.T) {
-	e := NewSoftDeletableEntity("doc-1")
+	e := mustNewSoftDeletableEntity("doc-1")
 	if e.CreatedAt().IsZero() {
 		t.Error("expected CreatedAt to be set from AuditableEntity")
 	}
@@ -81,7 +85,10 @@ func TestNewSoftDeletableEntityFromData(t *testing.T) {
 	ct := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	ut := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	dt := time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
-	e := NewSoftDeletableEntityFromData("doc-1", ct, ut, &dt)
+	e, err := NewSoftDeletableEntityFromData("doc-1", ct, ut, &dt)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if e.ID() != "doc-1" {
 		t.Errorf("expected ID 'doc-1', got '%s'", e.ID())
@@ -92,4 +99,51 @@ func TestNewSoftDeletableEntityFromData(t *testing.T) {
 	if e.DeletedAt() == nil || *e.DeletedAt() != dt {
 		t.Errorf("expected DeletedAt %v, got %v", dt, e.DeletedAt())
 	}
+}
+
+func TestSoftDeletableEntity_JSONRoundTrip(t *testing.T) {
+	e := mustNewSoftDeletableEntity("doc-1")
+	e.SoftDelete()
+	data, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var e2 SoftDeletableEntity
+	if err := json.Unmarshal(data, &e2); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if e2.ID() != "doc-1" {
+		t.Errorf("expected ID 'doc-1', got '%s'", e2.ID())
+	}
+	if !e2.IsDeleted() {
+		t.Error("expected entity to be deleted after unmarshal")
+	}
+}
+
+func TestSoftDeletableEntity_JSONRoundTrip_NotDeleted(t *testing.T) {
+	e := mustNewSoftDeletableEntity("doc-1")
+	data, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var e2 SoftDeletableEntity
+	if err := json.Unmarshal(data, &e2); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if e2.ID() != "doc-1" {
+		t.Errorf("expected ID 'doc-1', got '%s'", e2.ID())
+	}
+	if e2.IsDeleted() {
+		t.Error("expected entity to not be deleted after unmarshal")
+	}
+}
+
+func mustNewSoftDeletableEntity(id string) *SoftDeletableEntity {
+	e, err := NewSoftDeletableEntity(id)
+	if err != nil {
+		panic(err)
+	}
+	return e
 }

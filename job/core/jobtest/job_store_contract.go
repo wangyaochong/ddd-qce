@@ -3,6 +3,7 @@ package jobtest
 import (
 	"context"
 	"testing"
+	"time"
 
 	jobcore "github.com/ddd-qce/core/job/core"
 )
@@ -70,7 +71,7 @@ func TestJobStoreContract(t *testing.T, newStore func() jobcore.JobStore) {
 	t.Run("UpdateNotFound", func(t *testing.T) {
 		store := newStore()
 		job := &jobcore.Job{ID: "contract-update-noexist"}
-		job.SetStatus(jobcore.JobStatusRunning)
+		job.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 		if err := store.Update(ctx, job); err == nil {
 			t.Fatal("expected error for updating nonexistent job")
 		}
@@ -103,7 +104,7 @@ func TestJobStoreContract(t *testing.T, newStore func() jobcore.JobStore) {
 		p1 := jobcore.NewJob("contract-list-p1", map[string]any{"action": "test"})
 		p2 := jobcore.NewJob("contract-list-p2", map[string]any{"action": "test"})
 		r1 := jobcore.NewJob("contract-list-r1", map[string]any{"action": "test"})
-		r1.SetStatus(jobcore.JobStatusRunning)
+		r1.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 
 		for _, j := range []*jobcore.Job{p1, p2, r1} {
 			if err := store.Create(ctx, j); err != nil {

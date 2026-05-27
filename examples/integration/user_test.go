@@ -233,7 +233,7 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 	eventmemory.RegisterEvent[*testUserCreatedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, getHandler)
 
-	result, err := 	command.Dispatch(ctx, cmdBus, &testCreateUserCommand{
+	result, err := command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, cmdBus, &testCreateUserCommand{
 		UserID: "user-001",
 		Name:   "张三",
 		Email:  "zhangsan@example.com",
@@ -245,7 +245,7 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 		t.Error("user created event handler was not called")
 	}
 
-	_, err = 	command.Dispatch(ctx, cmdBus, &testUpdateUserCommand{
+	_, err = command.Dispatch[*testUpdateUserCommand, *testUpdateUserResult](ctx, cmdBus, &testUpdateUserCommand{
 		UserID: result.UserID,
 		Name:   "张三更新",
 	})
@@ -253,7 +253,7 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 		t.Fatalf("update user failed: %v", err)
 	}
 
-	qResult, err := query.Dispatch(ctx, qBus, &testGetUserQuery{
+	qResult, err := query.Dispatch[*testGetUserQuery, *testGetUserResult](ctx, qBus, &testGetUserQuery{
 		UserID: result.UserID,
 	})
 	if err != nil {

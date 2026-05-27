@@ -327,6 +327,138 @@ func TestEventStore_Contract(t *testing.T) {
 	})
 }
 
+func TestEventStore_LoadAllContract(t *testing.T) {
+	impl.TestEventStoreLoadAllContract(t, func() event.EventSourceStore[*impl.TestEvent] {
+		store, err := NewEventSourceStore[*impl.TestEvent]()
+		if err != nil {
+			t.Fatalf("create event store: %v", err)
+		}
+		return store
+	})
+}
+
+func TestEventStore_LoadAll(t *testing.T) {
+	store, err := NewEventSourceStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
+	ctx := context.Background()
+
+	store.Append(ctx, "agg-1", 0, []*testStoreEvent{
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "a1-e1"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "a1-e2"},
+	})
+	store.Append(ctx, "agg-2", 0, []*testStoreEvent{
+		{BaseEvent: event.NewBaseEvent("agg-2", time.Now()), Data: "a2-e1"},
+	})
+	store.Append(ctx, "agg-1", 2, []*testStoreEvent{
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "a1-e3"},
+	})
+
+	all, err := store.LoadAll(ctx, 0, 0)
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	if len(all) != 4 {
+		t.Fatalf("expected 4 events, got %d", len(all))
+	}
+	if all[0].Position != 1 || all[0].Event.Data != "a1-e1" {
+		t.Errorf("first event: position=%d data=%s", all[0].Position, all[0].Event.Data)
+	}
+	if all[1].Position != 2 || all[1].Event.Data != "a1-e2" {
+		t.Errorf("second event: position=%d data=%s", all[1].Position, all[1].Event.Data)
+	}
+	if all[2].Position != 3 || all[2].Event.Data != "a2-e1" {
+		t.Errorf("third event: position=%d data=%s", all[2].Position, all[2].Event.Data)
+	}
+	if all[3].Position != 4 || all[3].Event.Data != "a1-e3" {
+		t.Errorf("fourth event: position=%d data=%s", all[3].Position, all[3].Event.Data)
+	}
+}
+
+func TestEventStore_LoadAll_WithAfterPosition(t *testing.T) {
+	store, err := NewEventSourceStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
+	ctx := context.Background()
+
+	store.Append(ctx, "agg-1", 0, []*testStoreEvent{
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e1"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e2"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e3"},
+	})
+
+	all, err := store.LoadAll(ctx, 2, 0)
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 event after position 2, got %d", len(all))
+	}
+	if all[0].Position != 3 || all[0].Event.Data != "e3" {
+		t.Errorf("event: position=%d data=%s", all[0].Position, all[0].Event.Data)
+	}
+}
+
+func TestEventStore_LoadAll_WithLimit(t *testing.T) {
+	store, err := NewEventSourceStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
+	ctx := context.Background()
+
+	store.Append(ctx, "agg-1", 0, []*testStoreEvent{
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e1"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e2"},
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e3"},
+	})
+
+	all, err := store.LoadAll(ctx, 0, 2)
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 events with limit 2, got %d", len(all))
+	}
+}
+
+func TestEventStore_LoadAll_Empty(t *testing.T) {
+	store, err := NewEventSourceStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
+	ctx := context.Background()
+
+	all, err := store.LoadAll(ctx, 0, 0)
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	if len(all) != 0 {
+		t.Errorf("expected 0 events, got %d", len(all))
+	}
+}
+
+func TestEventStore_LoadAll_AfterPositionBeyondRange(t *testing.T) {
+	store, err := NewEventSourceStore[*testStoreEvent]()
+	if err != nil {
+		t.Fatalf("create event store: %v", err)
+	}
+	ctx := context.Background()
+
+	store.Append(ctx, "agg-1", 0, []*testStoreEvent{
+		{BaseEvent: event.NewBaseEvent("agg-1", time.Now()), Data: "e1"},
+	})
+
+	all, err := store.LoadAll(ctx, 100, 0)
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	if len(all) != 0 {
+		t.Errorf("expected 0 events, got %d", len(all))
+	}
+}
+
 func TestEventStore_WithFactory_LoadReturnsCopy(t *testing.T) {
 	store, err := NewEventSourceStore[*testStoreEvent](WithFactory[*testStoreEvent](func() *testStoreEvent {
 		return &testStoreEvent{}

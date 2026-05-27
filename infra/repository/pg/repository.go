@@ -3,41 +3,27 @@ package pg
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"time"
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
+	"github.com/ddd-qce/core/domain/repository"
 	"github.com/ddd-qce/core/cqrs/event"
 	corepg "github.com/ddd-qce/core/pg"
-	"github.com/ddd-qce/core/infra/repository"
+	infrarepo "github.com/ddd-qce/core/infra/repository"
 )
-
-type SnapshotSerializer[T aggregate.AggregateRef] interface {
-	Serialize(agg T) ([]byte, error)
-	Deserialize(data []byte) (T, error)
-}
-
-type JSONSerializer[T aggregate.AggregateRef] struct{}
-
-func (JSONSerializer[T]) Serialize(agg T) ([]byte, error) { return json.Marshal(agg) }
-func (JSONSerializer[T]) Deserialize(data []byte) (T, error) {
-	var v T
-	err := json.Unmarshal(data, &v)
-	return v, err
-}
 
 type PgRepository[T aggregate.AggregateRef] struct {
 	db         *sql.DB
-	serializer SnapshotSerializer[T]
+	serializer repository.SnapshotSerializer[T]
 	typeName   string
 }
 
 type RepoOption[T aggregate.AggregateRef] func(*PgRepository[T])
 
-func WithRepoSerializer[T aggregate.AggregateRef](s SnapshotSerializer[T]) RepoOption[T] {
+func WithRepoSerializer[T aggregate.AggregateRef](s repository.SnapshotSerializer[T]) RepoOption[T] {
 	return func(r *PgRepository[T]) { r.serializer = s }
 }
 
@@ -49,7 +35,7 @@ func NewRepository[T aggregate.AggregateRef](db *sql.DB, opts ...RepoOption[T]) 
 	}
 	r := &PgRepository[T]{
 		db:         db,
-		serializer: JSONSerializer[T]{},
+		serializer: repository.JSONSerializer[T]{},
 		typeName:   tName,
 	}
 	for _, opt := range opts {
@@ -80,7 +66,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &repository.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
+		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }
@@ -132,16 +118,16 @@ type AggregateReconstructor[T aggregate.AggregateRef] func(id string) T
 
 type PgEventSourcedRepository[T aggregate.AggregateRef] struct {
 	db            *sql.DB
-	eventStore    event.EventSourceStore[event.DomainEvent]
+	eventStore    event.EventSourceStore[event.Event]
 	reconstructor AggregateReconstructor[T]
-	serializer    SnapshotSerializer[T]
+	serializer    repository.SnapshotSerializer[T]
 	typeName      string
 	snapshotEvery int
 }
 
 func NewEventSourcedRepository[T aggregate.AggregateRef](
 	db *sql.DB,
-	eventStore event.EventSourceStore[event.DomainEvent],
+	eventStore event.EventSourceStore[event.Event],
 	reconstructor AggregateReconstructor[T],
 	opts ...EventSourcedRepoOption[T],
 ) *PgEventSourcedRepository[T] {
@@ -154,7 +140,7 @@ func NewEventSourcedRepository[T aggregate.AggregateRef](
 		db:            db,
 		eventStore:    eventStore,
 		reconstructor: reconstructor,
-		serializer:    JSONSerializer[T]{},
+		serializer:    repository.JSONSerializer[T]{},
 		typeName:      tName,
 		snapshotEvery: 10,
 	}
@@ -170,7 +156,7 @@ func WithSnapshotEvery[T aggregate.AggregateRef](n int) EventSourcedRepoOption[T
 	return func(r *PgEventSourcedRepository[T]) { r.snapshotEvery = n }
 }
 
-func WithSerializer[T aggregate.AggregateRef](s SnapshotSerializer[T]) EventSourcedRepoOption[T] {
+func WithSerializer[T aggregate.AggregateRef](s repository.SnapshotSerializer[T]) EventSourcedRepoOption[T] {
 	return func(r *PgEventSourcedRepository[T]) { r.serializer = s }
 }
 
@@ -218,7 +204,7 @@ func (r *PgEventSourcedRepository[T]) Load(ctx context.Context, id string) (T, e
 		return agg, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 
-	if err := root.LoadFromHistory(events); err != nil {
+	if err := aggregate.LoadFromHistory(agg, events); err != nil {
 		return agg, fmt.Errorf("load from history for aggregate %s: %w", id, err)
 	}
 	return agg, nil
@@ -245,7 +231,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &repository.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
+		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
 	}
 	return nil
 }

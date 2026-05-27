@@ -205,7 +205,7 @@ func TestOrderAggregate_ConfirmFlow(t *testing.T) {
 	eventmemory.RegisterEvent[*testOrderConfirmedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, statusHandler)
 
-	_, err := 	command.Dispatch(ctx, cmdBus, &testPlaceOrderCommand{
+	_, err := command.Dispatch[*testPlaceOrderCommand, *testPlaceOrderResult](ctx, cmdBus, &testPlaceOrderCommand{
 		OrderID: "ORD-001",
 		UserID:  "user-001",
 		Items: []OrderItem{
@@ -217,7 +217,7 @@ func TestOrderAggregate_ConfirmFlow(t *testing.T) {
 		t.Fatalf("place order failed: %v", err)
 	}
 
-	_, err = 	command.Dispatch(ctx, cmdBus, &testConfirmOrderCommand{
+	_, err = command.Dispatch[*testConfirmOrderCommand, *testConfirmOrderResult](ctx, cmdBus, &testConfirmOrderCommand{
 		OrderID: "ORD-001",
 	})
 	if err != nil {
@@ -227,7 +227,7 @@ func TestOrderAggregate_ConfirmFlow(t *testing.T) {
 		t.Error("order confirmed event handler was not called")
 	}
 
-	result, err := query.Dispatch(ctx, qBus, &testGetOrderStatusQuery{
+	result, err := query.Dispatch[*testGetOrderStatusQuery, *testGetOrderStatusResult](ctx, qBus, &testGetOrderStatusQuery{
 		OrderID: "ORD-001",
 	})
 	if err != nil {

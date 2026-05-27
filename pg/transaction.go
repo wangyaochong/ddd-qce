@@ -111,6 +111,11 @@ func (m *PgTransactionManager) Rollback(ctx context.Context) error {
 	return state.tx.Rollback()
 }
 
+func HasTransaction(ctx context.Context) bool {
+	_, ok := ctx.Value(txKey{}).(*txState)
+	return ok
+}
+
 func GetQuerier(ctx context.Context, db *sql.DB) DBTX {
 	if state, ok := ctx.Value(txKey{}).(*txState); ok {
 		return state.tx

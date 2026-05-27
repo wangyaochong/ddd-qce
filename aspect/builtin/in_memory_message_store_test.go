@@ -22,10 +22,10 @@ func TestInMemoryMessageStore_RecordCommand(t *testing.T) {
 	if err := s.RecordCommand(context.Background(), entry); err != nil {
 		t.Fatalf("RecordCommand returned error: %v", err)
 	}
-	if len(s.Commands) != 1 {
-		t.Fatalf("expected 1 command, got %d", len(s.Commands))
+	if len(s.commands) != 1 {
+		t.Fatalf("expected 1 command, got %d", len(s.commands))
 	}
-	got := s.Commands[0]
+	got := s.commands[0]
 	if got.TraceID != "t1" {
 		t.Errorf("expected TraceID t1, got %s", got.TraceID)
 	}
@@ -55,10 +55,10 @@ func TestInMemoryMessageStore_RecordQuery(t *testing.T) {
 	if err := s.RecordQuery(context.Background(), entry); err != nil {
 		t.Fatalf("RecordQuery returned error: %v", err)
 	}
-	if len(s.Queries) != 1 {
-		t.Fatalf("expected 1 query, got %d", len(s.Queries))
+	if len(s.queries) != 1 {
+		t.Fatalf("expected 1 query, got %d", len(s.queries))
 	}
-	got := s.Queries[0]
+	got := s.queries[0]
 	if got.TraceID != "t2" {
 		t.Errorf("expected TraceID t2, got %s", got.TraceID)
 	}
@@ -85,10 +85,10 @@ func TestInMemoryMessageStore_RecordEvent(t *testing.T) {
 	if err := s.RecordEvent(context.Background(), entry); err != nil {
 		t.Fatalf("RecordEvent returned error: %v", err)
 	}
-	if len(s.Events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(s.Events))
+	if len(s.events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(s.events))
 	}
-	got := s.Events[0]
+	got := s.events[0]
 	if got.TraceID != "t3" {
 		t.Errorf("expected TraceID t3, got %s", got.TraceID)
 	}
@@ -118,10 +118,10 @@ func TestInMemoryMessageStore_RecordEventHandler(t *testing.T) {
 	if err := s.RecordEventHandler(context.Background(), entry); err != nil {
 		t.Fatalf("RecordEventHandler returned error: %v", err)
 	}
-	if len(s.Handlers) != 1 {
-		t.Fatalf("expected 1 handler, got %d", len(s.Handlers))
+	if len(s.handlers) != 1 {
+		t.Fatalf("expected 1 handler, got %d", len(s.handlers))
 	}
-	got := s.Handlers[0]
+	got := s.handlers[0]
 	if got.TraceID != "t4" {
 		t.Errorf("expected TraceID t4, got %s", got.TraceID)
 	}
@@ -149,14 +149,14 @@ func TestInMemoryMessageStore_MaxSizeTrimsOldest(t *testing.T) {
 			t.Fatalf("RecordCommand returned error: %v", err)
 		}
 	}
-	if len(s.Commands) != 3 {
-		t.Fatalf("expected 3 commands after trim, got %d", len(s.Commands))
+	if len(s.commands) != 3 {
+		t.Fatalf("expected 3 commands after trim, got %d", len(s.commands))
 	}
-	if s.Commands[0].Duration != 2*time.Millisecond {
-		t.Errorf("expected oldest kept duration 2ms, got %v", s.Commands[0].Duration)
+	if s.commands[0].Duration != 2*time.Millisecond {
+		t.Errorf("expected oldest kept duration 2ms, got %v", s.commands[0].Duration)
 	}
-	if s.Commands[2].Duration != 4*time.Millisecond {
-		t.Errorf("expected newest duration 4ms, got %v", s.Commands[2].Duration)
+	if s.commands[2].Duration != 4*time.Millisecond {
+		t.Errorf("expected newest duration 4ms, got %v", s.commands[2].Duration)
 	}
 }
 

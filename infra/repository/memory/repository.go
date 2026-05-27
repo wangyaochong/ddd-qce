@@ -17,16 +17,42 @@ type aggregateRecord[T aggregate.AggregateRef] struct {
 }
 
 type InMemoryRepository[T aggregate.AggregateRef] struct {
-	mu    sync.RWMutex
-	store map[string]*aggregateRecord[T]
+	mu         sync.RWMutex
+	store      map[string]*aggregateRecord[T]
+	serializer repository.SnapshotSerializer[T]
 }
 
 var _ repository.Repository[aggregate.AggregateRef] = (*InMemoryRepository[aggregate.AggregateRef])(nil)
 
-func NewRepository[T aggregate.AggregateRef]() *InMemoryRepository[T] {
-	return &InMemoryRepository[T]{
-		store: make(map[string]*aggregateRecord[T]),
+type RepoOption[T aggregate.AggregateRef] func(*InMemoryRepository[T])
+
+func WithSerializer[T aggregate.AggregateRef](s repository.SnapshotSerializer[T]) RepoOption[T] {
+	return func(r *InMemoryRepository[T]) { r.serializer = s }
+}
+
+func NewRepository[T aggregate.AggregateRef](opts ...RepoOption[T]) *InMemoryRepository[T] {
+	r := &InMemoryRepository[T]{
+		store:      make(map[string]*aggregateRecord[T]),
+		serializer: repository.JSONSerializer[T]{},
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
+}
+
+func (r *InMemoryRepository[T]) deepCopy(agg T) (T, error) {
+	data, err := r.serializer.Serialize(agg)
+	if err != nil {
+		var zero T
+		return zero, fmt.Errorf("serialize aggregate: %w", err)
+	}
+	copied, err := r.serializer.Deserialize(data)
+	if err != nil {
+		var zero T
+		return zero, fmt.Errorf("deserialize aggregate: %w", err)
+	}
+	return copied, nil
 }
 
 func (r *InMemoryRepository[T]) Save(_ context.Context, agg T) error {
@@ -41,8 +67,13 @@ func (r *InMemoryRepository[T]) Save(_ context.Context, agg T) error {
 		}
 	}
 
+	copied, err := r.deepCopy(agg)
+	if err != nil {
+		return err
+	}
+
 	r.store[root.ID()] = &aggregateRecord[T]{
-		agg:     agg,
+		agg:     copied,
 		version: root.Version(),
 	}
 	return nil
@@ -58,7 +89,7 @@ func (r *InMemoryRepository[T]) FindByID(_ context.Context, id string) (T, error
 		return zero, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 
-	return rec.agg, nil
+	return r.deepCopy(rec.agg)
 }
 
 func (r *InMemoryRepository[T]) Delete(_ context.Context, id string) error {
@@ -73,16 +104,42 @@ func (r *InMemoryRepository[T]) Delete(_ context.Context, id string) error {
 }
 
 type InMemoryEventSourcedRepository[T aggregate.AggregateRef] struct {
-	mu    sync.RWMutex
-	store map[string]*aggregateRecord[T]
+	mu         sync.RWMutex
+	store      map[string]*aggregateRecord[T]
+	serializer repository.SnapshotSerializer[T]
 }
 
 var _ repository.EventSourcingRepository[aggregate.AggregateRef] = (*InMemoryEventSourcedRepository[aggregate.AggregateRef])(nil)
 
-func NewEventSourcedRepository[T aggregate.AggregateRef]() *InMemoryEventSourcedRepository[T] {
-	return &InMemoryEventSourcedRepository[T]{
-		store: make(map[string]*aggregateRecord[T]),
+type EventSourcedRepoOption[T aggregate.AggregateRef] func(*InMemoryEventSourcedRepository[T])
+
+func WithEventSourcedSerializer[T aggregate.AggregateRef](s repository.SnapshotSerializer[T]) EventSourcedRepoOption[T] {
+	return func(r *InMemoryEventSourcedRepository[T]) { r.serializer = s }
+}
+
+func NewEventSourcedRepository[T aggregate.AggregateRef](opts ...EventSourcedRepoOption[T]) *InMemoryEventSourcedRepository[T] {
+	r := &InMemoryEventSourcedRepository[T]{
+		store:      make(map[string]*aggregateRecord[T]),
+		serializer: repository.JSONSerializer[T]{},
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
+}
+
+func (r *InMemoryEventSourcedRepository[T]) deepCopy(agg T) (T, error) {
+	data, err := r.serializer.Serialize(agg)
+	if err != nil {
+		var zero T
+		return zero, fmt.Errorf("serialize aggregate: %w", err)
+	}
+	copied, err := r.serializer.Deserialize(data)
+	if err != nil {
+		var zero T
+		return zero, fmt.Errorf("deserialize aggregate: %w", err)
+	}
+	return copied, nil
 }
 
 func (r *InMemoryEventSourcedRepository[T]) Save(_ context.Context, agg T) error {
@@ -95,8 +152,13 @@ func (r *InMemoryEventSourcedRepository[T]) Save(_ context.Context, agg T) error
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	copied, err := r.deepCopy(agg)
+	if err != nil {
+		return err
+	}
+
 	r.store[root.ID()] = &aggregateRecord[T]{
-		agg:     agg,
+		agg:     copied,
 		version: root.Version(),
 	}
 	root.MarkEventsAsCommitted()
@@ -113,5 +175,5 @@ func (r *InMemoryEventSourcedRepository[T]) Load(_ context.Context, id string) (
 		return zero, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 
-	return rec.agg, nil
+	return r.deepCopy(rec.agg)
 }

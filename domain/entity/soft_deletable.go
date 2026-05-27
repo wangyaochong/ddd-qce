@@ -1,25 +1,36 @@
 package entity
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type SoftDeletableEntity struct {
 	AuditableEntity
-	deletedAt *time.Time `json:"deletedAt,omitempty"`
+	deletedAt *time.Time
 }
 
 func (e *SoftDeletableEntity) DeletedAt() *time.Time { return e.deletedAt }
 
-func NewSoftDeletableEntity(id string) *SoftDeletableEntity {
-	return &SoftDeletableEntity{
-		AuditableEntity: *NewAuditableEntity(id),
+func NewSoftDeletableEntity(id string) (*SoftDeletableEntity, error) {
+	ae, err := NewAuditableEntity(id)
+	if err != nil {
+		return nil, err
 	}
+	return &SoftDeletableEntity{
+		AuditableEntity: *ae,
+	}, nil
 }
 
-func NewSoftDeletableEntityFromData(id string, createdAt, updatedAt time.Time, deletedAt *time.Time) *SoftDeletableEntity {
-	return &SoftDeletableEntity{
-		AuditableEntity: *NewAuditableEntityFromData(id, createdAt, updatedAt),
-		deletedAt:       deletedAt,
+func NewSoftDeletableEntityFromData(id string, createdAt, updatedAt time.Time, deletedAt *time.Time) (*SoftDeletableEntity, error) {
+	ae, err := NewAuditableEntityFromData(id, createdAt, updatedAt)
+	if err != nil {
+		return nil, err
 	}
+	return &SoftDeletableEntity{
+		AuditableEntity: *ae,
+		deletedAt:       deletedAt,
+	}, nil
 }
 
 func (e *SoftDeletableEntity) IsDeleted() bool {
@@ -35,4 +46,35 @@ func (e *SoftDeletableEntity) SoftDelete() {
 func (e *SoftDeletableEntity) Restore() {
 	e.deletedAt = nil
 	e.Touch()
+}
+
+func (e *SoftDeletableEntity) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		ID        string     `json:"id"`
+		CreatedAt time.Time  `json:"createdAt"`
+		UpdatedAt time.Time  `json:"updatedAt"`
+		DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	}{
+		ID:        e.id,
+		CreatedAt: e.createdAt,
+		UpdatedAt: e.updatedAt,
+		DeletedAt: e.deletedAt,
+	})
+}
+
+func (e *SoftDeletableEntity) UnmarshalJSON(data []byte) error {
+	var aux struct {
+		ID        string     `json:"id"`
+		CreatedAt time.Time  `json:"createdAt"`
+		UpdatedAt time.Time  `json:"updatedAt"`
+		DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	e.id = aux.ID
+	e.createdAt = aux.CreatedAt
+	e.updatedAt = aux.UpdatedAt
+	e.deletedAt = aux.DeletedAt
+	return nil
 }

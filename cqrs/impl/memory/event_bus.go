@@ -24,7 +24,7 @@ func handlerTypeName(h any) string {
 
 type handlerEntry struct {
 	handler any
-	invoke  func(ctx context.Context, evt event.DomainEvent) error
+	invoke  func(ctx context.Context, evt event.Event) error
 	name    string
 }
 
@@ -34,6 +34,7 @@ type EventBus struct {
 	handlers       map[reflect.Type][]handlerEntry
 	chain          *aspect.AspectChain
 	handlerTimeout time.Duration
+	sem            chan struct{}
 	mu             sync.RWMutex
 }
 
@@ -47,6 +48,10 @@ func WithEventBusAspectChain(chain *aspect.AspectChain) EventBusOption {
 
 func WithHandlerTimeout(timeout time.Duration) EventBusOption {
 	return func(b *EventBus) { b.handlerTimeout = timeout }
+}
+
+func WithConcurrencyLimit(n int) EventBusOption {
+	return func(b *EventBus) { b.sem = make(chan struct{}, n) }
 }
 
 var WithBusAspectChain = WithEventBusAspectChain
@@ -93,10 +98,10 @@ func (b *EventBus) SubscribeHandler(handler any) error {
 	return nil
 }
 
-func (b *EventBus) Publish(ctx context.Context, evt event.DomainEvent) error {
+func (b *EventBus) Publish(ctx context.Context, evt event.Event) error {
 	evtType := reflect.TypeOf(evt)
 	if evtType == nil {
-		return fmt.Errorf("Publish: event must be a non-nil pointer implementing DomainEvent")
+		return fmt.Errorf("Publish: event must be a non-nil pointer implementing Event")
 	}
 
 	b.mu.RLock()
@@ -120,7 +125,12 @@ func (b *EventBus) Publish(ctx context.Context, evt event.DomainEvent) error {
 		hCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		hCtx = builtin.ContextWithHandlerType(hCtx, entries[0].name)
-		return b.chain.ExecuteWithEventAspects(hCtx, evt, func(ctx context.Context) error {
+		return b.chain.ExecuteWithEventAspects(hCtx, evt, func(ctx context.Context) (err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("handler %s panicked: %v", entries[0].name, r)
+				}
+			}()
 			return entries[0].invoke(ctx, evt)
 		})
 	}
@@ -132,6 +142,15 @@ func (b *EventBus) Publish(ctx context.Context, evt event.DomainEvent) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					errCh <- fmt.Errorf("handler %s panicked: %v", e.name, r)
+				}
+			}()
+			if b.sem != nil {
+				b.sem <- struct{}{}
+				defer func() { <-b.sem }()
+			}
 			hCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			hCtx = builtin.ContextWithHandlerType(hCtx, e.name)
@@ -168,12 +187,12 @@ func (b *EventBus) HandlerCount(evtType reflect.Type) int {
 	return len(b.handlers[evtType])
 }
 
-func RegisterEvent[T event.DomainEvent](bus *EventBus, handler event.EventHandler[T]) error {
+func RegisterEvent[T event.Event](bus *EventBus, handler event.EventHandler[T]) error {
 	return bus.SubscribeHandler(handler)
 }
 
 func extractEventHandlerEventType(handlerType reflect.Type) (reflect.Type, bool) {
-	eventHandlerType := reflect.TypeOf((*event.EventHandler[event.DomainEvent])(nil)).Elem()
+	eventHandlerType := reflect.TypeOf((*event.EventHandler[event.Event])(nil)).Elem()
 
 	if handlerType.Kind() != reflect.Ptr {
 		for i := 0; i < handlerType.NumMethod(); i++ {
@@ -205,12 +224,12 @@ func extractEventTypeFromHandleMethod(methodType reflect.Type) reflect.Type {
 	return methodType.In(2)
 }
 
-func makeHandlerInvoker(handler any, handlerType reflect.Type) (func(ctx context.Context, evt event.DomainEvent) error, error) {
+func makeHandlerInvoker(handler any, handlerType reflect.Type) (func(ctx context.Context, evt event.Event) error, error) {
 	handleMethod, ok := handlerType.MethodByName("Handle")
 	if !ok {
 		return nil, fmt.Errorf("handler %T does not have a Handle method", handler)
 	}
-	invoker := func(ctx context.Context, evt event.DomainEvent) error {
+	invoker := func(ctx context.Context, evt event.Event) error {
 		args := []reflect.Value{
 			reflect.ValueOf(handler),
 			reflect.ValueOf(ctx),

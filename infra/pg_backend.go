@@ -25,6 +25,7 @@ func NewPgBackend(db *sql.DB, opts ...BackendOption) *Backend {
 		WithTraceStore(tracepg.NewTraceStore(db)),
 		WithMessageStore(builtinpg.NewMessageStore(db)),
 		WithMigrator(&pgMigrator{db: db}),
+		WithCloser(db.Close),
 	}
 	return NewBackend(append(defaults, opts...)...)
 }

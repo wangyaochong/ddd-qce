@@ -308,8 +308,7 @@ func TestJob_Snapshot_IncludesCommandType(t *testing.T) {
 		Command:     &testSampleCmd{Name: "test"},
 		CommandType: "core.testSampleCmd",
 	}
-	job.SetResult(&testSampleResult{File: "out.pdf"})
-	job.SetResultType("core.testSampleResult")
+	job.RestoreJobState("", &testSampleResult{File: "out.pdf"}, "core.testSampleResult", "", time.Time{}, time.Time{})
 	snap := job.Snapshot()
 	if snap.CommandType != "core.testSampleCmd" {
 		t.Errorf("expected CommandType preserved, got %q", snap.CommandType)

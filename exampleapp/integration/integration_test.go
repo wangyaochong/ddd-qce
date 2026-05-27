@@ -10,7 +10,7 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
@@ -103,7 +103,7 @@ func TestEventSourcingFullCycle(t *testing.T) {
 	runForBothStores(t, func(t *testing.T, app *infrastructure.AppContext) {
 		ctx := context.Background()
 
-		order, _ := domain.NewOrder("ORD-ES-FULL", "user-001", []*domain.OrderItem{
+		order, _ := domain.NewOrder(context.Background(), "ORD-ES-FULL", "user-001", []*domain.OrderItem{
 			domain.NewOrderItem("laptop", "Laptop", 999, 1),
 		})
 		if err := app.EventSourcedRepo.Save(ctx, order); err != nil {
@@ -240,7 +240,7 @@ func TestTraceContextPropagation(t *testing.T) {
 func TestRepositoryDelete(t *testing.T) {
 	runForBothStores(t, func(t *testing.T, app *infrastructure.AppContext) {
 		ctx := context.Background()
-		order, _ := domain.NewOrder("ORD-DEL", "user-001", []*domain.OrderItem{
+		order, _ := domain.NewOrder(context.Background(), "ORD-DEL", "user-001", []*domain.OrderItem{
 			domain.NewOrderItem("laptop", "Laptop", 999, 1),
 		})
 		app.OrderRepo.Save(ctx, order)
@@ -319,7 +319,7 @@ func TestJobStore_CRUD(t *testing.T) {
 	if found.ID != "J1" {
 		t.Errorf("expected J1, got %s", found.ID)
 	}
-	found.SetStatus(jobcore.JobStatusRunning)
+	found.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 	if err := store.Update(ctx, found); err != nil {
 		t.Fatalf("update failed: %v", err)
 	}

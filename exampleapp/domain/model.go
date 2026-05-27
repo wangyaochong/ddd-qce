@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -26,8 +28,12 @@ type OrderItem struct {
 }
 
 func NewOrderItem(id, productName string, price float64, quantity int) *OrderItem {
+	e, err := entity.NewEntity(id)
+	if err != nil {
+		panic(err)
+	}
 	return &OrderItem{
-		Entity:      *entity.NewEntity(id),
+		Entity:      *e,
 		ProductName: productName,
 		Price:       price,
 		Quantity:    quantity,
@@ -36,6 +42,34 @@ func NewOrderItem(id, productName string, price float64, quantity int) *OrderIte
 
 func (i *OrderItem) Subtotal() float64 {
 	return i.Price * float64(i.Quantity)
+}
+
+type orderItemJSON struct {
+	entity.EntityJSON
+	ProductName string  `json:"productName"`
+	Price       float64 `json:"price"`
+	Quantity    int     `json:"quantity"`
+}
+
+func (i *OrderItem) MarshalJSON() ([]byte, error) {
+	return json.Marshal(orderItemJSON{
+		EntityJSON:  i.Entity.ToJSON(),
+		ProductName: i.ProductName,
+		Price:       i.Price,
+		Quantity:    i.Quantity,
+	})
+}
+
+func (i *OrderItem) UnmarshalJSON(data []byte) error {
+	var aux orderItemJSON
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	i.Entity.FromJSON(aux.EntityJSON)
+	i.ProductName = aux.ProductName
+	i.Price = aux.Price
+	i.Quantity = aux.Quantity
+	return nil
 }
 
 type Order struct {
@@ -51,20 +85,24 @@ type Order struct {
 	CancelReason string
 }
 
-func NewOrder(id, userID string, items []*OrderItem) (*Order, error) {
+func NewOrder(ctx context.Context, id, userID string, items []*OrderItem) (*Order, error) {
 	o := &Order{
 		UserID:    userID,
 		Items:     items,
 		Status:    OrderStatusPending,
 		CreatedAt: time.Now(),
 	}
-	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier(id, o)
+	ar, err := aggregate.NewAggregateRoot(id)
+	if err != nil {
+		return nil, err
+	}
+	o.AggregateRoot = *ar
 	if err := o.validate(); err != nil {
 		return nil, err
 	}
 	o.TotalAmount = o.calculateTotal()
-	if err := o.Apply(&OrderPlacedEvent{
-		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
+	if err := o.Apply(ctx, &OrderPlacedEvent{
+		BaseEvent: event.WithCorrelation(ctx, o.ID()),
 		UserID:          o.UserID,
 		TotalAmount:     o.TotalAmount,
 		Items:           o.ItemNames(),
@@ -76,15 +114,15 @@ func NewOrder(id, userID string, items []*OrderItem) (*Order, error) {
 
 func NewOrderForReplay(id string) *Order {
 	o := &Order{}
-	o.AggregateRoot = *aggregate.NewAggregateRootWithApplier(id, o)
+	ar, err := aggregate.NewAggregateRoot(id)
+	if err != nil {
+		panic(err)
+	}
+	o.AggregateRoot = *ar
 	return o
 }
 
-func NewOrderEventCollector(id string) *aggregate.AggregateRoot {
-	return aggregate.NewEventCollector(id)
-}
-
-func (o *Order) When(evt event.DomainEvent) {
+func (o *Order) When(evt event.Event) error {
 	switch e := evt.(type) {
 	case *OrderPlacedEvent:
 		o.UserID = e.UserID
@@ -101,42 +139,99 @@ func (o *Order) When(evt event.DomainEvent) {
 		o.Status = OrderStatusCancelled
 		o.CancelledAt = e.OccurredAt()
 		o.CancelReason = e.Reason
+	default:
+		return fmt.Errorf("order: unhandled event type %T", evt)
 	}
+	return nil
 }
 
-func (o *Order) ConfirmPayment() error {
+func (o *Order) Apply(ctx context.Context, evt event.Event) error {
+	return aggregate.ApplyChange(o, ctx, evt)
+}
+
+func (o *Order) LoadFromHistory(events []event.Event) error {
+	return aggregate.LoadFromHistory(o, events)
+}
+
+type orderJSON struct {
+	aggregate.AggregateRootJSON
+	UserID       string      `json:"userId"`
+	Items        []*OrderItem `json:"items"`
+	Status       OrderStatus `json:"status"`
+	TotalAmount  float64     `json:"totalAmount"`
+	CreatedAt    time.Time   `json:"createdAt"`
+	PaidAt       time.Time   `json:"paidAt"`
+	ShippedAt    time.Time   `json:"shippedAt"`
+	CancelledAt  time.Time   `json:"cancelledAt"`
+	CancelReason string      `json:"cancelReason"`
+}
+
+func (o *Order) MarshalJSON() ([]byte, error) {
+	return json.Marshal(orderJSON{
+		AggregateRootJSON: o.AggregateRoot.ToJSON(),
+		UserID:            o.UserID,
+		Items:             o.Items,
+		Status:            o.Status,
+		TotalAmount:       o.TotalAmount,
+		CreatedAt:         o.CreatedAt,
+		PaidAt:            o.PaidAt,
+		ShippedAt:         o.ShippedAt,
+		CancelledAt:       o.CancelledAt,
+		CancelReason:      o.CancelReason,
+	})
+}
+
+func (o *Order) UnmarshalJSON(data []byte) error {
+	var aux orderJSON
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	o.AggregateRoot.FromJSON(aux.AggregateRootJSON)
+	o.UserID = aux.UserID
+	o.Items = aux.Items
+	o.Status = aux.Status
+	o.TotalAmount = aux.TotalAmount
+	o.CreatedAt = aux.CreatedAt
+	o.PaidAt = aux.PaidAt
+	o.ShippedAt = aux.ShippedAt
+	o.CancelledAt = aux.CancelledAt
+	o.CancelReason = aux.CancelReason
+	return nil
+}
+
+func (o *Order) ConfirmPayment(ctx context.Context) error {
 	if o.Status != OrderStatusPending {
 		return fmt.Errorf("order %s cannot be confirmed payment (status: %s)", o.ID(), o.Status)
 	}
-	if err := o.Apply(&PaymentConfirmedEvent{
-		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
+	if err := o.Apply(ctx, &PaymentConfirmedEvent{
+		BaseEvent: event.WithCorrelation(ctx, o.ID()),
 	}); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (o *Order) Ship() error {
+func (o *Order) Ship(ctx context.Context) error {
 	if o.Status != OrderStatusPaid {
 		return fmt.Errorf("order %s cannot be shipped (status: %s)", o.ID(), o.Status)
 	}
-	if err := o.Apply(&OrderShippedEvent{
-		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
+	if err := o.Apply(ctx, &OrderShippedEvent{
+		BaseEvent: event.WithCorrelation(ctx, o.ID()),
 	}); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (o *Order) Cancel(reason string) error {
+func (o *Order) Cancel(ctx context.Context, reason string) error {
 	if o.Status == OrderStatusCancelled {
 		return fmt.Errorf("order %s already cancelled", o.ID())
 	}
 	if o.Status == OrderStatusShipped {
 		return fmt.Errorf("order %s already shipped, cannot cancel", o.ID())
 	}
-	if err := o.Apply(&OrderCancelledEvent{
-		BaseEvent: event.NewBaseEvent(o.ID(), time.Now()),
+	if err := o.Apply(ctx, &OrderCancelledEvent{
+		BaseEvent: event.WithCorrelation(ctx, o.ID()),
 		Reason:          reason,
 	}); err != nil {
 		return err

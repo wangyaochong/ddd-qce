@@ -257,8 +257,8 @@ import (
     "time"
 
     "github.com/ddd-qce/core/domain/aggregate"
-    "github.com/ddd-qce/core/domain/event"
-    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+    "github.com/ddd-qce/core/cqrs/event"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/impl/memory"
 )
 
 type OrderStatus string
@@ -288,7 +288,7 @@ type Order struct {
     eventBus   *eventmemory.EventBus
 }
 
-func (o *Order) When(evt event.DomainEvent) {
+func (o *Order) When(evt event.Event) error {
     switch e := evt.(type) {
     case OrderConfirmedEvent:
         o.Status = OrderStatusConfirmed
@@ -297,6 +297,7 @@ func (o *Order) When(evt event.DomainEvent) {
     case OrderCancelledEvent:
         o.Status = OrderStatusCancelled
     }
+    return nil
 }
 
 func NewOrder(id, userID string, items []OrderItem, totalPrice float64, eventBus *eventmemory.EventBus) *Order {
@@ -368,7 +369,7 @@ import (
     "sync"
 
     "github.com/ddd-qce/core/cqrs/command"
-    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/impl/memory"
 )
 
 // ActorCommandBus 将 Command 路由到对应 Actor
@@ -447,8 +448,8 @@ import (
     "github.com/ddd-qce/core/aspect"
     "github.com/ddd-qce/core/aspect/builtin"
     "github.com/ddd-qce/core/cqrs/command"
-    commandmemory "github.com/ddd-qce/core/cqrs/command/memory"
-    eventmemory "github.com/ddd-qce/core/cqrs/event/memory"
+    commandmemory "github.com/ddd-qce/core/cqrs/command/impl/memory"
+    eventmemory "github.com/ddd-qce/core/cqrs/event/impl/memory"
     "github.com/ddd-qce/core/trace"
 )
 

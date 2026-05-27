@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/cmd"
+	"github.com/ddd-qce/core/cqrs/command"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
@@ -146,7 +146,7 @@ func TestReleaseInventoryCommand(t *testing.T) {
 func TestGetOrderQuery(t *testing.T) {
 	_, qBus, _, repo, _ := setupTestApp()
 	ctx := context.Background()
-	order, _ := domain.NewOrder("ORD-Q1", "user-001", []*domain.OrderItem{
+	order, _ := domain.NewOrder(context.Background(), "ORD-Q1", "user-001", []*domain.OrderItem{
 		domain.NewOrderItem("laptop", "Laptop", 999, 1),
 	})
 	repo.Save(ctx, order)
@@ -162,8 +162,8 @@ func TestGetOrderQuery(t *testing.T) {
 func TestListOrdersQuery(t *testing.T) {
 	_, qBus, _, repo, _ := setupTestApp()
 	ctx := context.Background()
-	o1, _ := domain.NewOrder("ORD-L1", "u1", []*domain.OrderItem{domain.NewOrderItem("laptop", "Laptop", 999, 1)})
-	o2, _ := domain.NewOrder("ORD-L2", "u2", []*domain.OrderItem{domain.NewOrderItem("mouse", "Mouse", 29, 1)})
+	o1, _ := domain.NewOrder(context.Background(), "ORD-L1", "u1", []*domain.OrderItem{domain.NewOrderItem("laptop", "Laptop", 999, 1)})
+	o2, _ := domain.NewOrder(context.Background(), "ORD-L2", "u2", []*domain.OrderItem{domain.NewOrderItem("mouse", "Mouse", 29, 1)})
 	repo.Save(ctx, o1)
 	repo.Save(ctx, o2)
 	result, err := query.Dispatch[*ListOrdersQuery, *ListOrdersResult](ctx, qBus, &ListOrdersQuery{})
@@ -190,7 +190,7 @@ func TestGetInventoryQuery(t *testing.T) {
 func TestOrderRepository_CRUD(t *testing.T) {
 	repo := NewOrderRepository()
 	ctx := context.Background()
-	order, _ := domain.NewOrder("ORD-CRUD", "user-001", []*domain.OrderItem{
+	order, _ := domain.NewOrder(context.Background(), "ORD-CRUD", "user-001", []*domain.OrderItem{
 		domain.NewOrderItem("laptop", "Laptop", 999, 1),
 	})
 	if err := repo.Save(ctx, order); err != nil {
@@ -215,14 +215,15 @@ func TestOrderRepository_CRUD(t *testing.T) {
 func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 	_ = aspect.NewAspectChain()
 	repo := NewOrderRepository()
-	eventStore, err := eventmemory.NewEventSourceStore[domainevent.DomainEvent]()
+	eventStore, err := eventmemory.NewEventSourceStore[domainevent.Event]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
-	esRepo := NewOrderEventSourcedRepository(eventStore, repo)
+	eventBus := eventmemory.NewEventBus()
+	esRepo := NewOrderEventSourcedRepository(eventStore, eventBus, repo)
 	ctx := context.Background()
 
-	order, _ := domain.NewOrder("ORD-ES1", "user-001", []*domain.OrderItem{
+	order, _ := domain.NewOrder(context.Background(), "ORD-ES1", "user-001", []*domain.OrderItem{
 		domain.NewOrderItem("laptop", "Laptop", 999, 1),
 	})
 	if err := esRepo.Save(ctx, order); err != nil {
@@ -244,14 +245,15 @@ func TestEventSourcedRepo_SaveAndLoad(t *testing.T) {
 func TestEventSourcedRepo_LoadFromHistory(t *testing.T) {
 	_ = aspect.NewAspectChain()
 	repo := NewOrderRepository()
-	eventStore, err := eventmemory.NewEventSourceStore[domainevent.DomainEvent]()
+	eventStore, err := eventmemory.NewEventSourceStore[domainevent.Event]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
-	esRepo := NewOrderEventSourcedRepository(eventStore, repo)
+	eventBus := eventmemory.NewEventBus()
+	esRepo := NewOrderEventSourcedRepository(eventStore, eventBus, repo)
 	ctx := context.Background()
 
-	order, _ := domain.NewOrder("ORD-ES2", "user-001", []*domain.OrderItem{
+	order, _ := domain.NewOrder(context.Background(), "ORD-ES2", "user-001", []*domain.OrderItem{
 		domain.NewOrderItem("laptop", "Laptop", 999, 1),
 	})
 	esRepo.Save(ctx, order)
@@ -267,18 +269,19 @@ func TestEventSourcedRepo_LoadFromHistory(t *testing.T) {
 
 func TestEventSourcedRepo_MultipleEventTypes(t *testing.T) {
 	repo := NewOrderRepository()
-	eventStore, err := eventmemory.NewEventSourceStore[domainevent.DomainEvent]()
+	eventStore, err := eventmemory.NewEventSourceStore[domainevent.Event]()
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
 	}
-	esRepo := NewOrderEventSourcedRepository(eventStore, repo)
+	eventBus := eventmemory.NewEventBus()
+	esRepo := NewOrderEventSourcedRepository(eventStore, eventBus, repo)
 	ctx := context.Background()
 
-	order, _ := domain.NewOrder("ORD-MT", "user-001", []*domain.OrderItem{
+	order, _ := domain.NewOrder(context.Background(), "ORD-MT", "user-001", []*domain.OrderItem{
 		domain.NewOrderItem("laptop", "Laptop", 999, 1),
 	})
-	_ = order.ConfirmPayment()
-	_ = order.Ship()
+	_ = order.ConfirmPayment(context.Background())
+	_ = order.Ship(context.Background())
 	if err := esRepo.Save(ctx, order); err != nil {
 		t.Fatalf("save failed: %v", err)
 	}

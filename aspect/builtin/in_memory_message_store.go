@@ -7,10 +7,10 @@ import (
 
 type InMemoryMessageStore struct {
 	mu       sync.RWMutex
-	Commands []CommandEntry
-	Queries  []QueryEntry
-	Events   []EventEntry
-	Handlers []EventHandlerEntry
+	commands []CommandEntry
+	queries  []QueryEntry
+	events   []EventEntry
+	handlers []EventHandlerEntry
 	maxSize  int
 }
 
@@ -30,12 +30,44 @@ func NewInMemoryMessageStore(opts ...InMemoryMessageStoreOption) *InMemoryMessag
 	return s
 }
 
+func (s *InMemoryMessageStore) GetCommands() []CommandEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]CommandEntry, len(s.commands))
+	copy(result, s.commands)
+	return result
+}
+
+func (s *InMemoryMessageStore) GetQueries() []QueryEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]QueryEntry, len(s.queries))
+	copy(result, s.queries)
+	return result
+}
+
+func (s *InMemoryMessageStore) GetEvents() []EventEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]EventEntry, len(s.events))
+	copy(result, s.events)
+	return result
+}
+
+func (s *InMemoryMessageStore) GetHandlers() []EventHandlerEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]EventHandlerEntry, len(s.handlers))
+	copy(result, s.handlers)
+	return result
+}
+
 func (s *InMemoryMessageStore) RecordCommand(_ context.Context, entry *CommandEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Commands = append(s.Commands, *entry)
-	if len(s.Commands) > s.maxSize {
-		s.Commands = s.Commands[len(s.Commands)-s.maxSize:]
+	s.commands = append(s.commands, *entry)
+	if len(s.commands) > s.maxSize {
+		s.commands = s.commands[len(s.commands)-s.maxSize:]
 	}
 	return nil
 }
@@ -43,9 +75,9 @@ func (s *InMemoryMessageStore) RecordCommand(_ context.Context, entry *CommandEn
 func (s *InMemoryMessageStore) RecordQuery(_ context.Context, entry *QueryEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Queries = append(s.Queries, *entry)
-	if len(s.Queries) > s.maxSize {
-		s.Queries = s.Queries[len(s.Queries)-s.maxSize:]
+	s.queries = append(s.queries, *entry)
+	if len(s.queries) > s.maxSize {
+		s.queries = s.queries[len(s.queries)-s.maxSize:]
 	}
 	return nil
 }
@@ -53,9 +85,9 @@ func (s *InMemoryMessageStore) RecordQuery(_ context.Context, entry *QueryEntry)
 func (s *InMemoryMessageStore) RecordEvent(_ context.Context, entry *EventEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Events = append(s.Events, *entry)
-	if len(s.Events) > s.maxSize {
-		s.Events = s.Events[len(s.Events)-s.maxSize:]
+	s.events = append(s.events, *entry)
+	if len(s.events) > s.maxSize {
+		s.events = s.events[len(s.events)-s.maxSize:]
 	}
 	return nil
 }
@@ -63,9 +95,9 @@ func (s *InMemoryMessageStore) RecordEvent(_ context.Context, entry *EventEntry)
 func (s *InMemoryMessageStore) RecordEventHandler(_ context.Context, entry *EventHandlerEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Handlers = append(s.Handlers, *entry)
-	if len(s.Handlers) > s.maxSize {
-		s.Handlers = s.Handlers[len(s.Handlers)-s.maxSize:]
+	s.handlers = append(s.handlers, *entry)
+	if len(s.handlers) > s.maxSize {
+		s.handlers = s.handlers[len(s.handlers)-s.maxSize:]
 	}
 	return nil
 }

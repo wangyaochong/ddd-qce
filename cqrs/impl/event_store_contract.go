@@ -217,3 +217,83 @@ func TestEventStoreContract(t *testing.T, newStore func() event.EventSourceStore
 		}
 	})
 }
+
+func TestEventStoreLoadAllContract(t *testing.T, newStore func() event.EventSourceStore[*TestEvent]) {
+	t.Helper()
+
+	t.Run("LoadAllReturnsAllEventsInOrder", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		store.Append(ctx, "la-1", 0, []*TestEvent{NewTestEvent("la-1", "a1-e1")})
+		store.Append(ctx, "la-2", 0, []*TestEvent{NewTestEvent("la-2", "a2-e1")})
+		store.Append(ctx, "la-1", 1, []*TestEvent{NewTestEvent("la-1", "a1-e2")})
+
+		all, err := store.LoadAll(ctx, 0, 0)
+		if err != nil {
+			t.Fatalf("LoadAll failed: %v", err)
+		}
+		if len(all) != 3 {
+			t.Fatalf("expected 3 events, got %d", len(all))
+		}
+		if all[0].Position != 1 {
+			t.Errorf("first event position = %d, want 1", all[0].Position)
+		}
+		if all[1].Position != 2 {
+			t.Errorf("second event position = %d, want 2", all[1].Position)
+		}
+		if all[2].Position != 3 {
+			t.Errorf("third event position = %d, want 3", all[2].Position)
+		}
+	})
+
+	t.Run("LoadAllWithAfterPosition", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		store.Append(ctx, "la-3", 0, []*TestEvent{NewTestEvent("la-3", "e1")})
+		store.Append(ctx, "la-3", 1, []*TestEvent{NewTestEvent("la-3", "e2")})
+		store.Append(ctx, "la-3", 2, []*TestEvent{NewTestEvent("la-3", "e3")})
+
+		all, err := store.LoadAll(ctx, 1, 0)
+		if err != nil {
+			t.Fatalf("LoadAll failed: %v", err)
+		}
+		if len(all) != 2 {
+			t.Fatalf("expected 2 events after position 1, got %d", len(all))
+		}
+		if all[0].Position != 2 {
+			t.Errorf("first event position = %d, want 2", all[0].Position)
+		}
+	})
+
+	t.Run("LoadAllWithLimit", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		store.Append(ctx, "la-4", 0, []*TestEvent{NewTestEvent("la-4", "e1")})
+		store.Append(ctx, "la-4", 1, []*TestEvent{NewTestEvent("la-4", "e2")})
+		store.Append(ctx, "la-4", 2, []*TestEvent{NewTestEvent("la-4", "e3")})
+
+		all, err := store.LoadAll(ctx, 0, 2)
+		if err != nil {
+			t.Fatalf("LoadAll failed: %v", err)
+		}
+		if len(all) != 2 {
+			t.Fatalf("expected 2 events with limit 2, got %d", len(all))
+		}
+	})
+
+	t.Run("LoadAllEmpty", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		all, err := store.LoadAll(ctx, 0, 0)
+		if err != nil {
+			t.Fatalf("LoadAll failed: %v", err)
+		}
+		if len(all) != 0 {
+			t.Errorf("expected 0 events, got %d", len(all))
+		}
+	})
+}

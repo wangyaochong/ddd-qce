@@ -2,6 +2,7 @@ package repositorytest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -19,11 +20,48 @@ type TestAggregate struct {
 
 func NewTestAggregate(id string) *TestAggregate {
 	a := &TestAggregate{}
-	a.AggregateRoot = *aggregate.NewAggregateRootWithApplier(id, a)
+	ar, err := aggregate.NewAggregateRoot(id)
+	if err != nil {
+		panic(err)
+	}
+	a.AggregateRoot = *ar
 	return a
 }
 
-func (a *TestAggregate) When(_ event.DomainEvent) {}
+func (a *TestAggregate) When(_ event.Event) error { return nil }
+
+func (a *TestAggregate) Apply(ctx context.Context, evt event.Event) error {
+	return aggregate.ApplyChange(a, ctx, evt)
+}
+
+func (a *TestAggregate) LoadFromHistory(events []event.Event) error {
+	return aggregate.LoadFromHistory(a, events)
+}
+
+type testAggregateJSON struct {
+	aggregate.AggregateRootJSON
+	Name   string `json:"name"`
+	Amount int   `json:"amount"`
+}
+
+func (a *TestAggregate) MarshalJSON() ([]byte, error) {
+	return json.Marshal(testAggregateJSON{
+		AggregateRootJSON: a.AggregateRoot.ToJSON(),
+		Name:              a.Name,
+		Amount:            a.Amount,
+	})
+}
+
+func (a *TestAggregate) UnmarshalJSON(data []byte) error {
+	var aux testAggregateJSON
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	a.AggregateRoot.FromJSON(aux.AggregateRootJSON)
+	a.Name = aux.Name
+	a.Amount = aux.Amount
+	return nil
+}
 
 func TestRepositoryContract[T aggregate.AggregateRef](t *testing.T, repo repository.Repository[T], newAgg func(id string) T, setFields func(agg T)) {
 	t.Helper()

@@ -66,12 +66,14 @@ type MessageStore interface {
 }
 
 type PersistenceAspect struct {
-	Store MessageStore
+	store MessageStore
 }
 
 func NewPersistenceAspect(store MessageStore) *PersistenceAspect {
-	return &PersistenceAspect{Store: store}
+	return &PersistenceAspect{store: store}
 }
+
+func (a *PersistenceAspect) GetStore() MessageStore { return a.store }
 
 func (a *PersistenceAspect) Name() string { return "persistence" }
 func (a *PersistenceAspect) Order() int   { return 200 }
@@ -104,7 +106,7 @@ func (a *PersistenceAspect) AfterCommand(ctx context.Context, cmd any, result an
 	if err != nil {
 		entry.Error = err.Error()
 	}
-	return a.Store.RecordCommand(ctx, entry)
+	return a.store.RecordCommand(ctx, entry)
 }
 
 func (a *PersistenceAspect) BeforeQuery(ctx context.Context, query any) (context.Context, error) {
@@ -135,7 +137,7 @@ func (a *PersistenceAspect) AfterQuery(ctx context.Context, query any, result an
 	if err != nil {
 		entry.Error = err.Error()
 	}
-	return a.Store.RecordQuery(ctx, entry)
+	return a.store.RecordQuery(ctx, entry)
 }
 
 func (a *PersistenceAspect) BeforePublish(ctx context.Context, evt any) (context.Context, error) {
@@ -166,7 +168,7 @@ func (a *PersistenceAspect) AfterPublish(ctx context.Context, evt any, err error
 		} else {
 			entry.Status = "success"
 		}
-		return a.Store.RecordEventHandler(ctx, entry)
+		return a.store.RecordEventHandler(ctx, entry)
 	}
 
 	entry := &EventEntry{
@@ -181,7 +183,7 @@ func (a *PersistenceAspect) AfterPublish(ctx context.Context, evt any, err error
 	if err != nil {
 		entry.Error = err.Error()
 	}
-	return a.Store.RecordEvent(ctx, entry)
+	return a.store.RecordEvent(ctx, entry)
 }
 
 type handlerTypeKey struct{}
