@@ -1291,3 +1291,173 @@ DDD_STORE_TYPE=memory ./myapp
 ```
 
 PostgreSQL 是唯一的生产运行模式。Memory 模式的价值在于验证架构设计——确保依赖倒置、接口隔离等原则得到遵守。
+
+---
+
+## 十二、DDD Lint 规则
+
+ddd-qce 提供基于 `go/analysis` 框架的静态分析工具，自动扫描项目代码是否满足 DDD 驱动开发规范。消费项目引入 ddd-qce 后，通过 golangci-lint 或独立 CLI 即可启用。
+
+### 目录约定
+
+所有领域位于 `ddd/` 目录下，每个领域是一个直接子目录：
+
+```
+ddd/
+├── order/
+│   ├── command/     # 公开 — 其他领域可 import
+│   ├── query/       # 公开
+│   ├── event/       # 公开
+│   ├── domain/      # 内部 — 仅本领域可 import
+│   ├── service/     # 内部
+│   ├── repository/  # 内部
+│   └── wire/        # 基础设施 — 唯一可 import 实现包的地方
+└── inventory/
+    ├── command/
+    ├── query/
+    ├── event/
+    ├── domain/
+    ├── service/
+    ├── repository/
+    └── wire/
+```
+
+| 包路径 | 可见性 | 说明 |
+|--------|--------|------|
+| `ddd/{domain}/command` | 公开 | 其他领域可 import，定义 Command、Result |
+| `ddd/{domain}/query` | 公开 | 其他领域可 import，定义 Query、Result |
+| `ddd/{domain}/event` | 公开 | 其他领域可 import，定义 Event |
+| `ddd/{domain}/domain` | 内部 | 仅本领域可 import，包含实体、值对象、聚合根 |
+| `ddd/{domain}/service` | 内部 | 仅本领域可 import，包含领域服务 |
+| `ddd/{domain}/repository` | 内部 | 仅本领域可 import，包含仓储实现 |
+| `ddd/{domain}/wire` | 基础设施 | 唯一可 import `cqrs/impl/*` 的地方 |
+
+### 规则 1: dddcrossdomain — 跨领域内部包引用检查
+
+**目的**: 保护限界上下文边界，防止领域间隐式耦合。
+
+**检查逻辑**:
+- 如果文件属于 `ddd/{domainA}/` 且 import 了 `ddd/{domainB}/domain/`、`ddd/{domainB}/service/` 或 `ddd/{domainB}/repository/`（domainA ≠ domainB），报错
+- 同领域内互相引用不报错
+- 引用公开包（command/query/event）不报错
+
+**违规示例**:
+
+```go
+// ddd/inventory/command/handler.go
+import "myproject/ddd/order/domain"  // ❌ 跨领域引用内部包
+import "myproject/ddd/order/event"    // ✅ 引用公开包
+import "myproject/ddd/inventory/domain" // ✅ 同领域引用
+```
+
+**诊断消息**:
+
+```
+ddd/inventory/command/handler.go:5:2: dddcrossdomain: package "myproject/ddd/order/domain" is internal to domain "order", import from domain "inventory" is forbidden; use command/query/event for cross-domain communication
+```
+
+### 规则 2: dddpublicleak — 公开类型泄露检查
+
+**目的**: 防止内部领域模型通过公开 API 泄露到其他领域，保持限界上下文边界清晰。
+
+**检查逻辑**:
+- 在 `ddd/{domain}/command/`、`ddd/{domain}/query/`、`ddd/{domain}/event/` 包中
+- 扫描导出 struct 的字段和导出 func 的参数/返回值
+- 如果引用了**其他领域**的 `ddd/*/domain/` 类型，报错
+- 同领域内的引用不报错（command handler 引用本领域 domain 是正常的）
+
+**违规示例**:
+
+```go
+// ddd/order/command/commands.go
+import inventorydomain "myproject/ddd/inventory/domain"
+
+type GetInventoryResult struct {
+    Inv inventorydomain.Inventory // ❌ 跨领域泄露内部类型
+}
+
+type PlaceOrderResult struct {
+    OrderID string     // ✅ 标量值
+    Status  string
+}
+```
+
+**诊断消息**:
+
+```
+ddd/order/command/commands.go:8:2: dddpublicleak: type in "GetInventoryResult" references internal domain package from another domain; use scalar fields and map domain objects to Result types in handler
+```
+
+### 规则 3: dddimplimport — 实现包引用检查（依赖倒置）
+
+**目的**: 确保应用层只依赖接口，实现包只在 wire 层引用。
+
+**检查逻辑**:
+- 在 `ddd/` 目录下，排除 `ddd/*/wire/` 包
+- 如果 import 路径匹配 `*/cqrs/impl/*`，报错
+- `ddd/*/wire/` 包中的 import 不报错
+
+**违规示例**:
+
+```go
+// ddd/order/command/handler.go
+import "github.com/ddd-qce/core/cqrs/impl/memory" // ❌ 非 wire 层引用实现包
+
+// ddd/order/wire/wire.go
+import "github.com/ddd-qce/core/cqrs/impl/memory" // ✅ wire 层允许
+```
+
+**诊断消息**:
+
+```
+ddd/order/command/handler.go:4:2: dddimplimport: import of implementation package "github.com/ddd-qce/core/cqrs/impl/memory" is forbidden outside wire layer; use interface packages (cqrs/command, cqrs/query, cqrs/event) instead
+```
+
+### 安装与使用
+
+#### 方式 1: 独立 CLI
+
+```bash
+go install github.com/ddd-qce/core/lint/cmd/ddd-lint@latest
+ddd-lint ./...
+```
+
+#### 方式 2: golangci-lint custom 配置
+
+在项目 `.golangci.yml` 中添加：
+
+```yaml
+linters-settings:
+  custom:
+    dddcrossdomain:
+      type: module
+      description: "Check cross-domain internal package imports"
+    dddpublicleak:
+      type: module
+      description: "Check domain type leaks in public packages"
+    dddimplimport:
+      type: module
+      description: "Check CQRS impl package imports outside wire layer"
+```
+
+### 跨领域交互正确方式
+
+当领域 A 需要与领域 B 交互时：
+
+| 场景 | 正确方式 | 错误方式 |
+|------|---------|---------|
+| A 需要 B 执行操作 | A 通过 CommandBus 发送 B 的 Command | A 直接 import B 的 domain 包 |
+| A 需要查询 B 的数据 | A 通过 QueryBus 发送 B 的 Query | A 直接 import B 的 repository |
+| A 需要监听 B 的事件 | A 的 wire 层订阅 B 的 Event | A 直接 import B 的 domain 事件 |
+| A 需要公开数据给 B | A 在 command/query/event 包中定义 Result | A 在公开包中暴露 domain 实体 |
+
+### wire 包说明
+
+`ddd/{domain}/wire/` 是 Composition Root（组合根），职责单一：
+
+- **只做组装和注册** — 实例化 Handler 并注册到 Bus
+- **不含业务逻辑** — 所有业务判断在 domain 或 command/query 层
+- **是唯一引用实现包的地方** — `cqrs/impl/memory`、`cqrs/impl/pg` 等
+- **可包含跨领域事件 Handler** — 监听其他领域公开事件并分发本领域 Command
+
+当领域内聚合增多时，wire 可按聚合拆文件（如 `wire/order_wire.go`、`wire/refund_wire.go`）。

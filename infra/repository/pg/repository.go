@@ -51,12 +51,13 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		return fmt.Errorf("serialize aggregate: %w", err)
 	}
 	root := agg.GetAggregateRoot()
+	expectedVersion := root.ExpectedVersion()
 	res, err := q.ExecContext(ctx,
 		`INSERT INTO ddd_aggregate_snapshots (aggregate_id, aggregate_type, snapshot_data, version, updated_at)
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
-		 WHERE ddd_aggregate_snapshots.version < $4`,
-		root.ID(), r.typeName, data, root.Version(), time.Now(),
+		 WHERE ddd_aggregate_snapshots.version = $6 AND ddd_aggregate_snapshots.version < $4`,
+		root.ID(), r.typeName, data, root.Version(), time.Now(), expectedVersion,
 	)
 	if err != nil {
 		return err
@@ -66,7 +67,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
+		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: expectedVersion}
 	}
 	return nil
 }
@@ -216,12 +217,13 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 	if err != nil {
 		return err
 	}
+	expectedVersion := root.ExpectedVersion()
 	res, err := q.ExecContext(ctx,
 		`INSERT INTO ddd_aggregate_snapshots (aggregate_id, aggregate_type, snapshot_data, version, updated_at)
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
-		 WHERE ddd_aggregate_snapshots.version < $4`,
-		root.ID(), r.typeName, data, root.Version(), time.Now(),
+		 WHERE ddd_aggregate_snapshots.version = $6 AND ddd_aggregate_snapshots.version < $4`,
+		root.ID(), r.typeName, data, root.Version(), time.Now(), expectedVersion,
 	)
 	if err != nil {
 		return err
@@ -231,7 +233,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
+		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: expectedVersion}
 	}
 	return nil
 }

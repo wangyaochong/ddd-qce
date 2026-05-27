@@ -9,7 +9,8 @@ import (
 
 	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/infra/infratest"
-	"github.com/ddd-qce/exampleapp/domain"
+	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
+	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 )
 
 func TestProviderContract_Memory(t *testing.T) {
@@ -44,7 +45,7 @@ func testProviderContract(t *testing.T, store *StoreComponents) {
 
 	t.Run("EventStoreAppendAndLoad", func(t *testing.T) {
 		ctx := context.Background()
-		evt := &domain.OrderPlacedEvent{
+		evt := &orderevent.OrderPlacedEvent{
 			BaseEvent:   event.NewBaseEvent("contract-agg-1", time.Now()),
 			UserID:      "u1",
 			TotalAmount: 100,
@@ -64,8 +65,8 @@ func testProviderContract(t *testing.T, store *StoreComponents) {
 
 	t.Run("OrderRepositorySaveAndFind", func(t *testing.T) {
 		ctx := context.Background()
-		order, err := domain.NewOrder(context.Background(), "contract-ord-1", "user-001", []*domain.OrderItem{
-			domain.NewOrderItem("laptop", "Laptop", 999, 1),
+		order, err := orderdomain.NewOrder(context.Background(), "contract-ord-1", "user-001", []*orderdomain.OrderItem{
+			orderdomain.NewOrderItem("laptop", "Laptop", 999, 1),
 		})
 		if err != nil {
 			t.Fatalf("create order: %v", err)

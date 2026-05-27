@@ -69,9 +69,11 @@ func (a *TracingAspect) AfterCommand(ctx context.Context, cmd any, result any, e
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
-		if err := a.store.RecordSpan(ctx, span); err != nil {
-			if a.logger != nil {
-				a.logger.Error("TracingAspect RecordSpan failed", "error", err)
+		if a.store != nil {
+			if err := a.store.RecordSpan(ctx, span); err != nil {
+				if a.logger != nil {
+					a.logger.Error("TracingAspect RecordSpan failed", "error", err)
+				}
 			}
 		}
 	}
@@ -117,9 +119,11 @@ func (a *TracingAspect) AfterQuery(ctx context.Context, query any, result any, e
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
-		if err := a.store.RecordSpan(ctx, span); err != nil {
-			if a.logger != nil {
-				a.logger.Error("TracingAspect RecordSpan failed", "error", err)
+		if a.store != nil {
+			if err := a.store.RecordSpan(ctx, span); err != nil {
+				if a.logger != nil {
+					a.logger.Error("TracingAspect RecordSpan failed", "error", err)
+				}
 			}
 		}
 	}
@@ -165,9 +169,11 @@ func (a *TracingAspect) AfterPublish(ctx context.Context, event any, err error, 
 		} else {
 			span.Status = trace.SpanStatusSuccess
 		}
-		if err := a.store.RecordSpan(ctx, span); err != nil {
-			if a.logger != nil {
-				a.logger.Error("TracingAspect RecordSpan failed", "error", err)
+		if a.store != nil {
+			if err := a.store.RecordSpan(ctx, span); err != nil {
+				if a.logger != nil {
+					a.logger.Error("TracingAspect RecordSpan failed", "error", err)
+				}
 			}
 		}
 	}

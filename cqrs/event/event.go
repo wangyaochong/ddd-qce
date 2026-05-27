@@ -48,51 +48,27 @@ func (e BaseEvent) OccurredAt() time.Time   { return e.occurredAt }
 func (e BaseEvent) CorrelationID() string   { return e.correlationID }
 func (e BaseEvent) CausationID() string     { return e.causationID }
 
-func (e *BaseEvent) restore(aggregateID string, occurredAt time.Time, correlationID, causationID string) {
+func (e *BaseEvent) SetCorrelation(correlationID, causationID string) {
+	e.correlationID = correlationID
+	e.causationID = causationID
+}
+
+func (e *BaseEvent) Restore(aggregateID string, occurredAt time.Time, correlationID, causationID string) {
 	e.aggregateID = aggregateID
 	e.occurredAt = occurredAt
 	e.correlationID = correlationID
 	e.causationID = causationID
 }
 
-func (e *BaseEvent) setCorrelation(correlationID, causationID string) {
-	e.correlationID = correlationID
-	e.causationID = causationID
-}
-
 func ApplyCorrelation(evt Event, correlationID, causationID string) {
-	v := reflect.ValueOf(evt)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return
-	}
-	field := v.FieldByName("BaseEvent")
-	if !field.IsValid() || field.Kind() != reflect.Struct {
-		return
-	}
-	base, ok := field.Addr().Interface().(*BaseEvent)
-	if ok {
-		base.setCorrelation(correlationID, causationID)
+	if setter, ok := evt.(interface{ SetCorrelation(string, string) }); ok {
+		setter.SetCorrelation(correlationID, causationID)
 	}
 }
 
 func RestoreBaseEvent(evt Event, aggregateID string, occurredAt time.Time, correlationID, causationID string) {
-	v := reflect.ValueOf(evt)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return
-	}
-	field := v.FieldByName("BaseEvent")
-	if !field.IsValid() || field.Kind() != reflect.Struct {
-		return
-	}
-	base, ok := field.Addr().Interface().(*BaseEvent)
-	if ok {
-		base.restore(aggregateID, occurredAt, correlationID, causationID)
+	if restorer, ok := evt.(interface{ Restore(string, time.Time, string, string) }); ok {
+		restorer.Restore(aggregateID, occurredAt, correlationID, causationID)
 	}
 }
 

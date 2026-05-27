@@ -7,7 +7,8 @@ import (
 )
 
 type ValueObject[T comparable] struct {
-	value T
+	value    T
+	validate func(T) error
 }
 
 func New[T comparable](value T, validate func(T) error) (ValueObject[T], error) {
@@ -16,7 +17,7 @@ func New[T comparable](value T, validate func(T) error) (ValueObject[T], error) 
 			return ValueObject[T]{}, err
 		}
 	}
-	return ValueObject[T]{value: value}, nil
+	return ValueObject[T]{value: value, validate: validate}, nil
 }
 
 func MustNew[T comparable](value T, validate func(T) error) ValueObject[T] {
@@ -53,6 +54,17 @@ func (v *ValueObject[T]) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	v.value = aux.Value
+	return v.Validate()
+}
+
+func (v ValueObject[T]) Validate() error {
+	if v.validate != nil {
+		return v.validate(v.value)
+	}
+	var zero T
+	if v.value == zero {
+		return fmt.Errorf("value object: value cannot be zero")
+	}
 	return nil
 }
 

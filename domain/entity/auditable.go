@@ -2,6 +2,7 @@ package entity
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -63,6 +64,9 @@ func (e *AuditableEntity) UnmarshalJSON(data []byte) error {
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
+	}
+	if aux.ID == "" {
+		return fmt.Errorf("entity: id is required")
 	}
 	e.id = aux.ID
 	e.createdAt = aux.CreatedAt

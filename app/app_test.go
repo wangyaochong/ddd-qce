@@ -4,10 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ddd-qce/core/aspect/builtin"
+	"github.com/ddd-qce/core/config"
 	"github.com/ddd-qce/core/cqrs/command"
 	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/query"
+	"github.com/ddd-qce/core/infra"
 )
 
 type testCommand struct{ command.BaseCommand }
@@ -166,5 +169,60 @@ func TestWithBuses_NilBusUsesDefault(t *testing.T) {
 	}
 	if app.EventBus != nil {
 		t.Error("expected EventBus to be nil when nil passed")
+	}
+}
+
+func TestWithDefaultAspects_NilBackend_NoPanic(t *testing.T) {
+	app, err := NewApp(WithDefaultAspects())
+	if err != nil {
+		t.Fatalf("WithDefaultAspects without Backend should not error, got: %v", err)
+	}
+	if app.Chain == nil {
+		t.Error("expected AspectChain to be created")
+	}
+}
+
+func TestWithDefaultAspects_BackendNilTraceStore_NoPanic(t *testing.T) {
+	backend := infra.NewBackend()
+	app, err := NewApp(
+		WithBackend(backend),
+		WithDefaultAspects(),
+	)
+	if err != nil {
+		t.Fatalf("WithDefaultAspects with Backend but nil TraceStore should not error, got: %v", err)
+	}
+	if app.Chain == nil {
+		t.Error("expected AspectChain to be created")
+	}
+}
+
+func TestWithDefaultAspects_TracingDisabled_NoPanic(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Aspect.EnableTracing = false
+	app, err := NewApp(
+		WithConfig(cfg),
+		WithDefaultAspects(),
+	)
+	if err != nil {
+		t.Fatalf("WithDefaultAspects with tracing disabled should not error, got: %v", err)
+	}
+	if app.Chain == nil {
+		t.Error("expected AspectChain to be created")
+	}
+}
+
+func TestWithDefaultAspects_NilStoreRecordSpan_NoPanic(t *testing.T) {
+	aspect := builtin.NewTracingAspect(nil)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, struct{}{}, &struct{}{})
+	aspect.AfterCommand(ctx, "cmd", nil, nil, 0)
+	aspect.AfterQuery(ctx, "query", nil, nil, 0)
+	aspect.AfterPublish(ctx, "event", nil, 0)
+}
+
+func WithConfig(cfg *config.Config) AppOption {
+	return func(a *App) error {
+		a.Config = cfg
+		return nil
 	}
 }

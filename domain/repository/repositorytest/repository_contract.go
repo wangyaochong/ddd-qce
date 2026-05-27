@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
@@ -129,13 +130,26 @@ func TestRepositoryContract[T aggregate.AggregateRef](t *testing.T, repo reposit
 			t.Fatalf("first Save: %v", err)
 		}
 
+		loaded, err := repo.FindByID(ctx, "contract-lock")
+		if err != nil {
+			t.Fatalf("FindByID: %v", err)
+		}
+
 		duplicate := newAgg("contract-lock")
-		err := repo.Save(ctx, duplicate)
+		err = repo.Save(ctx, duplicate)
 		if err == nil {
 			t.Fatal("expected optimistic lock error, got nil")
 		}
 		if !errors.Is(err, ddderror.ErrConcurrency) {
 			t.Errorf("error should wrap ErrConcurrency, got: %v", err)
+		}
+
+		evt := event.NewBaseEvent("contract-lock", time.Now())
+		if err := aggregate.ApplyChange(loaded, ctx, evt); err != nil {
+			t.Fatalf("ApplyChange on loaded: %v", err)
+		}
+		if err := repo.Save(ctx, loaded); err != nil {
+			t.Fatalf("update after failed duplicate Save: %v", err)
 		}
 	})
 
@@ -153,10 +167,12 @@ func TestRepositoryContract[T aggregate.AggregateRef](t *testing.T, repo reposit
 		if err != nil {
 			t.Fatalf("FindByID: %v", err)
 		}
-		loaded.GetAggregateRoot().SetSnapshotVersion(loaded.GetAggregateRoot().Version() + 1)
-		if setFields != nil {
-			setFields(loaded)
+
+		evt := event.NewBaseEvent("contract-update", time.Now())
+		if err := aggregate.ApplyChange(loaded, ctx, evt); err != nil {
+			t.Fatalf("ApplyChange: %v", err)
 		}
+
 		if err := repo.Save(ctx, loaded); err != nil {
 			t.Fatalf("second Save: %v", err)
 		}

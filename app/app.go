@@ -101,7 +101,9 @@ func WithDefaultAspects() AppOption {
 			chain.RegisterAspect(builtin.NewLoggingAspect(logger))
 		}
 		if a.Config.Aspect.EnableTracing {
-			chain.RegisterAspect(builtin.NewTracingAspect(a.Backend.TraceStore))
+			if a.Backend != nil && a.Backend.TraceStore != nil {
+				chain.RegisterAspect(builtin.NewTracingAspect(a.Backend.TraceStore))
+			}
 		}
 		if a.Config.Aspect.EnableMetrics {
 			chain.RegisterAspect(builtin.NewMetricsAspect(metrics))

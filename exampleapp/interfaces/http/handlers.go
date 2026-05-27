@@ -14,8 +14,10 @@ import (
 	"github.com/ddd-qce/core/cqrs/event"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
-	"github.com/ddd-qce/exampleapp/application"
-	"github.com/ddd-qce/exampleapp/domain"
+	ordercommand "github.com/ddd-qce/exampleapp/ddd/order/command"
+	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
+	orderquery "github.com/ddd-qce/exampleapp/ddd/order/query"
+	inventoryquery "github.com/ddd-qce/exampleapp/ddd/inventory/query"
 	"github.com/ddd-qce/exampleapp/infrastructure"
 )
 
@@ -45,12 +47,12 @@ func resolveTemplatePath() string {
 
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	ordersResult, err := query.Dispatch[*application.ListOrdersQuery, *application.ListOrdersResult](ctx, h.app.QueryBus, &application.ListOrdersQuery{})
+	ordersResult, err := query.Dispatch[*orderquery.ListOrdersQuery, *orderquery.ListOrdersResult](ctx, h.app.QueryBus, &orderquery.ListOrdersQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	inventoryResult, err := query.Dispatch[*application.GetInventoryQuery, *application.GetInventoryResult](ctx, h.app.QueryBus, &application.GetInventoryQuery{})
+	inventoryResult, err := query.Dispatch[*inventoryquery.GetInventoryQuery, *inventoryquery.GetInventoryResult](ctx, h.app.QueryBus, &inventoryquery.GetInventoryQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -90,7 +92,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	result, err := query.Dispatch[*application.ListOrdersQuery, *application.ListOrdersResult](ctx, h.app.QueryBus, &application.ListOrdersQuery{})
+	result, err := query.Dispatch[*orderquery.ListOrdersQuery, *orderquery.ListOrdersResult](ctx, h.app.QueryBus, &orderquery.ListOrdersQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -100,7 +102,7 @@ func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) NewOrderForm(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	inventoryResult, err := query.Dispatch[*application.GetInventoryQuery, *application.GetInventoryResult](ctx, h.app.QueryBus, &application.GetInventoryQuery{})
+	inventoryResult, err := query.Dispatch[*inventoryquery.GetInventoryQuery, *inventoryquery.GetInventoryResult](ctx, h.app.QueryBus, &inventoryquery.GetInventoryQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -116,12 +118,12 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := r.FormValue("user_id")
-	var items []application.ItemInput
+	var items []ordercommand.ItemInput
 	products := h.app.Inventory.GetAll()
 	for _, p := range products {
 		qtyStr := r.FormValue("qty_" + p.ID)
 		if qty, err := strconv.Atoi(qtyStr); err == nil && qty > 0 {
-			items = append(items, application.ItemInput{
+			items = append(items, ordercommand.ItemInput{
 				ProductID:   p.ID,
 				ProductName: p.Name,
 				Price:       p.Price,
@@ -135,7 +137,7 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := command.Dispatch[*application.PlaceOrderCommand, *application.PlaceOrderResult](ctx, h.app.CmdBus, &application.PlaceOrderCommand{
+	result, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, h.app.CmdBus, &ordercommand.PlaceOrderCommand{
 		UserID: userID,
 		Items:  items,
 	})
@@ -149,7 +151,7 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	result, err := query.Dispatch[*application.GetOrderQuery, *application.GetOrderResult](ctx, h.app.QueryBus, &application.GetOrderQuery{OrderID: orderID})
+	result, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: orderID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -160,7 +162,7 @@ func (h *Handler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ConfirmPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	_, err := command.Dispatch[*application.ConfirmPaymentCommand, *application.ConfirmPaymentResult](ctx, h.app.CmdBus, &application.ConfirmPaymentCommand{OrderID: orderID})
+	_, err := command.Dispatch[*ordercommand.ConfirmPaymentCommand, *ordercommand.ConfirmPaymentResult](ctx, h.app.CmdBus, &ordercommand.ConfirmPaymentCommand{OrderID: orderID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -171,7 +173,7 @@ func (h *Handler) ConfirmPayment(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ShipOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	_, err := command.Dispatch[*application.ShipOrderCommand, *application.ShipOrderResult](ctx, h.app.CmdBus, &application.ShipOrderCommand{OrderID: orderID})
+	_, err := command.Dispatch[*ordercommand.ShipOrderCommand, *ordercommand.ShipOrderResult](ctx, h.app.CmdBus, &ordercommand.ShipOrderCommand{OrderID: orderID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -183,7 +185,7 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
 	reason := r.FormValue("reason")
-	_, err := command.Dispatch[*application.CancelOrderCommand, *application.CancelOrderResult](ctx, h.app.CmdBus, &application.CancelOrderCommand{OrderID: orderID, Reason: reason})
+	_, err := command.Dispatch[*ordercommand.CancelOrderCommand, *ordercommand.CancelOrderResult](ctx, h.app.CmdBus, &ordercommand.CancelOrderCommand{OrderID: orderID, Reason: reason})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -227,16 +229,16 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 			OccurredAt: e.OccurredAt().Format(time.RFC3339),
 		}
 		switch evt := e.(type) {
-		case *domain.OrderPlacedEvent:
+		case *orderevent.OrderPlacedEvent:
 			view.OrderID = evt.AggregateID()
 			view.Details = fmt.Sprintf("UserID: %s, Amount: %.2f", evt.UserID, evt.TotalAmount)
-		case *domain.PaymentConfirmedEvent:
+		case *orderevent.PaymentConfirmedEvent:
 			view.OrderID = evt.AggregateID()
 			view.Details = "Payment confirmed"
-		case *domain.OrderShippedEvent:
+		case *orderevent.OrderShippedEvent:
 			view.OrderID = evt.AggregateID()
 			view.Details = "Order shipped"
-		case *domain.OrderCancelledEvent:
+		case *orderevent.OrderCancelledEvent:
 			view.OrderID = evt.AggregateID()
 			view.Details = fmt.Sprintf("Cancelled: %s", evt.Reason)
 		default:
@@ -245,7 +247,7 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 		views[i] = view
 	}
 
-	order, err := query.Dispatch[*application.GetOrderQuery, *application.GetOrderResult](ctx, h.app.QueryBus, &application.GetOrderQuery{OrderID: orderID})
+	order, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: orderID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -255,7 +257,7 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	result, err := query.Dispatch[*application.GetInventoryQuery, *application.GetInventoryResult](ctx, h.app.QueryBus, &application.GetInventoryQuery{})
+	result, err := query.Dispatch[*inventoryquery.GetInventoryQuery, *inventoryquery.GetInventoryResult](ctx, h.app.QueryBus, &inventoryquery.GetInventoryQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -298,7 +300,7 @@ func (h *Handler) SubmitJob(w http.ResponseWriter, r *http.Request) {
 		opts = append(opts, jobcore.WithMaxRetries(retries))
 	}
 
-	_, err := h.app.JobManager.Submit(ctx, &application.GenerateReportCommand{OrderID: orderID}, opts...)
+	_, err := h.app.JobManager.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderID}, opts...)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

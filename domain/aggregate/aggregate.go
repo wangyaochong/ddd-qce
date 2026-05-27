@@ -45,6 +45,10 @@ func (a *AggregateRoot) Version() int {
 	return a.version
 }
 
+func (a *AggregateRoot) ExpectedVersion() int {
+	return a.version - len(a.uncommittedEvents)
+}
+
 func (a *AggregateRoot) SetSnapshotVersion(v int) {
 	a.version = v
 }

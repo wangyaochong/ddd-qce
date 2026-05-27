@@ -9,9 +9,13 @@ import (
 type OptimisticLockError struct {
 	AggregateID     string
 	ExpectedVersion int
+	VersionMismatch bool
 }
 
 func (e *OptimisticLockError) Error() string {
+	if e.VersionMismatch {
+		return fmt.Sprintf("optimistic lock error: aggregate %s version %d conflicts with existing version", e.AggregateID, e.ExpectedVersion)
+	}
 	return fmt.Sprintf("optimistic lock error: aggregate %s version %d was already updated by another transaction", e.AggregateID, e.ExpectedVersion)
 }
 

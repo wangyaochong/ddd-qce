@@ -12,12 +12,13 @@ import (
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	domainevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/infra"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
-	"github.com/ddd-qce/exampleapp/application"
-	"github.com/ddd-qce/exampleapp/domain"
+	inventorydomain "github.com/ddd-qce/exampleapp/ddd/inventory/domain"
+	inventorywire "github.com/ddd-qce/exampleapp/ddd/inventory/wire"
+	orderrepo "github.com/ddd-qce/exampleapp/ddd/order/repository"
+	orderwire "github.com/ddd-qce/exampleapp/ddd/order/wire"
 )
 
 type AppContext struct {
@@ -28,10 +29,10 @@ type AppContext struct {
 	Backend    *infra.Backend
 	JobManager *jobmemory.JobManager
 
-	OrderRepo        application.OrderRepositoryAdapter
-	EventSourcedRepo *application.OrderEventSourcedRepository
-	EventStore       domainevent.EventSourceStore[domainevent.Event]
-	Inventory        *domain.Inventory
+	OrderRepo        orderrepo.OrderRepositoryAdapter
+	EventSourcedRepo *orderrepo.OrderEventSourcedRepository
+	EventStore       cqrsevent.EventSourceStore[cqrsevent.Event]
+	Inventory        *inventorydomain.Inventory
 
 	MetricsRecorder *AppMetricsRecorder
 	TxManager       *AppTransactionManager
@@ -83,52 +84,18 @@ func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext
 	queryBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
 	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
 
-	inventory := domain.NewInventory()
+	inventory := inventorydomain.NewInventory()
 	orderRepo := store.OrderRepo
 	eventStore := store.EventStore
-	eventSourcedRepo := application.NewOrderEventSourcedRepository(eventStore, eventBus, orderRepo)
 
-	if err := cmdBus.RegisterHandler(application.NewPlaceOrderHandler(orderRepo, eventBus)); err != nil {
-		return nil, fmt.Errorf("register PlaceOrderHandler: %w", err)
+	if err := orderwire.WireOrder(chain, cmdBus, queryBus, eventBus, orderRepo); err != nil {
+		return nil, err
 	}
-	if err := cmdBus.RegisterHandler(application.NewConfirmPaymentHandler(orderRepo, eventBus)); err != nil {
-		return nil, fmt.Errorf("register ConfirmPaymentHandler: %w", err)
-	}
-	if err := cmdBus.RegisterHandler(application.NewShipOrderHandler(orderRepo, eventBus)); err != nil {
-		return nil, fmt.Errorf("register ShipOrderHandler: %w", err)
-	}
-	if err := cmdBus.RegisterHandler(application.NewCancelOrderHandler(orderRepo, eventBus)); err != nil {
-		return nil, fmt.Errorf("register CancelOrderHandler: %w", err)
-	}
-	if err := cmdBus.RegisterHandler(application.NewReserveInventoryHandler(inventory, eventBus)); err != nil {
-		return nil, fmt.Errorf("register ReserveInventoryHandler: %w", err)
-	}
-	if err := cmdBus.RegisterHandler(application.NewReleaseInventoryHandler(inventory, eventBus)); err != nil {
-		return nil, fmt.Errorf("register ReleaseInventoryHandler: %w", err)
-	}
-	if err := cmdBus.RegisterHandler(application.NewGenerateReportHandler()); err != nil {
-		return nil, fmt.Errorf("register GenerateReportHandler: %w", err)
+	if err := inventorywire.WireInventory(chain, cmdBus, queryBus, eventBus, inventory); err != nil {
+		return nil, err
 	}
 
-	if err := queryBus.RegisterHandler(application.NewGetOrderHandler(orderRepo)); err != nil {
-		return nil, fmt.Errorf("register GetOrderHandler: %w", err)
-	}
-	if err := queryBus.RegisterHandler(application.NewListOrdersHandler(orderRepo)); err != nil {
-		return nil, fmt.Errorf("register ListOrdersHandler: %w", err)
-	}
-	if err := queryBus.RegisterHandler(application.NewGetInventoryHandler(inventory)); err != nil {
-		return nil, fmt.Errorf("register GetInventoryHandler: %w", err)
-	}
-
-	if err := eventBus.SubscribeHandler(application.NewOrderPlacedInventoryHandler(cmdBus)); err != nil {
-		return nil, fmt.Errorf("register OrderPlacedInventoryHandler: %w", err)
-	}
-	if err := eventBus.SubscribeHandler(application.NewOrderPlacedNotificationHandler()); err != nil {
-		return nil, fmt.Errorf("register OrderPlacedNotificationHandler: %w", err)
-	}
-	if err := eventBus.SubscribeHandler(application.NewOrderCancelledInventoryHandler(cmdBus)); err != nil {
-		return nil, fmt.Errorf("register OrderCancelledInventoryHandler: %w", err)
-	}
+	eventSourcedRepo := orderrepo.NewOrderEventSourcedRepository(eventStore, eventBus, orderRepo)
 
 	jobManagerOpts := []jobmemory.JobManagerOption{
 		jobmemory.WithStoreErrorHandler(func(ctx context.Context, storeErr *jobcore.StoreError) {

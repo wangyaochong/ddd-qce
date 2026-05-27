@@ -11,13 +11,13 @@ import (
 	domainevent "github.com/ddd-qce/core/cqrs/event"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/ddd-qce/exampleapp/application"
+	"github.com/ddd-qce/exampleapp/ddd/order/repository"
 )
 
 type StoreComponents struct {
 	Backend      *infra.Backend
 	EventStore   domainevent.EventSourceStore[domainevent.Event]
-	OrderRepo    application.OrderRepositoryAdapter
+	OrderRepo    repository.OrderRepositoryAdapter
 	DB           *sql.DB
 }
 
@@ -43,7 +43,7 @@ func newMemoryProvider() (*StoreComponents, error) {
 	return &StoreComponents{
 		Backend:    infra.NewMemoryBackend(),
 		EventStore: eventStore,
-		OrderRepo:  application.NewOrderRepository(),
+		OrderRepo:  repository.NewOrderRepository(),
 	}, nil
 }
 
@@ -76,7 +76,7 @@ func newPgProvider(dsn string) (*StoreComponents, error) {
 	return &StoreComponents{
 		Backend:    backend,
 		EventStore: eventStore,
-		OrderRepo:  application.NewOrderRepository(),
+		OrderRepo:  repository.NewOrderRepository(),
 		DB:         db,
 	}, nil
 }

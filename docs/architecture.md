@@ -28,6 +28,7 @@
 - ✅ **调用图清晰**: 所有跨领域交互一目了然
 - ✅ **部署无关**: 无论单体还是微服务，接口不变
 - ✅ **AI 友好**: 规则明确，AI 生成代码不会越界
+- ✅ **Lint 自动检查**: 通过 ddd-qce 内置 DDD Lint 规则，CI 中自动扫描违规
 
 ---
 
@@ -230,12 +231,14 @@ func (h *CreateUserHandler) Handle(ctx context.Context, cmd CreateUserCommand) e
 
 ### 静态分析能力
 
-基于严格的目录约定和接口约束，可以实现：
+基于严格的目录约定和接口约束，框架内置了 DDD Lint 静态分析规则（详见[实战指南](guide.md#十二ddd-lint-规则)），可实现：
 
-1. **依赖图生成**: 自动分析领域间的 Command/Event/Query 调用关系
-2. **违规检测**: 扫描 import 语句，检测是否引入了其他领域的内部包
-3. **调用链追踪**: 结合 Trace 系统，记录完整的跨领域调用链
-4. **架构文档**: 从代码自动生成领域交互图
+1. **跨领域依赖检查 (dddcrossdomain)**: 自动检测是否引入了其他领域的内部包（domain/service/repository）
+2. **公开类型泄露检查 (dddpublicleak)**: 检测公开包（command/query/event）中是否引用了其他领域的内部 domain 类型
+3. **依赖倒置检查 (dddimplimport)**: 检测非 wire 层是否引用了 `cqrs/impl/*` 实现包
+4. **依赖图生成**: 自动分析领域间的 Command/Event/Query 调用关系
+5. **调用链追踪**: 结合 Trace 系统，记录完整的跨领域调用链
+6. **架构文档**: 从代码自动生成领域交互图
 
 ### 部署无关性
 

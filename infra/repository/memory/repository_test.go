@@ -154,8 +154,13 @@ func TestInMemoryRepository_OptimisticLock(t *testing.T) {
 		t.Fatalf("first Save: %v", err)
 	}
 
+	loaded, err := repo.FindByID(ctx, "agg-1")
+	if err != nil {
+		t.Fatalf("FindByID: %v", err)
+	}
+
 	duplicate := newTestAggregate("agg-1")
-	err := repo.Save(ctx, duplicate)
+	err = repo.Save(ctx, duplicate)
 	if err == nil {
 		t.Fatal("expected optimistic lock error, got nil")
 	}
@@ -169,6 +174,13 @@ func TestInMemoryRepository_OptimisticLock(t *testing.T) {
 	}
 	if !errors.Is(err, ddderror.ErrConcurrency) {
 		t.Errorf("OptimisticLockError should unwrap to ErrConcurrency, got: %v", err)
+	}
+
+	if err := loaded.Apply(ctx, event.NewBaseEvent("agg-1", time.Now())); err != nil {
+		t.Fatalf("Apply on loaded: %v", err)
+	}
+	if err := repo.Save(ctx, loaded); err != nil {
+		t.Fatalf("update after failed duplicate Save: %v", err)
 	}
 }
 
@@ -188,7 +200,10 @@ func TestInMemoryRepository_UpdateExistingAggregate(t *testing.T) {
 	}
 
 	loaded.Name = "updated"
-	loaded.GetAggregateRoot().SetSnapshotVersion(loaded.Version() + 1)
+	if err := loaded.Apply(ctx, event.NewBaseEvent("agg-1", time.Now())); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
 	if err := repo.Save(ctx, loaded); err != nil {
 		t.Fatalf("second Save: %v", err)
 	}
@@ -353,5 +368,132 @@ func TestInMemoryRepository_DeepCopyIsolation_ApplierSelfReference(t *testing.T)
 
 	if err := found.Apply(context.Background(), event.NewBaseEvent("iso-3", time.Now())); err != nil {
 		t.Fatalf("Apply on loaded aggregate should work, got: %v", err)
+	}
+}
+
+func TestInMemoryRepository_ConcurrentOptimisticLock(t *testing.T) {
+	repo := NewRepository[*testAggregate]()
+	ctx := context.Background()
+
+	agg := newTestAggregate("concurrent-1")
+	agg.Name = "initial"
+	if err := repo.Save(ctx, agg); err != nil {
+		t.Fatalf("initial Save: %v", err)
+	}
+
+	loadedA, err := repo.FindByID(ctx, "concurrent-1")
+	if err != nil {
+		t.Fatalf("FindByID A: %v", err)
+	}
+	loadedB, err := repo.FindByID(ctx, "concurrent-1")
+	if err != nil {
+		t.Fatalf("FindByID B: %v", err)
+	}
+
+	loadedA.Name = "updated-by-A"
+	if err := loadedA.Apply(ctx, event.NewBaseEvent("concurrent-1", time.Now())); err != nil {
+		t.Fatalf("Apply A: %v", err)
+	}
+
+	loadedB.Name = "updated-by-B"
+	if err := loadedB.Apply(ctx, event.NewBaseEvent("concurrent-1", time.Now())); err != nil {
+		t.Fatalf("Apply B: %v", err)
+	}
+
+	errA := repo.Save(ctx, loadedA)
+	errB := repo.Save(ctx, loadedB)
+
+	if errA != nil {
+		t.Fatalf("first save should succeed, got: %v", errA)
+	}
+
+	if errB == nil {
+		t.Fatal("second save should fail with optimistic lock error, got nil")
+	}
+	var ole *rep.OptimisticLockError
+	if !errors.As(errB, &ole) {
+		t.Fatalf("expected *OptimisticLockError, got %T: %v", errB, errB)
+	}
+}
+
+func TestInMemoryEventSourcedRepository_OptimisticLock(t *testing.T) {
+	repo := NewEventSourcedRepository[*testAggregate]()
+	ctx := context.Background()
+
+	agg := newTestAggregate("es-lock-1")
+	if err := agg.Apply(ctx, event.NewBaseEvent("es-lock-1", time.Now())); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if err := repo.Save(ctx, agg); err != nil {
+		t.Fatalf("first Save: %v", err)
+	}
+
+	loaded, err := repo.Load(ctx, "es-lock-1")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := loaded.Apply(ctx, event.NewBaseEvent("es-lock-1", time.Now())); err != nil {
+		t.Fatalf("Apply on loaded: %v", err)
+	}
+	if err := repo.Save(ctx, loaded); err != nil {
+		t.Fatalf("second Save: %v", err)
+	}
+
+	stale := newTestAggregate("es-lock-1")
+	stale.GetAggregateRoot().SetSnapshotVersion(0)
+	if err := stale.Apply(ctx, event.NewBaseEvent("es-lock-1", time.Now())); err != nil {
+		t.Fatalf("Apply on stale: %v", err)
+	}
+	err = repo.Save(ctx, stale)
+	if err == nil {
+		t.Fatal("expected optimistic lock error for stale aggregate, got nil")
+	}
+	var ole *rep.OptimisticLockError
+	if !errors.As(err, &ole) {
+		t.Fatalf("expected *OptimisticLockError, got %T: %v", err, err)
+	}
+}
+
+func TestInMemoryEventSourcedRepository_ConcurrentOptimisticLock(t *testing.T) {
+	repo := NewEventSourcedRepository[*testAggregate]()
+	ctx := context.Background()
+
+	agg := newTestAggregate("es-concurrent-1")
+	if err := agg.Apply(ctx, event.NewBaseEvent("es-concurrent-1", time.Now())); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if err := repo.Save(ctx, agg); err != nil {
+		t.Fatalf("first Save: %v", err)
+	}
+
+	loadedA, err := repo.Load(ctx, "es-concurrent-1")
+	if err != nil {
+		t.Fatalf("Load A: %v", err)
+	}
+	loadedB, err := repo.Load(ctx, "es-concurrent-1")
+	if err != nil {
+		t.Fatalf("Load B: %v", err)
+	}
+
+	if err := loadedA.Apply(ctx, event.NewBaseEvent("es-concurrent-1", time.Now())); err != nil {
+		t.Fatalf("Apply A: %v", err)
+	}
+	if err := loadedB.Apply(ctx, event.NewBaseEvent("es-concurrent-1", time.Now())); err != nil {
+		t.Fatalf("Apply B: %v", err)
+	}
+
+	errA := repo.Save(ctx, loadedA)
+	errB := repo.Save(ctx, loadedB)
+
+	if errA != nil {
+		t.Fatalf("first save should succeed, got: %v", errA)
+	}
+
+	if errB == nil {
+		t.Fatal("second save should fail with optimistic lock error, got nil")
+	}
+	var ole *rep.OptimisticLockError
+	if !errors.As(errB, &ole) {
+		t.Fatalf("expected *OptimisticLockError, got %T: %v", errB, errB)
 	}
 }

@@ -151,10 +151,7 @@ func TestEntity_UnmarshalJSON_Invalid(t *testing.T) {
 func TestEntity_UnmarshalJSON_EmptyID(t *testing.T) {
 	e := &Entity{}
 	err := json.Unmarshal([]byte(`{"id": ""}`), e)
-	if err != nil {
-		t.Errorf("unmarshal with empty ID should not error: %v", err)
-	}
-	if !e.IsEmpty() {
-		t.Error("entity should have empty ID")
+	if err == nil {
+		t.Error("unmarshal with empty ID should error")
 	}
 }

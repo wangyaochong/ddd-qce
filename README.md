@@ -11,6 +11,7 @@ DDD-QCE 是一个基于 **CQRS + Event Sourcing + AOP** 的 Go 领域驱动开�
 - **异步 Job**: 支持超时、重试、取消的后台任务系统
 - **泛型安全**: 基于 Go 1.18+ 泛型，类型安全的 Handler 注册与调度
 - **可插拔持久化**: 统一 Backend 抽象，内存实现开箱即用，PostgreSQL 生产就绪
+- **DDD Lint**: 内置静态分析规则（跨领域依赖检查、公开类型泄露检查、依赖倒置检查），通过 golangci-lint 集成，自动强制 DDD 边界
 - **环境变量配置切换**: 通过 `DDD_STORE_TYPE` + `DDD_POSTGRES_URI` 一键切换存储后端，`app.WithAutoBackend()` 开箱即用
 - **乐观锁**: 聚合保存自动版本检查，防止并发冲突
 - **嵌套事务**: 基于 SAVEPOINT 的嵌套事务支持
@@ -156,6 +157,7 @@ DDD_STORE_TYPE=postgres DDD_POSTGRES_URI="postgres://user:pass@localhost/db" ./y
 | **Job** | 异步后台任务，支持超时、重试、取消、状态追踪 |
 | **Trace** | 链路追踪，跨 Command/Event/Query 传播 TraceID 与 SpanID |
 | **Backend** | 统一基础设施抽象，包含 TransactionManager、JobStore、TraceStore、MessageStore |
+| **DDD Lint** | 静态分析规则，自动检查跨领域依赖、类型泄露、依赖倒置 |
 
 ## 架构原则
 
@@ -171,7 +173,8 @@ DDD_STORE_TYPE=postgres DDD_POSTGRES_URI="postgres://user:pass@localhost/db" ./y
 ## 文档导航
 
 - [架构设计文档](docs/architecture.md) - AI 时代架构治理、严格边界规则、目录约定
-- [实战指南](docs/guide.md) - Command/Query/Event/Aspect/Job/Trace 完整使用指南
+- [实战指南](docs/guide.md) - Command/Query/Event/Aspect/Job/Trace/DDD Lint 完整使用指南
+- [AI 代码生成规则](docs/ai-domain-generation-rules.md) - AI 生成 domain 代码时必须遵守的规则
 - [Actor + CQRS + DDD 组合架构](docs/actor-cqrs-ddd.md) - 黄金三角架构详解、Actor 模型实现、长耗时任务场景
 
 ## 项目结构
@@ -213,6 +216,13 @@ DDD_STORE_TYPE=postgres DDD_POSTGRES_URI="postgres://user:pass@localhost/db" ./y
 │   ├── /core                    # Job / JobStore / JobManager 接口 + JobOption
 │   ├── /memory                  # 内存 InMemoryJobStore + JobManager
 │   └── /pg                      # PostgreSQL PgJobStore
+│
+├── /lint                        # DDD 静态分析规则
+│   ├── /convention              # DDD 目录约定识别（ddd/ 目录扫描）
+│   ├── /crossdomain             # 规则1: 跨领域内部包引用检查
+│   ├── /publicleak              # 规则2: 公开类型泄露检查
+│   ├── /implimport              # 规则3: 实现包引用检查（依赖倒置）
+│   └── /cmd/ddd-lint            # 独立 CLI 入口
 │
 ├── /trace                       # 链路追踪
 │   ├── trace.go                 # Trace 上下文传播（WithTrace / GetTraceID / GetSpanID）

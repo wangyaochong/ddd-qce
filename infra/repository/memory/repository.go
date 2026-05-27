@@ -60,10 +60,18 @@ func (r *InMemoryRepository[T]) Save(_ context.Context, agg T) error {
 	defer r.mu.Unlock()
 
 	root := agg.GetAggregateRoot()
+	expectedVersion := root.ExpectedVersion()
 
 	if existing, ok := r.store[root.ID()]; ok {
-		if root.Version() <= existing.version {
-			return &rep.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: root.Version()}
+		if expectedVersion != existing.version {
+			return &rep.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: expectedVersion}
+		}
+		if root.Version() == existing.version && len(root.UncommittedEvents()) == 0 {
+			return &rep.OptimisticLockError{
+				AggregateID:     root.ID(),
+				ExpectedVersion: expectedVersion,
+				VersionMismatch: true,
+			}
 		}
 	}
 
@@ -151,6 +159,20 @@ func (r *InMemoryEventSourcedRepository[T]) Save(_ context.Context, agg T) error
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	expectedVersion := root.ExpectedVersion()
+	if existing, ok := r.store[root.ID()]; ok {
+		if expectedVersion != existing.version {
+			return &rep.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: expectedVersion}
+		}
+		if root.Version() == existing.version {
+			return &rep.OptimisticLockError{
+				AggregateID:     root.ID(),
+				ExpectedVersion: expectedVersion,
+				VersionMismatch: true,
+			}
+		}
+	}
 
 	copied, err := r.deepCopy(agg)
 	if err != nil {

@@ -206,11 +206,8 @@ func TestValueObject_UnmarshalJSON_ZeroValue(t *testing.T) {
 		t.Fatalf("MarshalJSON zero value: %v", err)
 	}
 	var restored ValueObject[money]
-	if err := json.Unmarshal(data, &restored); err != nil {
-		t.Fatalf("UnmarshalJSON zero value: %v", err)
-	}
-	if !original.Equals(restored) {
-		t.Errorf("zero value round-trip failed: original=%v, restored=%v", original.Value(), restored.Value())
+	if err := json.Unmarshal(data, &restored); err == nil {
+		t.Error("UnmarshalJSON should fail for zero value")
 	}
 }
 
@@ -226,6 +223,63 @@ func TestValueObject_UnmarshalJSON_NilValidator(t *testing.T) {
 	}
 	if !vo.Equals(restored) {
 		t.Errorf("round-trip with nil validator failed: original=%v, restored=%v", vo.Value(), restored.Value())
+	}
+}
+
+func TestValueObject_Validate_WithCustomValidator(t *testing.T) {
+	vo, err := New(money{Amount: 100, Currency: "USD"}, validateMoney)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := vo.Validate(); err != nil {
+		t.Errorf("Validate() should pass for valid value, got: %v", err)
+	}
+}
+
+func TestValueObject_Validate_WithCustomValidator_Invalid(t *testing.T) {
+	vo := ValueObject[money]{
+		value:    money{Amount: -1, Currency: "USD"},
+		validate: validateMoney,
+	}
+	if err := vo.Validate(); err == nil {
+		t.Error("Validate() should fail for negative amount with custom validator")
+	}
+}
+
+func TestValueObject_Validate_ZeroValue_NoValidator(t *testing.T) {
+	var vo ValueObject[money]
+	if err := vo.Validate(); err == nil {
+		t.Error("Validate() should fail for zero value without validator")
+	}
+}
+
+func TestValueObject_Validate_NonZeroValue_NoValidator(t *testing.T) {
+	vo, _ := New(money{Amount: 100, Currency: "USD"}, nil)
+	if err := vo.Validate(); err != nil {
+		t.Errorf("Validate() should pass for non-zero value without validator, got: %v", err)
+	}
+}
+
+func TestValueObject_UnmarshalJSON_InvalidValue(t *testing.T) {
+	vo, _ := New(money{Amount: 100, Currency: "USD"}, validateMoney)
+	_, err := json.Marshal(vo)
+	if err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
+	}
+
+	invalidData := `{"value":{"Amount":-1,"Currency":"USD"}}`
+	var restored ValueObject[money]
+	restored.validate = validateMoney
+	if err := json.Unmarshal([]byte(invalidData), &restored); err == nil {
+		t.Error("UnmarshalJSON should fail for invalid value when validator is set")
+	}
+}
+
+func TestValueObject_UnmarshalJSON_ZeroValueFails(t *testing.T) {
+	zeroData := `{"value":{"Amount":0,"Currency":""}}`
+	var restored ValueObject[money]
+	if err := json.Unmarshal([]byte(zeroData), &restored); err == nil {
+		t.Error("UnmarshalJSON should fail for zero value (no validator)")
 	}
 }
 

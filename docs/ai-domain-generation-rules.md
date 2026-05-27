@@ -500,7 +500,66 @@ func Setup(buses AppBuses, backend *infra.Backend) {
 
 ---
 
-## 十、参考实现
+## 十、DDD Lint 自动检查
+
+ddd-qce 内置 DDD Lint 静态分析规则，可在 CI 中自动检测上述禁止事项。引入 ddd-qce 的项目应配置 golangci-lint custom 或独立运行 `ddd-lint`。
+
+### 目录约定
+
+所有领域位于 `ddd/` 目录下，每个领域是一个直接子目录：
+
+```
+ddd/
+├── order/
+│   ├── command/     # 公开 — 其他领域可 import
+│   ├── query/       # 公开
+│   ├── event/       # 公开
+│   ├── domain/      # 内部 — 仅本领域可 import
+│   ├── service/     # 内部
+│   ├── repository/  # 内部
+│   └── wire/        # 基础设施 — 唯一可 import 实现包的地方
+└── inventory/
+    └── ...
+```
+
+### Lint 规则与禁止事项对应关系
+
+| Lint 规则 | 对应禁止事项 | 检查内容 |
+|-----------|-------------|---------|
+| `dddcrossdomain` | 禁止事项 #1, #2 | 跨领域 import 内部包（domain/service/repository） |
+| `dddpublicleak` | 禁止事项 #8 | 公开包（command/query/event）中引用其他领域 domain 类型 |
+| `dddimplimport` | 禁止事项 #6 | 非 wire 层 import `cqrs/impl/*` 实现包 |
+
+### 集成方式
+
+在项目 `.golangci.yml` 中添加：
+
+```yaml
+linters-settings:
+  custom:
+    dddcrossdomain:
+      type: module
+      description: "Check cross-domain internal package imports"
+    ddddpublicleak:
+      type: module
+      description: "Check domain type leaks in public packages"
+    dddimplimport:
+      type: module
+      description: "Check CQRS impl package imports outside wire layer"
+```
+
+或独立运行：
+
+```bash
+go install github.com/ddd-qce/core/lint/cmd/ddd-lint@latest
+ddd-lint ./...
+```
+
+详细使用说明请参考[实战指南](guide.md#十二ddd-lint-规则)。
+
+---
+
+## 十一、参考实现
 
 完整示例请参考 `exampleapp/` 目录，其中包含：
 
