@@ -81,16 +81,6 @@ func ApplyCorrelation(evt Event, correlationID, causationID string) {
 	}
 }
 
-func (e *BaseEvent) SetBaseEvent(aggregateID string, occurredAt time.Time) {
-	e.aggregateID = aggregateID
-	e.occurredAt = occurredAt
-}
-
-func (e *BaseEvent) SetCorrelation(correlationID, causationID string) {
-	e.correlationID = correlationID
-	e.causationID = causationID
-}
-
 func EventTypeOf(event any) string {
 	if event == nil {
 		return ""
