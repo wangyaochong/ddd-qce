@@ -72,7 +72,9 @@ func TestJobManager_ConcurrentSubmitAndCancel(t *testing.T) {
 		jobs = append(jobs, job)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	for _, job := range jobs {
+		manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	}
 
 	cancelWg := sync.WaitGroup{}
 	for _, job := range jobs {
@@ -107,7 +109,7 @@ func TestJobManager_CancelDuringExecution(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	var cancelErr error
 	var cancelWg sync.WaitGroup
@@ -143,7 +145,7 @@ func TestJobManager_ConcurrentCancelSameJob(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	var wg sync.WaitGroup
 	errors := make(chan error, 10)
@@ -198,8 +200,6 @@ func TestJobManager_ConcurrentSubmitWaitCancel(t *testing.T) {
 			if err != nil {
 				return
 			}
-
-			time.Sleep(50 * time.Millisecond)
 
 			go manager.Cancel(ctx, job.ID)
 
