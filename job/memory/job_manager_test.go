@@ -10,6 +10,7 @@ import (
 	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
+	"github.com/stretchr/testify/require"
 )
 
 type testLongCommand struct {
@@ -85,7 +86,7 @@ func TestJobManager_Cancel(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil {
@@ -346,7 +347,7 @@ func TestJobManager_CancelRunningJob(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(300 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil {
@@ -411,7 +412,7 @@ func TestJobManager_Cancel_StoreUpdateError(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err == nil {
@@ -449,7 +450,7 @@ func TestJobManager_Cancel_UpdateError(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err == nil {
@@ -471,7 +472,7 @@ func TestJobManager_ExecuteJob_SuccessAfterCancel(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(10 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil {
@@ -498,7 +499,7 @@ func TestJobManager_Cancel_NotInCancelers(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(150 * time.Millisecond)
+	_, _ = manager.Wait(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil && err.Error() != "" {
@@ -557,7 +558,7 @@ func TestJobManager_ExecuteJob_CancelledDuringRetry(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil {
@@ -594,12 +595,11 @@ func TestJobManager_ExecuteJob_StoreErrorHandler(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, err = manager.Wait(ctx, job.ID, 2*time.Second)
-	if err != nil {
-		t.Logf("wait result: %v", err)
-	}
+	_, _ = manager.Wait(ctx, job.ID, 2*time.Second)
 
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return len(capturedErrors) > 0
+	}, 2*time.Second, 10*time.Millisecond)
 
 	if len(capturedErrors) == 0 {
 		t.Fatal("expected store errors to be captured by handler")
@@ -668,12 +668,12 @@ func TestJobManager_StoreErrorHandler_NoHandler(t *testing.T) {
 	manager := NewJobManager(store, cmdBus)
 
 	ctx := context.Background()
-	_, err := manager.Submit(ctx, &testLongCommand{Duration: 100 * time.Millisecond})
+	job, err := manager.Submit(ctx, &testLongCommand{Duration: 100 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(300 * time.Millisecond)
+	_, _ = manager.Wait(ctx, job.ID, 2*time.Second)
 }
 
 func TestJobManager_Recovery_PendingReExecuted(t *testing.T) {
@@ -689,7 +689,13 @@ func TestJobManager_Recovery_PendingReExecuted(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		s, err := manager.GetStatus(ctx, "pending-recover-test")
+		if err != nil {
+			return false
+		}
+		return s.GetStatus() == jobcore.JobStatusCompleted
+	}, 2*time.Second, 10*time.Millisecond)
 
 	status, err := manager.GetStatus(ctx, "pending-recover-test")
 	if err != nil {
@@ -713,7 +719,13 @@ func TestJobManager_Recovery_RunningMarkedFailed(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		s, err := manager.GetStatus(ctx, "running-recover-test")
+		if err != nil {
+			return false
+		}
+		return s.GetStatus() == jobcore.JobStatusFailed
+	}, 2*time.Second, 10*time.Millisecond)
 
 	status, err := manager.GetStatus(ctx, "running-recover-test")
 	if err != nil {
@@ -740,7 +752,13 @@ func TestJobManager_Recovery_NoRecoveryOption(t *testing.T) {
 		t.Fatalf("Create failed: %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		s, err := manager.GetStatus(ctx, "no-recovery-test")
+		if err != nil {
+			return false
+		}
+		return s.GetStatus() == jobcore.JobStatusPending
+	}, 2*time.Second, 10*time.Millisecond)
 
 	status, err := manager.GetStatus(ctx, "no-recovery-test")
 	if err != nil {
