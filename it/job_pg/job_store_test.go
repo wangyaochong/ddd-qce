@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -14,17 +13,13 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func openTestDBForJob(t *testing.T) *sql.DB {
-	return testutil.OpenTestDB(t, "ddd_qce_job_test")
-}
-
 func TestPgJobStore_Contract(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	jobtest.TestJobStoreContract(t, func() jobcore.JobStore { return pgjob.NewJobStore(db) })
 }
 
 func TestPgJobStore_CreateAndGet(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	store := pgjob.NewJobStore(db)
 	ctx := context.Background()
 
@@ -56,7 +51,7 @@ func TestPgJobStore_CreateAndGet(t *testing.T) {
 }
 
 func TestPgJobStore_Update(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	store := pgjob.NewJobStore(db)
 	ctx := context.Background()
 
@@ -82,7 +77,7 @@ func TestPgJobStore_Update(t *testing.T) {
 }
 
 func TestPgJobStore_Delete(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	store := pgjob.NewJobStore(db)
 	ctx := context.Background()
 
@@ -104,7 +99,7 @@ func TestPgJobStore_Delete(t *testing.T) {
 }
 
 func TestPgJobStore_DeleteNotFound(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	store := pgjob.NewJobStore(db)
 	ctx := context.Background()
 
@@ -115,7 +110,7 @@ func TestPgJobStore_DeleteNotFound(t *testing.T) {
 }
 
 func TestPgJobStore_List(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	store := pgjob.NewJobStore(db)
 	ctx := context.Background()
 
@@ -139,7 +134,7 @@ func TestPgJobStore_List(t *testing.T) {
 }
 
 func TestPgJobStore_GetNotFound(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	store := pgjob.NewJobStore(db)
 	ctx := context.Background()
 
@@ -150,7 +145,7 @@ func TestPgJobStore_GetNotFound(t *testing.T) {
 }
 
 func TestRecordJobExecution(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	ctx := context.Background()
 
 	started := time.Now().Truncate(time.Microsecond)
@@ -175,7 +170,7 @@ type testGenReportResult struct {
 }
 
 func TestPgJobStore_TypedRoundTrip(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	reg := jobcore.NewTypeRegistry()
 	reg.Register(&testGenReportCmd{})
 	reg.Register(&testGenReportResult{})
@@ -210,7 +205,7 @@ func TestPgJobStore_TypedRoundTrip(t *testing.T) {
 }
 
 func TestPgJobStore_TypedResultRoundTrip(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	reg := jobcore.NewTypeRegistry()
 	reg.Register(&testGenReportCmd{})
 	reg.Register(&testGenReportResult{})
@@ -247,7 +242,7 @@ func TestPgJobStore_TypedResultRoundTrip(t *testing.T) {
 }
 
 func TestPgJobStore_WithoutRegistry_Fallback(t *testing.T) {
-	db := openTestDBForJob(t)
+	db := testutil.OpenTestDB(t)
 	store := pgjob.NewJobStore(db)
 	ctx := context.Background()
 

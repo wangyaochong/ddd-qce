@@ -1,7 +1,6 @@
 package pg
 
 import (
-	"database/sql"
 	"testing"
 
 	corepg "github.com/ddd-qce/core/pg"
@@ -10,7 +9,7 @@ import (
 )
 
 func TestMigrate(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.OpenTestDB(t)
 	defer db.Close()
 
 	var count int
@@ -24,7 +23,7 @@ func TestMigrate(t *testing.T) {
 }
 
 func TestDropAll(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.OpenTestDB(t)
 	defer db.Close()
 
 	if err := corepg.DropAll(db); err != nil {
@@ -40,8 +39,4 @@ func TestDropAll(t *testing.T) {
 	if err := corepg.Migrate(db); err != nil {
 		t.Fatalf("re-migrate failed: %v", err)
 	}
-}
-
-func openTestDB(t *testing.T) *sql.DB {
-	return testutil.OpenTestDB(t, "ddd_qce_test")
 }

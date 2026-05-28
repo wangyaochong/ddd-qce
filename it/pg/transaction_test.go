@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
 	"github.com/ddd-qce/core/aspect/builtin/builtintest"
@@ -11,12 +10,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func openTestDBForTx(t *testing.T) *sql.DB {
-	return testutil.OpenTestDB(t, "ddd_qce_tx_test")
-}
-
 func TestPgTransactionManager_SimpleBeginCommit(t *testing.T) {
-	db := openTestDBForTx(t)
+	db := testutil.OpenTestDB(t)
 	m := corepg.NewTransactionManager(db)
 	ctx := context.Background()
 
@@ -44,7 +39,7 @@ func TestPgTransactionManager_SimpleBeginCommit(t *testing.T) {
 }
 
 func TestPgTransactionManager_SimpleRollback(t *testing.T) {
-	db := openTestDBForTx(t)
+	db := testutil.OpenTestDB(t)
 	m := corepg.NewTransactionManager(db)
 	ctx := context.Background()
 
@@ -69,7 +64,7 @@ func TestPgTransactionManager_SimpleRollback(t *testing.T) {
 }
 
 func TestPgTransactionManager_NestedBeginCommit(t *testing.T) {
-	db := openTestDBForTx(t)
+	db := testutil.OpenTestDB(t)
 	m := corepg.NewTransactionManager(db)
 	ctx := context.Background()
 
@@ -111,7 +106,7 @@ func TestPgTransactionManager_NestedBeginCommit(t *testing.T) {
 }
 
 func TestPgTransactionManager_NestedRollbackAbortsOuter(t *testing.T) {
-	db := openTestDBForTx(t)
+	db := testutil.OpenTestDB(t)
 	m := corepg.NewTransactionManager(db)
 	ctx := context.Background()
 
@@ -146,7 +141,7 @@ func TestPgTransactionManager_NestedRollbackAbortsOuter(t *testing.T) {
 }
 
 func TestPgTransactionManager_NoTransaction(t *testing.T) {
-	db := openTestDBForTx(t)
+	db := testutil.OpenTestDB(t)
 	m := corepg.NewTransactionManager(db)
 	ctx := context.Background()
 
@@ -159,7 +154,7 @@ func TestPgTransactionManager_NoTransaction(t *testing.T) {
 }
 
 func TestPgTransactionManager_RollbackThenBeginAgain(t *testing.T) {
-	db := openTestDBForTx(t)
+	db := testutil.OpenTestDB(t)
 	m := corepg.NewTransactionManager(db)
 	ctx := context.Background()
 
@@ -192,7 +187,7 @@ func TestPgTransactionManager_RollbackThenBeginAgain(t *testing.T) {
 }
 
 func TestPgTransactionManager_Contract(t *testing.T) {
-	db := openTestDBForTx(t)
+	db := testutil.OpenTestDB(t)
 	m := corepg.NewTransactionManager(db)
 	builtintest.TestTransactionManagerContract(t, m, func() context.Context {
 		return context.Background()

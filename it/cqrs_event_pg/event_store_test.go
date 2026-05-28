@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -23,12 +22,8 @@ type testDomainEvent struct {
 func (e *testDomainEvent) AggregateID() string   { return e.BaseEvent.AggregateID() }
 func (e *testDomainEvent) OccurredAt() time.Time { return e.BaseEvent.OccurredAt() }
 
-func openTestDBForEventStore(t *testing.T) *sql.DB {
-	return testutil.OpenTestDB(t, "ddd_qce_event_test")
-}
-
 func TestPgEventStore_AppendAndLoad(t *testing.T) {
-	db := openTestDBForEventStore(t)
+	db := testutil.OpenTestDB(t)
 	store, err := pgevent.NewEventSourceStore[*testDomainEvent](db)
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
@@ -60,7 +55,7 @@ func TestPgEventStore_AppendAndLoad(t *testing.T) {
 }
 
 func TestPgEventStore_LoadAfterVersion(t *testing.T) {
-	db := openTestDBForEventStore(t)
+	db := testutil.OpenTestDB(t)
 	store, err := pgevent.NewEventSourceStore[*testDomainEvent](db)
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
@@ -86,7 +81,7 @@ func TestPgEventStore_LoadAfterVersion(t *testing.T) {
 }
 
 func TestPgEventStore_LoadNotFound(t *testing.T) {
-	db := openTestDBForEventStore(t)
+	db := testutil.OpenTestDB(t)
 	store, err := pgevent.NewEventSourceStore[*testDomainEvent](db)
 	if err != nil {
 		t.Fatalf("create event store: %v", err)
@@ -103,7 +98,7 @@ func TestPgEventStore_LoadNotFound(t *testing.T) {
 }
 
 func TestPgEventStore_WithFactory(t *testing.T) {
-	db := openTestDBForEventStore(t)
+	db := testutil.OpenTestDB(t)
 	store, err := pgevent.NewEventSourceStore[*testDomainEvent](db, pgevent.WithFactory[*testDomainEvent](func() *testDomainEvent {
 		return &testDomainEvent{}
 	}))
@@ -131,7 +126,7 @@ func TestPgEventStore_WithFactory(t *testing.T) {
 var _ event.Event = (*testDomainEvent)(nil)
 
 func TestPgEventStore_Contract(t *testing.T) {
-	db := openTestDBForEventStore(t)
+	db := testutil.OpenTestDB(t)
 	eventtest.TestEventStoreContract(t, func() event.EventSourceStore[*eventtest.TestEvent] {
 		store, err := pgevent.NewEventSourceStore[*eventtest.TestEvent](db)
 		if err != nil {

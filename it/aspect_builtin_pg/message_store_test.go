@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -14,12 +13,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func openTestDB(t *testing.T) *sql.DB {
-	return testutil.OpenTestDB(t, "ddd_qce_aspect_test")
-}
-
 func TestPgMessageStore_RecordCommand(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.OpenTestDB(t)
 	store := pgmsg.NewMessageStore(db)
 	ctx := context.Background()
 
@@ -49,7 +44,7 @@ func TestPgMessageStore_RecordCommand(t *testing.T) {
 }
 
 func TestPgMessageStore_RecordCommandWithError(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.OpenTestDB(t)
 	store := pgmsg.NewMessageStore(db)
 	ctx := context.Background()
 
@@ -75,7 +70,7 @@ func TestPgMessageStore_RecordCommandWithError(t *testing.T) {
 }
 
 func TestPgMessageStore_RecordQuery(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.OpenTestDB(t)
 	store := pgmsg.NewMessageStore(db)
 	ctx := context.Background()
 
@@ -104,7 +99,7 @@ func TestPgMessageStore_RecordQuery(t *testing.T) {
 }
 
 func TestPgMessageStore_RecordEvent(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.OpenTestDB(t)
 	store := pgmsg.NewMessageStore(db)
 	ctx := context.Background()
 
@@ -138,7 +133,7 @@ func TestPgMessageStore_RecordEvent(t *testing.T) {
 }
 
 func TestPgMessageStore_RecordEventHandler(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.OpenTestDB(t)
 	store := pgmsg.NewMessageStore(db)
 	ctx := context.Background()
 
@@ -171,7 +166,7 @@ func TestPgMessageStore_RecordEventHandler(t *testing.T) {
 }
 
 func TestPgMessageStore_WithContextTransaction(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.OpenTestDB(t)
 	store := pgmsg.NewMessageStore(db)
 	ctx := context.Background()
 
@@ -209,7 +204,7 @@ func TestPgMessageStore_WithContextTransaction(t *testing.T) {
 }
 
 func TestPgMessageStore_Contract(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.OpenTestDB(t)
 	store := pgmsg.NewMessageStore(db)
 	builtintest.TestMessageStoreContract(t, store)
 }

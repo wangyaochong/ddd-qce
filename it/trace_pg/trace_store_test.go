@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -14,12 +13,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func openTestDBForTrace(t *testing.T) *sql.DB {
-	return testutil.OpenTestDB(t, "ddd_qce_trace_test")
-}
-
 func TestPgTraceStore_RecordAndGetTrace(t *testing.T) {
-	db := openTestDBForTrace(t)
+	db := testutil.OpenTestDB(t)
 	store := pgtrace.NewTraceStore(db)
 	ctx := context.Background()
 
@@ -58,7 +53,7 @@ func TestPgTraceStore_RecordAndGetTrace(t *testing.T) {
 }
 
 func TestPgTraceStore_GetTraceNotFound(t *testing.T) {
-	db := openTestDBForTrace(t)
+	db := testutil.OpenTestDB(t)
 	store := pgtrace.NewTraceStore(db)
 	ctx := context.Background()
 
@@ -69,7 +64,7 @@ func TestPgTraceStore_GetTraceNotFound(t *testing.T) {
 }
 
 func TestPgTraceStore_RecordSpanWithError(t *testing.T) {
-	db := openTestDBForTrace(t)
+	db := testutil.OpenTestDB(t)
 	store := pgtrace.NewTraceStore(db)
 	ctx := context.Background()
 
@@ -93,7 +88,7 @@ func TestPgTraceStore_RecordSpanWithError(t *testing.T) {
 }
 
 func TestPgTraceStore_ListTraces(t *testing.T) {
-	db := openTestDBForTrace(t)
+	db := testutil.OpenTestDB(t)
 	store := pgtrace.NewTraceStore(db)
 	ctx := context.Background()
 
@@ -116,14 +111,14 @@ func TestPgTraceStore_ListTraces(t *testing.T) {
 }
 
 func TestPgTraceStore_Contract(t *testing.T) {
-	db := openTestDBForTrace(t)
+	db := testutil.OpenTestDB(t)
 	tracetest.TestTraceStoreContract(t, func() trace.TraceStore {
 		return pgtrace.NewTraceStore(db)
 	})
 }
 
 func TestPgTraceStore_ListTracesByName(t *testing.T) {
-	db := openTestDBForTrace(t)
+	db := testutil.OpenTestDB(t)
 	store := pgtrace.NewTraceStore(db)
 	ctx := context.Background()
 

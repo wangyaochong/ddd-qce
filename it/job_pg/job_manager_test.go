@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -15,10 +14,6 @@ import (
 	"github.com/ddd-qce/it/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
-
-func openTestDBForJobManager(t *testing.T) *sql.DB {
-	return testutil.OpenTestDB(t, "ddd_qce_job_mgr_test")
-}
 
 type testReportCommand struct {
 	command.BaseCommand
@@ -36,7 +31,7 @@ func (h *testReportHandler) Handle(ctx context.Context, cmd *testReportCommand) 
 }
 
 func TestPgJobManager_Recovery_PendingReExecuted(t *testing.T) {
-	db := openTestDBForJobManager(t)
+	db := testutil.OpenTestDB(t)
 	registry := jobcore.NewTypeRegistry()
 	registry.Register(&testReportCommand{})
 
@@ -71,7 +66,7 @@ func TestPgJobManager_Recovery_PendingReExecuted(t *testing.T) {
 }
 
 func TestPgJobManager_Recovery_RunningMarkedFailed(t *testing.T) {
-	db := openTestDBForJobManager(t)
+	db := testutil.OpenTestDB(t)
 	registry := jobcore.NewTypeRegistry()
 	registry.Register(&testReportCommand{})
 	store := pgjob.NewJobStore(db, pgjob.WithTypeRegistry(registry))
@@ -107,7 +102,7 @@ func TestPgJobManager_Recovery_RunningMarkedFailed(t *testing.T) {
 }
 
 func TestPgJobManager_Recovery_FailedWithRetry(t *testing.T) {
-	db := openTestDBForJobManager(t)
+	db := testutil.OpenTestDB(t)
 	registry := jobcore.NewTypeRegistry()
 	registry.Register(&testReportCommand{})
 	store := pgjob.NewJobStore(db, pgjob.WithTypeRegistry(registry))
