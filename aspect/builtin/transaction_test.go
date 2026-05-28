@@ -7,7 +7,6 @@ import (
 	"errors"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
@@ -263,12 +262,10 @@ func TestTransactionAspect_Timeout(t *testing.T) {
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 
-	time.Sleep(10 * time.Millisecond)
-
-	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}

@@ -162,13 +162,14 @@ func TestTransactionAspect_BeginRollback(t *testing.T) {
 func TestNewEventBus_Direct(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
-	handler := &testEventHandler{}
+	handler := &testEventHandler{done: make(chan struct{})}
 	bus.SubscribeHandler(handler)
 	ctx := context.Background()
 	bus.Publish(ctx, &testDomainEvent{BaseEvent: event.NewBaseEvent("A1", time.Now())})
-	time.Sleep(50 * time.Millisecond)
-	if !handler.called {
-		t.Error("expected handler to be called")
+	select {
+	case <-handler.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for handler")
 	}
 }
 
@@ -176,10 +177,14 @@ type testDomainEvent struct {
 	event.BaseEvent
 }
 
-type testEventHandler struct{ called bool }
+type testEventHandler struct {
+	called bool
+	done   chan struct{}
+}
 
 func (h *testEventHandler) Handle(ctx context.Context, evt *testDomainEvent) error {
 	h.called = true
+	close(h.done)
 	return nil
 }
 
@@ -355,8 +360,9 @@ func TestTraceFilter_AllFields(t *testing.T) {
 
 func TestTraceStore_RecordAndGetTrace(t *testing.T) {
 	ts := trace.NewInMemoryTraceStore()
+	defer ts.Close()
 	ctx := context.Background()
-	span := &trace.Span{ID: "s1", TraceID: "t1", Type: trace.SpanTypeCommand, Name: "cmd", Status: trace.SpanStatusSuccess}
+	span := &trace.Span{ID: "s1", TraceID: "t1", Type: trace.SpanTypeCommand, Name: "cmd", Status: trace.SpanStatusSuccess, StartedAt: time.Now()}
 	ts.RecordSpan(ctx, span)
 	spans, _ := ts.GetTrace(ctx, "t1")
 	if len(spans) != 1 {
@@ -366,9 +372,10 @@ func TestTraceStore_RecordAndGetTrace(t *testing.T) {
 
 func TestTraceStore_ListTraces_WithFilter(t *testing.T) {
 	ts := trace.NewInMemoryTraceStore()
+	defer ts.Close()
 	ctx := context.Background()
-	ts.RecordSpan(ctx, &trace.Span{ID: "s1", TraceID: "t1", Type: trace.SpanTypeCommand, Name: "cmd", Status: trace.SpanStatusSuccess})
-	ts.RecordSpan(ctx, &trace.Span{ID: "s2", TraceID: "t2", Type: trace.SpanTypeQuery, Name: "qry", Status: trace.SpanStatusSuccess})
+	ts.RecordSpan(ctx, &trace.Span{ID: "s1", TraceID: "t1", Type: trace.SpanTypeCommand, Name: "cmd", Status: trace.SpanStatusSuccess, StartedAt: time.Now()})
+	ts.RecordSpan(ctx, &trace.Span{ID: "s2", TraceID: "t2", Type: trace.SpanTypeQuery, Name: "qry", Status: trace.SpanStatusSuccess, StartedAt: time.Now()})
 
 	all, _ := ts.ListTraces(ctx, trace.TraceFilter{})
 	if len(all) != 2 {
