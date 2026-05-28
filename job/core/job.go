@@ -238,6 +238,7 @@ type JobManager interface {
 	Cancel(ctx context.Context, jobID string) error
 	Retry(ctx context.Context, jobID string) error
 	Wait(ctx context.Context, jobID string, timeout time.Duration) (*Job, error)
+	WaitForRunning(ctx context.Context, jobID string, timeout time.Duration) (*Job, error)
 	ListByStatus(ctx context.Context, status JobStatus) ([]*Job, error)
 	Shutdown(ctx context.Context) error
 }

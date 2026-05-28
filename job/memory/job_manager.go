@@ -23,6 +23,7 @@ type JobManager struct {
 	onStoreError jobcore.StoreErrorHandler
 	wg           sync.WaitGroup
 	stopCh       chan struct{}
+	closed       bool
 	recovery     bool
 }
 
@@ -267,14 +268,40 @@ func (m *JobManager) Wait(ctx context.Context, jobID string, timeout time.Durati
 	}
 }
 
+func (m *JobManager) WaitForRunning(ctx context.Context, jobID string, timeout time.Duration) (*jobcore.Job, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		job, err := m.store.Get(ctx, jobID)
+		if err != nil {
+			return nil, fmt.Errorf("job %s: %w", jobID, err)
+		}
+		if job.GetStatus() == jobcore.JobStatusRunning || job.GetStatus() == jobcore.JobStatusCompleted || job.GetStatus() == jobcore.JobStatusFailed || job.GetStatus() == jobcore.JobStatusCancelled {
+			return job, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("job %s timed out waiting for running state", jobID)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
 func (m *JobManager) ListByStatus(ctx context.Context, status jobcore.JobStatus) ([]*jobcore.Job, error) {
 	return m.store.List(ctx, status)
 }
 
 func (m *JobManager) Shutdown(ctx context.Context) error {
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return nil
+	}
+	m.closed = true
 	close(m.stopCh)
 
-	m.mu.Lock()
 	for id, cancel := range m.cancelers {
 		cancel()
 		delete(m.cancelers, id)
