@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewTraceID(t *testing.T) {
@@ -510,15 +512,12 @@ func TestInMemoryTraceStore_BackgroundCleanup(t *testing.T) {
 	old := time.Now().Add(-200 * time.Millisecond)
 	store.RecordSpan(ctx, &Span{ID: "s1", TraceID: "t1", StartedAt: old})
 
-	time.Sleep(200 * time.Millisecond)
-
-	store.mu.RLock()
-	spanCount := len(store.spans)
-	store.mu.RUnlock()
-
-	if spanCount != 0 {
-		t.Errorf("expected 0 spans after background cleanup, got %d", spanCount)
-	}
+	require.Eventually(t, func() bool {
+		store.mu.RLock()
+		count := len(store.spans)
+		store.mu.RUnlock()
+		return count == 0
+	}, 2*time.Second, 20*time.Millisecond)
 }
 
 func TestInMemoryTraceStore_Evict_EmptyAfterAllExpired(t *testing.T) {
