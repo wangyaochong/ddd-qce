@@ -2,13 +2,10 @@ package config
 
 import (
 	"context"
-	"errors"
 	"os"
 
 	"github.com/pelletier/go-toml/v2"
 )
-
-var ErrInvalidConfig = errors.New("invalid configuration")
 
 type Config struct {
 	App    AppConfig    `toml:"app"`
@@ -58,12 +55,6 @@ func DefaultConfig() *Config {
 			Level: "debug",
 		},
 	}
-}
-
-type HandlerConfig struct {
-	Commands map[string]string `toml:"commands"`
-	Queries  map[string]string `toml:"queries"`
-	Events   map[string]string `toml:"events"`
 }
 
 type ConfigLoader struct {
