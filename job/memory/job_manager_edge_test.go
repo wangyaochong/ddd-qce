@@ -177,14 +177,12 @@ func TestJobManager_CancelledJob_ErrorDuringExecution(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
-
-	time.Sleep(100 * time.Millisecond)
 
 	close(continueExecuteJob)
 
@@ -214,14 +212,12 @@ func TestJobManager_CancelledJob_SuccessDuringExecution(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
-
-	time.Sleep(100 * time.Millisecond)
 
 	close(continueExecuteJob)
 
@@ -265,7 +261,7 @@ func TestJobManager_Cancel_SecondGetFails(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil {
@@ -362,7 +358,7 @@ func TestJobManager_Cancel_JobCompletedBetweenGets(t *testing.T) {
 	}
 	jobID = job.ID
 
-	time.Sleep(200 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil {
@@ -399,7 +395,7 @@ func TestJobManager_Cancel_JobCancelledBetweenGets(t *testing.T) {
 	}
 	jobID = job.ID
 
-	time.Sleep(200 * time.Millisecond)
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
 
 	err = manager.Cancel(ctx, job.ID)
 	if err != nil {
