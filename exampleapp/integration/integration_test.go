@@ -41,7 +41,7 @@ func wireTestApp(t *testing.T, storeType string) *infrastructure.AppContext {
 	if err != nil {
 		t.Fatalf("wire app (%s): %v", storeType, err)
 	}
-	t.Cleanup(func() { app.Close() })
+	t.Cleanup(func() { app.Close(context.Background()) })
 	return app
 }
 
@@ -65,13 +65,12 @@ func TestFullOrderLifecycle(t *testing.T) {
 		ctx := context.Background()
 
 		placed, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, app.CmdBus, &ordercommand.PlaceOrderCommand{
-			UserID: "user-001",
-			Items:  []ordercommand.ItemInput{{ProductID: "laptop", ProductName: "Laptop", Price: 999.99, Quantity: 1}},
+			UserID: orderdomain.NewUserID("user-001"),
+			Items:  []ordercommand.ItemInput{{ProductID: orderdomain.NewProductID("laptop"), ProductName: "Laptop", Price: 999.99, Quantity: 1}},
 		})
 		if err != nil {
 			t.Fatalf("place order failed: %v", err)
 		}
-		time.Sleep(100 * time.Millisecond)
 
 		_, err = command.Dispatch[*ordercommand.ConfirmPaymentCommand, *ordercommand.ConfirmPaymentResult](ctx, app.CmdBus, &ordercommand.ConfirmPaymentCommand{OrderID: placed.OrderID})
 		if err != nil {
@@ -106,8 +105,8 @@ func TestEventSourcingFullCycle(t *testing.T) {
 	runForBothStores(t, func(t *testing.T, app *infrastructure.AppContext) {
 		ctx := context.Background()
 
-		order, _ := orderdomain.NewOrder(context.Background(), "ORD-ES-FULL", "user-001", []*orderdomain.OrderItem{
-			orderdomain.NewOrderItem("laptop", "Laptop", 999, 1),
+		order, _ := orderdomain.NewOrder(context.Background(), orderdomain.NewOrderID("ORD-ES-FULL"), orderdomain.NewUserID("user-001"), []*orderdomain.OrderItem{
+			orderdomain.NewOrderItem(orderdomain.NewProductID("laptop"), "Laptop", 999, 1),
 		})
 		if err := app.EventSourcedRepo.Save(ctx, order); err != nil {
 			t.Fatalf("save failed: %v", err)
@@ -120,7 +119,7 @@ func TestEventSourcingFullCycle(t *testing.T) {
 		if loaded.ID() != "ORD-ES-FULL" {
 			t.Errorf("expected ORD-ES-FULL, got %s", loaded.ID())
 		}
-		if loaded.UserID != "user-001" {
+		if loaded.UserID != orderdomain.NewUserID("user-001") {
 			t.Errorf("expected user-001, got %s", loaded.UserID)
 		}
 
@@ -142,7 +141,7 @@ func TestJobManagerFullCycle(t *testing.T) {
 	}))
 	ctx := context.Background()
 
-	job, err := jobMgr.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: "O1"})
+	job, err := jobMgr.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderdomain.NewOrderID("O1")})
 	if err != nil {
 		t.Fatalf("submit failed: %v", err)
 	}
@@ -168,8 +167,8 @@ func TestJobManager_Cancel(t *testing.T) {
 	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus)
 	ctx := context.Background()
 
-	job, _ := jobMgr.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: "O2"}, jobcore.WithTimeout(5*time.Second))
-	time.Sleep(50 * time.Millisecond)
+	job, _ := jobMgr.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderdomain.NewOrderID("O2")}, jobcore.WithTimeout(5*time.Second))
+	_, _ = jobMgr.WaitForRunning(ctx, job.ID, 2*time.Second)
 	if err := jobMgr.Cancel(ctx, job.ID); err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
@@ -183,8 +182,8 @@ func TestJobManager_Retry(t *testing.T) {
 	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus)
 	ctx := context.Background()
 
-	job, _ := jobMgr.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: "O3"}, jobcore.WithTimeout(1*time.Millisecond))
-	time.Sleep(200 * time.Millisecond)
+	job, _ := jobMgr.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderdomain.NewOrderID("O3")}, jobcore.WithTimeout(1*time.Millisecond))
+	_, _ = jobMgr.Wait(ctx, job.ID, 2*time.Second)
 
 	status, _ := jobMgr.GetStatus(ctx, job.ID)
 	if status.GetStatus() == jobcore.JobStatusFailed {
@@ -203,7 +202,6 @@ func TestConcurrentEventHandlers_MultiError(t *testing.T) {
 	err := cqrsevent.Dispatch[*orderevent.OrderPlacedEvent](ctx, eventBus, &orderevent.OrderPlacedEvent{
 		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), UserID: "u1", TotalAmount: 100,
 	})
-	time.Sleep(100 * time.Millisecond)
 	if err == nil {
 		t.Log("MultiError not triggered (one handler succeeded), which is acceptable for concurrent publish")
 	} else {
@@ -243,8 +241,8 @@ func TestTraceContextPropagation(t *testing.T) {
 func TestRepositoryDelete(t *testing.T) {
 	runForBothStores(t, func(t *testing.T, app *infrastructure.AppContext) {
 		ctx := context.Background()
-		order, _ := orderdomain.NewOrder(context.Background(), "ORD-DEL", "user-001", []*orderdomain.OrderItem{
-			orderdomain.NewOrderItem("laptop", "Laptop", 999, 1),
+		order, _ := orderdomain.NewOrder(context.Background(), orderdomain.NewOrderID("ORD-DEL"), orderdomain.NewUserID("user-001"), []*orderdomain.OrderItem{
+			orderdomain.NewOrderItem(orderdomain.NewProductID("laptop"), "Laptop", 999, 1),
 		})
 		app.OrderRepo.Save(ctx, order)
 		found, err := app.OrderRepo.FindByID(ctx, "ORD-DEL")
@@ -273,8 +271,8 @@ func TestCustomAspect(t *testing.T) {
 	cmdBus.RegisterHandler(ordercommand.NewPlaceOrderHandler(repo, eventBus))
 	ctx := context.Background()
 	_, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, cmdBus, &ordercommand.PlaceOrderCommand{
-		UserID: "user-001",
-		Items:  []ordercommand.ItemInput{{ProductID: "laptop", ProductName: "Laptop", Price: 999, Quantity: 1}},
+		UserID: orderdomain.NewUserID("user-001"),
+		Items:  []ordercommand.ItemInput{{ProductID: orderdomain.NewProductID("laptop"), ProductName: "Laptop", Price: 999, Quantity: 1}},
 	})
 	if err != nil {
 		t.Fatalf("dispatch failed: %v", err)
