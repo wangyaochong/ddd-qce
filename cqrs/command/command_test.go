@@ -48,6 +48,14 @@ func (b *testCommandBus) RegisterHandler(handler any) error {
 	return nil
 }
 
+func (b *testCommandBus) RegisteredTypes() []string {
+	names := make([]string, 0, len(b.handlers))
+	for k := range b.handlers {
+		names = append(names, k)
+	}
+	return names
+}
+
 func TestCommandNameOf(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -67,6 +75,19 @@ func TestCommandNameOf(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCommandNameOf_NilPanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("CommandNameOf(nil) should panic")
+		}
+		if msg, ok := r.(string); !ok || msg != "command: CommandNameOf called with nil command" {
+			t.Errorf("unexpected panic message: %v", r)
+		}
+	}()
+	CommandNameOf(nil)
 }
 
 func TestDispatch_Success(t *testing.T) {

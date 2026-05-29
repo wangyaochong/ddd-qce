@@ -150,26 +150,6 @@ func (a *PersistenceAspect) AfterPublish(ctx context.Context, evt any, err error
 		evtData = json.RawMessage(fmt.Sprintf(`{"_marshal_error":%q}`, marshalErr.Error()))
 	}
 	aggregateID, eventType := extractEventMeta(evt)
-	handlerType := extractHandlerType(ctx)
-
-	if handlerType != "" {
-		entry := &EventHandlerEntry{
-			TraceID:     trace.GetTraceID(ctx),
-			SpanID:      trace.GetSpanID(ctx),
-			AggregateID: aggregateID,
-			EventType:   eventType,
-			HandlerType: handlerType,
-			Duration:    duration,
-			CreatedAt:   time.Now(),
-		}
-		if err != nil {
-			entry.Status = "error"
-			entry.Error = err.Error()
-		} else {
-			entry.Status = "success"
-		}
-		return a.store.RecordEventHandler(ctx, entry)
-	}
 
 	entry := &EventEntry{
 		TraceID:     trace.GetTraceID(ctx),
@@ -183,7 +163,30 @@ func (a *PersistenceAspect) AfterPublish(ctx context.Context, evt any, err error
 	if err != nil {
 		entry.Error = err.Error()
 	}
-	return a.store.RecordEvent(ctx, entry)
+	if recErr := a.store.RecordEvent(ctx, entry); recErr != nil {
+		return recErr
+	}
+
+	handlerType := extractHandlerType(ctx)
+	if handlerType != "" {
+		handlerEntry := &EventHandlerEntry{
+			TraceID:     trace.GetTraceID(ctx),
+			SpanID:      trace.GetSpanID(ctx),
+			AggregateID: aggregateID,
+			EventType:   eventType,
+			HandlerType: handlerType,
+			Duration:    duration,
+			CreatedAt:   time.Now(),
+		}
+		if err != nil {
+			handlerEntry.Status = "error"
+			handlerEntry.Error = err.Error()
+		} else {
+			handlerEntry.Status = "success"
+		}
+		return a.store.RecordEventHandler(ctx, handlerEntry)
+	}
+	return nil
 }
 
 type handlerTypeKey struct{}

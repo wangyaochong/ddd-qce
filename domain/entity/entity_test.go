@@ -155,3 +155,40 @@ func TestEntity_UnmarshalJSON_EmptyID(t *testing.T) {
 		t.Error("unmarshal with empty ID should error")
 	}
 }
+
+func TestEntity_ToJSON(t *testing.T) {
+	e := MustNewEntity("user-1")
+	j := e.ToJSON()
+	if j.ID != "user-1" {
+		t.Errorf("ToJSON().ID = %q, want %q", j.ID, "user-1")
+	}
+}
+
+func TestEntity_FromJSON(t *testing.T) {
+	e := &Entity{}
+	e.FromJSON(EntityJSON{ID: "user-2"})
+	if e.ID() != "user-2" {
+		t.Errorf("FromJSON: ID = %q, want %q", e.ID(), "user-2")
+	}
+}
+
+func TestEntity_ToJSON_FromJSON_RoundTrip(t *testing.T) {
+	e := MustNewEntity("user-1")
+	j := e.ToJSON()
+
+	e2 := &Entity{}
+	e2.FromJSON(j)
+	if e2.ID() != "user-1" {
+		t.Errorf("round-trip ID = %q, want %q", e2.ID(), "user-1")
+	}
+}
+
+func TestMustNewEntity_PanicWithEmptyID(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("MustNewEntity('') should panic")
+		}
+	}()
+	MustNewEntity("")
+}

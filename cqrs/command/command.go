@@ -14,7 +14,16 @@ type BaseCommand struct{}
 
 func (BaseCommand) isCommand() {}
 
+// CommandNameOf returns the short type name of the given command.
+// Panics if cmd is nil — nil is a programming error that should be
+// caught early rather than silently producing an empty string that
+// could be used as a map key or persisted to storage.
+// Note: a typed nil pointer like (*MyCmd)(nil) is NOT nil (the
+// interface has a type), so CommandNameOf((*MyCmd)(nil)) == "MyCmd".
 func CommandNameOf(cmd any) string {
+	if cmd == nil {
+		panic("command: CommandNameOf called with nil command")
+	}
 	t := reflect.TypeOf(cmd)
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
@@ -29,6 +38,11 @@ type CommandHandler[T Command, R any] interface {
 type CommandBus interface {
 	Execute(ctx context.Context, cmd any) (any, error)
 	RegisterHandler(handler any) error
+	RegisteredTypes() []string
+}
+
+type Shutdownable interface {
+	Shutdown(ctx context.Context) error
 }
 
 func Dispatch[T Command, R any](ctx context.Context, bus CommandBus, cmd T) (R, error) {

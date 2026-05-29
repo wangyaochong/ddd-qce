@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/trace"
+	domainevent "github.com/ddd-qce/core/domain/event"
 )
 
 type testEvent struct {
@@ -26,7 +27,7 @@ type testEventBus struct {
 	handlers      map[string]any
 	subscribeErr  error
 	publishErr    error
-	publishedEvts []Event
+	publishedEvts []domainevent.Event
 }
 
 func (b *testEventBus) SubscribeHandler(handler any) error {
@@ -38,7 +39,15 @@ func (b *testEventBus) SubscribeHandler(handler any) error {
 	return nil
 }
 
-func (b *testEventBus) Publish(ctx context.Context, evt Event) error {
+func (b *testEventBus) SubscribedTypes() []string {
+	names := make([]string, 0, len(b.handlers))
+	for k := range b.handlers {
+		names = append(names, k)
+	}
+	return names
+}
+
+func (b *testEventBus) Publish(ctx context.Context, evt domainevent.Event) error {
 	if b.publishErr != nil {
 		return b.publishErr
 	}
@@ -148,7 +157,6 @@ func TestEventTypeOf(t *testing.T) {
 		{"struct type", testEvent{}, "testEvent"},
 		{"pointer type", &testEvent{}, "testEvent"},
 		{"base event", BaseEvent{}, "BaseEvent"},
-		{"nil event", nil, ""},
 	}
 
 	for _, tt := range tests {
@@ -159,6 +167,19 @@ func TestEventTypeOf(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEventTypeOf_NilPanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("EventTypeOf(nil) should panic")
+		}
+		if msg, ok := r.(string); !ok || msg != "event: EventTypeOf called with nil event" {
+			t.Errorf("unexpected panic message: %v", r)
+		}
+	}()
+	EventTypeOf(nil)
 }
 
 func TestDispatch_Success(t *testing.T) {
@@ -208,7 +229,79 @@ func (s *testEventSourceStore) LoadAll(ctx context.Context, afterPosition int64,
 	return nil, nil
 }
 
+func TestBaseEvent_Restore(t *testing.T) {
+	var e BaseEvent
+	now := time.Now()
+	e.Restore("agg-1", now, "corr-1", "caus-1")
+
+	if e.AggregateID() != "agg-1" {
+		t.Errorf("AggregateID() = %q, want %q", e.AggregateID(), "agg-1")
+	}
+	if !e.OccurredAt().Equal(now) {
+		t.Errorf("OccurredAt() = %v, want %v", e.OccurredAt(), now)
+	}
+	if e.CorrelationID() != "corr-1" {
+		t.Errorf("CorrelationID() = %q, want %q", e.CorrelationID(), "corr-1")
+	}
+	if e.CausationID() != "caus-1" {
+		t.Errorf("CausationID() = %q, want %q", e.CausationID(), "caus-1")
+	}
+}
+
+func TestRestoreBaseEvent_WithRestorer(t *testing.T) {
+	evt := &testEvent{}
+	now := time.Now()
+	RestoreBaseEvent(evt, "agg-1", now, "corr-1", "caus-1")
+
+	if evt.AggregateID() != "agg-1" {
+		t.Errorf("AggregateID() = %q, want %q", evt.AggregateID(), "agg-1")
+	}
+	if !evt.OccurredAt().Equal(now) {
+		t.Errorf("OccurredAt() = %v, want %v", evt.OccurredAt(), now)
+	}
+	if evt.CorrelationID() != "corr-1" {
+		t.Errorf("CorrelationID() = %q, want %q", evt.CorrelationID(), "corr-1")
+	}
+	if evt.CausationID() != "caus-1" {
+		t.Errorf("CausationID() = %q, want %q", evt.CausationID(), "caus-1")
+	}
+}
+
+type noRestoreEvent struct {
+	BaseEvent
+}
+
+func (e *noRestoreEvent) Restore(string, time.Time, string, string) {}
+
+func TestRestoreBaseEvent_WithoutRestore(t *testing.T) {
+	evt := &noRestoreEvent{}
+	now := time.Now()
+	RestoreBaseEvent(evt, "agg-1", now, "corr-1", "caus-1")
+
+	if evt.AggregateID() != "" {
+		t.Errorf("AggregateID() = %q, want empty for no-op Restore", evt.AggregateID())
+	}
+}
+
+type bareEvent struct {
+	aggregateID string
+}
+
+func (e *bareEvent) AggregateID() string     { return e.aggregateID }
+func (e *bareEvent) OccurredAt() time.Time   { return time.Time{} }
+func (e *bareEvent) CorrelationID() string   { return "" }
+func (e *bareEvent) CausationID() string     { return "" }
+
+func TestRestoreBaseEvent_EventWithoutRestoreMethod(t *testing.T) {
+	evt := &bareEvent{aggregateID: "original"}
+	now := time.Now()
+	RestoreBaseEvent(evt, "agg-new", now, "corr-1", "caus-1")
+
+	if evt.AggregateID() != "original" {
+		t.Errorf("AggregateID() = %q, want %q (no-op since no Restore method)", evt.AggregateID(), "original")
+	}
+}
+
 func TestEventHandlerInterface(t *testing.T) {
-	// Verify EventHandler interface is implemented correctly
 	var _ EventHandler[testEvent] = (*testEventHandler)(nil)
 }

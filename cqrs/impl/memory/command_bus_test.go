@@ -258,3 +258,109 @@ func (a *testCommandAspect) AfterCommand(ctx context.Context, cmd any, r any, er
 	}
 	return nil
 }
+
+func TestCommandBus_RegisteredTypes(t *testing.T) {
+	bus := NewCommandBus()
+	RegisterCommand(bus, &testCreateUserHandler{})
+	RegisterCommand(bus, &testDeleteUserHandler{})
+
+	types := bus.RegisteredTypes()
+	if len(types) != 2 {
+		t.Fatalf("expected 2 registered types, got %d", len(types))
+	}
+
+	nameSet := make(map[string]bool)
+	for _, name := range types {
+		nameSet[name] = true
+	}
+	if !nameSet["testCreateUserCommand"] {
+		t.Error("expected testCreateUserCommand in registered types")
+	}
+	if !nameSet["testDeleteUserCommand"] {
+		t.Error("expected testDeleteUserCommand in registered types")
+	}
+}
+
+func TestCommandBus_RegisteredTypes_Empty(t *testing.T) {
+	bus := NewCommandBus()
+	types := bus.RegisteredTypes()
+	if len(types) != 0 {
+		t.Errorf("expected 0 types, got %d", len(types))
+	}
+}
+
+func TestCommandBus_Shutdown(t *testing.T) {
+	bus := NewCommandBus()
+	RegisterCommand(bus, &testCreateUserHandler{})
+
+	err := bus.Shutdown(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, err = bus.Execute(context.Background(), &testCreateUserCommand{Name: "test"})
+	if !errors.Is(err, ErrBusClosed) {
+		t.Errorf("expected ErrBusClosed after shutdown, got %v", err)
+	}
+}
+
+func TestCommandBus_Shutdown_WaitsForInFlight(t *testing.T) {
+	bus := NewCommandBus()
+	RegisterCommand(bus, &testSlowCommandHandler{})
+
+	started := make(chan struct{})
+	done := make(chan struct{})
+
+	go func() {
+		close(started)
+		_, _ = bus.Execute(context.Background(), &testSlowCommand{Duration: 100 * time.Millisecond})
+		close(done)
+	}()
+
+	<-started
+	time.Sleep(20 * time.Millisecond)
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		shutdownDone <- bus.Shutdown(context.Background())
+	}()
+
+	select {
+	case <-shutdownDone:
+		t.Fatal("shutdown should wait for in-flight command")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	<-done
+
+	select {
+	case err := <-shutdownDone:
+		if err != nil {
+			t.Fatalf("unexpected shutdown error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown timed out waiting for in-flight command")
+	}
+}
+
+func TestCommandBus_Shutdown_ContextCancelled(t *testing.T) {
+	bus := NewCommandBus()
+	RegisterCommand(bus, &testSlowCommandHandler{})
+
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		_, _ = bus.Execute(context.Background(), &testSlowCommand{Duration: 5 * time.Second})
+	}()
+
+	<-started
+	time.Sleep(20 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := bus.Shutdown(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got %v", err)
+	}
+}

@@ -9,6 +9,7 @@ import (
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/repository"
 	"github.com/ddd-qce/core/domain/repository/repositorytest"
@@ -17,8 +18,8 @@ import (
 
 type testAggregate struct {
 	aggregate.AggregateRoot
-	Name  string
-	Count int
+	Name  string `json:"name"`
+	Count int    `json:"count"`
 }
 
 func newTestAggregate(id string) *testAggregate {
@@ -31,39 +32,22 @@ func newTestAggregate(id string) *testAggregate {
 	return a
 }
 
-func (a *testAggregate) When(_ event.Event) error { return nil }
+func (a *testAggregate) When(_ domainevent.Event) error { return nil }
 
-func (a *testAggregate) Apply(ctx context.Context, evt event.Event) error {
+func (a *testAggregate) Apply(ctx context.Context, evt domainevent.Event) error {
 	return aggregate.ApplyChange(a, ctx, evt)
 }
 
-func (a *testAggregate) LoadFromHistory(events []event.Event) error {
+func (a *testAggregate) LoadFromHistory(events []domainevent.Event) error {
 	return aggregate.LoadFromHistory(a, events)
 }
 
-type testAggregateJSON struct {
-	aggregate.AggregateRootJSON
-	Name  string `json:"name"`
-	Count int   `json:"count"`
-}
-
 func (a *testAggregate) MarshalJSON() ([]byte, error) {
-	return json.Marshal(testAggregateJSON{
-		AggregateRootJSON: a.AggregateRoot.ToJSON(),
-		Name:              a.Name,
-		Count:             a.Count,
-	})
+	return aggregate.MarshalAggregate(a)
 }
 
 func (a *testAggregate) UnmarshalJSON(data []byte) error {
-	var aux testAggregateJSON
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	a.AggregateRoot.FromJSON(aux.AggregateRootJSON)
-	a.Name = aux.Name
-	a.Count = aux.Count
-	return nil
+	return aggregate.UnmarshalAggregate(data, a)
 }
 
 var _ repository.Repository[*testAggregate] = (*InMemoryRepository[*testAggregate])(nil)
@@ -451,6 +435,175 @@ func TestInMemoryEventSourcedRepository_OptimisticLock(t *testing.T) {
 	var ole *rep.OptimisticLockError
 	if !errors.As(err, &ole) {
 		t.Fatalf("expected *OptimisticLockError, got %T: %v", err, err)
+	}
+}
+
+type failingSerializer[T aggregate.AggregateRef] struct {
+	serializeErr   error
+	deserializeErr error
+}
+
+func (f *failingSerializer[T]) Serialize(_ T) ([]byte, error) {
+	if f.serializeErr != nil {
+		return nil, f.serializeErr
+	}
+	return json.Marshal(newTestAggregate("fake"))
+}
+
+func (f *failingSerializer[T]) Deserialize(_ []byte) (T, error) {
+	var zero T
+	if f.deserializeErr != nil {
+		return zero, f.deserializeErr
+	}
+	return zero, nil
+}
+
+func TestWithSerializer_SetsCustomSerializer(t *testing.T) {
+	custom := &failingSerializer[*testAggregate]{}
+	repo := NewRepository[*testAggregate](WithSerializer[*testAggregate](custom))
+	if repo.serializer != custom {
+		t.Error("WithSerializer did not set the custom serializer")
+	}
+}
+
+func TestWithSerializer_DefaultSerializer(t *testing.T) {
+	repo := NewRepository[*testAggregate]()
+	if _, ok := repo.serializer.(repository.JSONSerializer[*testAggregate]); !ok {
+		t.Errorf("expected default JSONSerializer, got %T", repo.serializer)
+	}
+}
+
+func TestWithSerializer_DeepCopySerializeError(t *testing.T) {
+	serializeErr := errors.New("serialize failed")
+	repo := NewRepository[*testAggregate](WithSerializer[*testAggregate](
+		&failingSerializer[*testAggregate]{serializeErr: serializeErr},
+	))
+	ctx := context.Background()
+
+	agg := newTestAggregate("ser-err")
+	err := repo.Save(ctx, agg)
+	if err == nil {
+		t.Fatal("expected error from Save with failing serializer, got nil")
+	}
+	if !errors.Is(err, serializeErr) {
+		t.Errorf("expected error wrapping serializeErr, got: %v", err)
+	}
+}
+
+func TestWithSerializer_DeepCopyDeserializeError(t *testing.T) {
+	deserializeErr := errors.New("deserialize failed")
+	repo := NewRepository[*testAggregate](WithSerializer[*testAggregate](
+		&failingSerializer[*testAggregate]{deserializeErr: deserializeErr},
+	))
+	ctx := context.Background()
+
+	agg := newTestAggregate("deser-err")
+	err := repo.Save(ctx, agg)
+	if err == nil {
+		t.Fatal("expected error from Save with failing deserializer, got nil")
+	}
+	if !errors.Is(err, deserializeErr) {
+		t.Errorf("expected error wrapping deserializeErr, got: %v", err)
+	}
+}
+
+func TestWithSerializer_FindByIDDeserializeError(t *testing.T) {
+	repo := NewRepository[*testAggregate]()
+	ctx := context.Background()
+
+	agg := newTestAggregate("find-deser")
+	if err := repo.Save(ctx, agg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	deserializeErr := errors.New("deserialize failed")
+	repo.serializer = &failingSerializer[*testAggregate]{deserializeErr: deserializeErr}
+
+	_, err := repo.FindByID(ctx, "find-deser")
+	if err == nil {
+		t.Fatal("expected error from FindByID with failing deserializer, got nil")
+	}
+	if !errors.Is(err, deserializeErr) {
+		t.Errorf("expected error wrapping deserializeErr, got: %v", err)
+	}
+}
+
+func TestWithEventSourcedSerializer_SetsCustomSerializer(t *testing.T) {
+	custom := &failingSerializer[*testAggregate]{}
+	repo := NewEventSourcedRepository[*testAggregate](WithEventSourcedSerializer[*testAggregate](custom))
+	if repo.serializer != custom {
+		t.Error("WithEventSourcedSerializer did not set the custom serializer")
+	}
+}
+
+func TestWithEventSourcedSerializer_DefaultSerializer(t *testing.T) {
+	repo := NewEventSourcedRepository[*testAggregate]()
+	if _, ok := repo.serializer.(repository.JSONSerializer[*testAggregate]); !ok {
+		t.Errorf("expected default JSONSerializer, got %T", repo.serializer)
+	}
+}
+
+func TestWithEventSourcedSerializer_DeepCopySerializeError(t *testing.T) {
+	serializeErr := errors.New("serialize failed")
+	repo := NewEventSourcedRepository[*testAggregate](WithEventSourcedSerializer[*testAggregate](
+		&failingSerializer[*testAggregate]{serializeErr: serializeErr},
+	))
+	ctx := context.Background()
+
+	agg := newTestAggregate("es-ser-err")
+	if err := agg.Apply(ctx, event.NewBaseEvent("es-ser-err", time.Now())); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	err := repo.Save(ctx, agg)
+	if err == nil {
+		t.Fatal("expected error from Save with failing serializer, got nil")
+	}
+	if !errors.Is(err, serializeErr) {
+		t.Errorf("expected error wrapping serializeErr, got: %v", err)
+	}
+}
+
+func TestWithEventSourcedSerializer_DeepCopyDeserializeError(t *testing.T) {
+	deserializeErr := errors.New("deserialize failed")
+	repo := NewEventSourcedRepository[*testAggregate](WithEventSourcedSerializer[*testAggregate](
+		&failingSerializer[*testAggregate]{deserializeErr: deserializeErr},
+	))
+	ctx := context.Background()
+
+	agg := newTestAggregate("es-deser-err")
+	if err := agg.Apply(ctx, event.NewBaseEvent("es-deser-err", time.Now())); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	err := repo.Save(ctx, agg)
+	if err == nil {
+		t.Fatal("expected error from Save with failing deserializer, got nil")
+	}
+	if !errors.Is(err, deserializeErr) {
+		t.Errorf("expected error wrapping deserializeErr, got: %v", err)
+	}
+}
+
+func TestWithEventSourcedSerializer_LoadDeserializeError(t *testing.T) {
+	repo := NewEventSourcedRepository[*testAggregate]()
+	ctx := context.Background()
+
+	agg := newTestAggregate("es-load-deser")
+	if err := agg.Apply(ctx, event.NewBaseEvent("es-load-deser", time.Now())); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if err := repo.Save(ctx, agg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	deserializeErr := errors.New("deserialize failed")
+	repo.serializer = &failingSerializer[*testAggregate]{deserializeErr: deserializeErr}
+
+	_, err := repo.Load(ctx, "es-load-deser")
+	if err == nil {
+		t.Fatal("expected error from Load with failing deserializer, got nil")
+	}
+	if !errors.Is(err, deserializeErr) {
+		t.Errorf("expected error wrapping deserializeErr, got: %v", err)
 	}
 }
 

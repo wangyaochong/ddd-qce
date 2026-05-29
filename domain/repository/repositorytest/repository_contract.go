@@ -2,21 +2,21 @@ package repositorytest
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/repository"
 )
 
 type TestAggregate struct {
 	aggregate.AggregateRoot
-	Name   string
-	Amount int
+	Name   string `json:"name"`
+	Amount int    `json:"amount"`
 }
 
 func NewTestAggregate(id string) *TestAggregate {
@@ -29,39 +29,26 @@ func NewTestAggregate(id string) *TestAggregate {
 	return a
 }
 
-func (a *TestAggregate) When(_ event.Event) error { return nil }
+func (a *TestAggregate) When(_ domainevent.Event) error { return nil }
 
-func (a *TestAggregate) Apply(ctx context.Context, evt event.Event) error {
+func (a *TestAggregate) Apply(ctx context.Context, evt domainevent.Event) error {
 	return aggregate.ApplyChange(a, ctx, evt)
 }
 
-func (a *TestAggregate) LoadFromHistory(events []event.Event) error {
+func (a *TestAggregate) LoadFromHistory(events []domainevent.Event) error {
 	return aggregate.LoadFromHistory(a, events)
 }
 
-type testAggregateJSON struct {
-	aggregate.AggregateRootJSON
-	Name   string `json:"name"`
-	Amount int   `json:"amount"`
-}
-
 func (a *TestAggregate) MarshalJSON() ([]byte, error) {
-	return json.Marshal(testAggregateJSON{
-		AggregateRootJSON: a.AggregateRoot.ToJSON(),
-		Name:              a.Name,
-		Amount:            a.Amount,
-	})
+	return aggregate.MarshalAggregate(a)
 }
 
 func (a *TestAggregate) UnmarshalJSON(data []byte) error {
-	var aux testAggregateJSON
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	a.AggregateRoot.FromJSON(aux.AggregateRootJSON)
-	a.Name = aux.Name
-	a.Amount = aux.Amount
-	return nil
+	return aggregate.UnmarshalAggregate(data, a)
+}
+
+type testContractEvent struct {
+	cqrsevent.BaseEvent
 }
 
 func TestRepositoryContract[T aggregate.AggregateRef](t *testing.T, repo repository.Repository[T], newAgg func(id string) T, setFields func(agg T)) {
@@ -144,7 +131,7 @@ func TestRepositoryContract[T aggregate.AggregateRef](t *testing.T, repo reposit
 			t.Errorf("error should wrap ErrConcurrency, got: %v", err)
 		}
 
-		evt := event.NewBaseEvent("contract-lock", time.Now())
+		evt := &testContractEvent{BaseEvent: cqrsevent.NewBaseEvent("contract-lock", time.Now())}
 		if err := aggregate.ApplyChange(loaded, ctx, evt); err != nil {
 			t.Fatalf("ApplyChange on loaded: %v", err)
 		}
@@ -168,7 +155,7 @@ func TestRepositoryContract[T aggregate.AggregateRef](t *testing.T, repo reposit
 			t.Fatalf("FindByID: %v", err)
 		}
 
-		evt := event.NewBaseEvent("contract-update", time.Now())
+		evt := &testContractEvent{BaseEvent: cqrsevent.NewBaseEvent("contract-update", time.Now())}
 		if err := aggregate.ApplyChange(loaded, ctx, evt); err != nil {
 			t.Fatalf("ApplyChange: %v", err)
 		}

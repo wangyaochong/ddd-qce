@@ -7,12 +7,14 @@ import (
 func Migrate(db *sql.DB) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS ddd_domain_events (
-			id            BIGSERIAL PRIMARY KEY,
-			aggregate_id  TEXT NOT NULL,
-			event_type    TEXT NOT NULL,
-			event_data    JSONB NOT NULL,
-			occurred_at   TIMESTAMPTZ NOT NULL,
-			version       INT NOT NULL DEFAULT 0,
+			id             BIGSERIAL PRIMARY KEY,
+			aggregate_id   TEXT NOT NULL,
+			event_type     TEXT NOT NULL,
+			event_data     JSONB NOT NULL,
+			occurred_at    TIMESTAMPTZ NOT NULL,
+			version        INT NOT NULL DEFAULT 0,
+			correlation_id TEXT NOT NULL DEFAULT '',
+			causation_id   TEXT NOT NULL DEFAULT '',
 			UNIQUE(aggregate_id, version)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_ddd_events_aggregate ON ddd_domain_events(aggregate_id, version)`,
@@ -71,7 +73,7 @@ func Migrate(db *sql.DB) error {
 			trace_id      TEXT,
 			span_id       TEXT,
 			command_type  TEXT NOT NULL,
-			command_data  JSONB NOT NULL,
+			command_data  JSONB,
 			result_type   TEXT,
 			result_data   JSONB,
 			error         TEXT,
@@ -152,6 +154,26 @@ func DropAll(db *sql.DB) error {
 	}
 	for _, t := range tables {
 		if _, err := db.Exec("DROP TABLE IF EXISTS " + t + " CASCADE"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func TruncateAll(db *sql.DB) error {
+	tables := []string{
+		"ddd_event_handler_log",
+		"ddd_event_log",
+		"ddd_query_log",
+		"ddd_command_log",
+		"ddd_aggregate_snapshots",
+		"ddd_spans",
+		"ddd_job_execution_log",
+		"ddd_jobs",
+		"ddd_domain_events",
+	}
+	for _, t := range tables {
+		if _, err := db.Exec("TRUNCATE TABLE " + t + " CASCADE"); err != nil {
 			return err
 		}
 	}

@@ -66,3 +66,6 @@ coverage_*
 
 /ddd
 cmd/ddd/ddd
+
+ddd-lint
+ddd-shop

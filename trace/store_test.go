@@ -185,3 +185,88 @@ func TestMatchesFilter_TraceID(t *testing.T) {
 		t.Error("expected filter by non-existent trace ID to not match")
 	}
 }
+
+func TestInMemoryTraceStore_WithBackgroundCleanup(t *testing.T) {
+	store := NewInMemoryTraceStore(
+		WithTTL(100*time.Millisecond),
+		WithBackgroundCleanup(50*time.Millisecond),
+	)
+	defer store.Close()
+
+	ctx := context.Background()
+	store.RecordSpan(ctx, &Span{
+		TraceID:   "trace-old",
+		ID:        "span-old",
+		Name:      "OldSpan",
+		StartedAt: time.Now().Add(-time.Hour),
+	})
+
+	time.Sleep(200 * time.Millisecond)
+
+	traceIDs, err := store.ListTraces(ctx, TraceFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(traceIDs) != 0 {
+		t.Errorf("expected 0 traces after background cleanup, got %d", len(traceIDs))
+	}
+}
+
+func TestInMemoryTraceStore_WithTTL(t *testing.T) {
+	store := NewInMemoryTraceStore(WithTTL(1 * time.Hour))
+	ctx := context.Background()
+
+	store.RecordSpan(ctx, &Span{
+		TraceID:   "trace-old",
+		ID:        "span-old",
+		Name:      "OldSpan",
+		StartedAt: time.Now().Add(-2 * time.Hour),
+	})
+
+	store.RecordSpan(ctx, &Span{
+		TraceID:   "trace-new",
+		ID:        "span-new",
+		Name:      "NewSpan",
+		StartedAt: time.Now(),
+	})
+
+	traceIDs, err := store.ListTraces(ctx, TraceFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(traceIDs) != 1 || traceIDs[0] != "trace-new" {
+		t.Errorf("expected only trace-new after TTL eviction, got %v", traceIDs)
+	}
+}
+
+func TestInMemoryTraceStore_WithMaxSpans(t *testing.T) {
+	store := NewInMemoryTraceStore(WithMaxSpans(2))
+	ctx := context.Background()
+
+	store.RecordSpan(ctx, &Span{
+		TraceID:   "trace-1",
+		ID:        "span-1",
+		Name:      "Span1",
+		StartedAt: time.Now(),
+	})
+	store.RecordSpan(ctx, &Span{
+		TraceID:   "trace-2",
+		ID:        "span-2",
+		Name:      "Span2",
+		StartedAt: time.Now(),
+	})
+	store.RecordSpan(ctx, &Span{
+		TraceID:   "trace-3",
+		ID:        "span-3",
+		Name:      "Span3",
+		StartedAt: time.Now(),
+	})
+
+	traceIDs, err := store.ListTraces(ctx, TraceFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(traceIDs) != 2 {
+		t.Errorf("expected 2 traces after max spans eviction, got %d", len(traceIDs))
+	}
+}

@@ -24,8 +24,8 @@ func (h *ReserveInventoryHandler) Handle(ctx context.Context, cmd *ReserveInvent
 	}
 
 	cqrsevent.Dispatch[*inventoryevent.InventoryReservedEvent](ctx, h.EventBus, &inventoryevent.InventoryReservedEvent{
-		BaseEvent: domainevent.WithCorrelation(ctx, cmd.OrderID),
-		ProductID: cmd.ProductID,
+		BaseEvent: domainevent.WithCorrelation(ctx, cmd.OrderID.String()),
+		ProductID: cmd.ProductID.String(),
 		Quantity:  cmd.Quantity,
 	})
 
@@ -47,8 +47,8 @@ func (h *ReleaseInventoryHandler) Handle(ctx context.Context, cmd *ReleaseInvent
 	}
 
 	cqrsevent.Dispatch[*inventoryevent.InventoryReleasedEvent](ctx, h.EventBus, &inventoryevent.InventoryReleasedEvent{
-		BaseEvent: domainevent.WithCorrelation(ctx, cmd.OrderID),
-		ProductID: cmd.ProductID,
+		BaseEvent: domainevent.WithCorrelation(ctx, cmd.OrderID.String()),
+		ProductID: cmd.ProductID.String(),
 		Quantity:  cmd.Quantity,
 	})
 

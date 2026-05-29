@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/cqrs/query"
@@ -15,6 +16,8 @@ type QueryBus struct {
 	invokers map[reflect.Type]queryInvoker
 	chain    *aspect.AspectChain
 	mu       sync.RWMutex
+	closed   atomic.Bool
+	inFlight sync.WaitGroup
 }
 
 type queryInvoker func(query any, ctx context.Context) (any, error)
@@ -45,7 +48,7 @@ func RegisterQuery[T query.Query, R any](bus *QueryBus, handler query.QueryHandl
 
 func (b *QueryBus) RegisterHandler(handler any) error {
 	handlerType := reflect.TypeOf(handler)
-	queryType, ok := extractQueryHandlerQueryType(handlerType)
+	queryType, ok := extractHandlerPayloadType(handlerType)
 	if !ok {
 		return fmt.Errorf("RegisterHandler: handler must implement query.QueryHandler[T], got %T", handler)
 	}
@@ -66,6 +69,12 @@ func (b *QueryBus) RegisterHandler(handler any) error {
 }
 
 func (b *QueryBus) Execute(ctx context.Context, q any) (any, error) {
+	if b.closed.Load() {
+		return nil, ErrBusClosed
+	}
+	b.inFlight.Add(1)
+	defer b.inFlight.Done()
+
 	queryType := reflect.TypeOf(q)
 
 	b.mu.RLock()
@@ -79,36 +88,6 @@ func (b *QueryBus) Execute(ctx context.Context, q any) (any, error) {
 	return b.chain.ExecuteWithQueryAspects(ctx, q, func(ctx context.Context) (any, error) {
 		return inv(q, ctx)
 	})
-}
-
-func extractQueryHandlerQueryType(handlerType reflect.Type) (reflect.Type, bool) {
-	if handlerType.Kind() != reflect.Ptr {
-		for i := 0; i < handlerType.NumMethod(); i++ {
-			method := handlerType.Method(i)
-			if method.Name != "Handle" {
-				continue
-			}
-			return extractQueryTypeFromHandleMethod(method.Type), true
-		}
-		return nil, false
-	}
-
-	handleMethod, ok := handlerType.MethodByName("Handle")
-	if !ok {
-		return nil, false
-	}
-	qt := extractQueryTypeFromHandleMethod(handleMethod.Type)
-	if qt == nil {
-		return nil, false
-	}
-	return qt, true
-}
-
-func extractQueryTypeFromHandleMethod(methodType reflect.Type) reflect.Type {
-	if methodType.NumIn() != 3 {
-		return nil
-	}
-	return methodType.In(2)
 }
 
 func makeQueryInvoker(handler any, handlerType reflect.Type) (queryInvoker, error) {
@@ -134,4 +113,14 @@ func makeQueryInvoker(handler any, handlerType reflect.Type) (queryInvoker, erro
 		}
 		return nil, err
 	}, nil
+}
+
+func (b *QueryBus) RegisteredTypes() []string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return typeNamesFromMap(b.handlers)
+}
+
+func (b *QueryBus) Shutdown(ctx context.Context) error {
+	return shutdownBus(&b.closed, &b.inFlight, ctx)
 }

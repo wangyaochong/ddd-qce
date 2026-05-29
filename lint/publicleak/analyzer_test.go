@@ -10,5 +10,5 @@ import (
 
 func TestAnalyzer(t *testing.T) {
 	testdata := analysistest.TestData()
-	analysistest.Run(t, testdata, publicleak.Analyzer, "myproject/ddd/order/command", "myproject/ddd/order/event")
+	analysistest.Run(t, testdata, publicleak.Analyzer, "myproject/ddd/order/command", "myproject/ddd/order/event", "myproject/ddd/order/query")
 }

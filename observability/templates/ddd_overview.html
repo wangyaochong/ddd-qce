@@ -1,0 +1,67 @@
+{{define "ddd_overview"}}{{template "ddd_header" .}}
+
+<h1>DDD Overview</h1>
+
+<div class="stats">
+    <div class="stat"><div class="number">{{len .Tables}}</div><div class="label">Tables</div></div>
+    <div class="stat"><div class="number">{{.CmdCount}}</div><div class="label">Commands</div></div>
+    <div class="stat"><div class="number">{{.QueryCount}}</div><div class="label">Queries</div></div>
+    <div class="stat"><div class="number">{{.EventCount}}</div><div class="label">Events</div></div>
+</div>
+
+<div class="card">
+    <h2>Tables</h2>
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Description</th><th>Rows</th><th>Size</th></tr>
+        </thead>
+        <tbody>
+        {{range .Tables}}
+            <tr>
+                <td><a href="{{$.Prefix}}/ddd_schema/{{.Name}}">{{.Name}}</a></td>
+                <td>{{.Description}}</td>
+                <td>{{formatCount .RowCount}}</td>
+                <td>{{formatSize .DiskSize}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+
+{{if .Relations}}
+<div class="card">
+    <h2>Relations</h2>
+    {{range .Relations}}
+    <div class="relation-item">
+        <span class="relation-table">{{.FromTable}}</span><span class="relation-col">.{{.FromColumn}}</span>
+        <span class="relation-arrow">&rarr;</span>
+        <span class="relation-table">{{.ToTable}}</span><span class="relation-col">.{{.ToColumn}}</span>
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+{{if .AllStats}}
+<div class="card">
+    <h2>Operations</h2>
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Type</th><th>Count</th><th>Errors</th><th>Avg</th><th>P99</th></tr>
+        </thead>
+        <tbody>
+        {{range .AllStats}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td><span class="badge badge-{{.Type}}">{{.Type}}</span></td>
+                <td>{{.Count}}</td>
+                <td>{{if gt .ErrorCount 0}}<span class="err">{{.ErrorCount}}</span>{{else}}0{{end}}</td>
+                <td>{{.AvgDuration}}</td>
+                <td>{{.P99Duration}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{template "ddd_footer" .}}{{end}}

@@ -244,3 +244,108 @@ func (a *testQueryAspect) AfterQuery(ctx context.Context, query any, r any, err 
 	}
 	return nil
 }
+
+func TestQueryBus_RegisteredTypes(t *testing.T) {
+	bus := NewQueryBus()
+	RegisterQuery(bus, &testGetUserHandler{})
+	RegisterQuery(bus, &testListUsersHandler{})
+
+	types := bus.RegisteredTypes()
+	if len(types) != 2 {
+		t.Fatalf("expected 2 registered types, got %d", len(types))
+	}
+
+	nameSet := make(map[string]bool)
+	for _, name := range types {
+		nameSet[name] = true
+	}
+	if !nameSet["testGetUserQuery"] {
+		t.Error("expected testGetUserQuery in registered types")
+	}
+	if !nameSet["testListUsersQuery"] {
+		t.Error("expected testListUsersQuery in registered types")
+	}
+}
+
+func TestQueryBus_RegisteredTypes_Empty(t *testing.T) {
+	bus := NewQueryBus()
+	types := bus.RegisteredTypes()
+	if len(types) != 0 {
+		t.Errorf("expected 0 types, got %d", len(types))
+	}
+}
+
+func TestQueryBus_Shutdown(t *testing.T) {
+	bus := NewQueryBus()
+	RegisterQuery(bus, &testGetUserHandler{})
+
+	err := bus.Shutdown(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, err = bus.Execute(context.Background(), &testGetUserQuery{UserID: "1"})
+	if !errors.Is(err, ErrBusClosed) {
+		t.Errorf("expected ErrBusClosed after shutdown, got %v", err)
+	}
+}
+
+func TestQueryBus_Shutdown_WaitsForInFlight(t *testing.T) {
+	bus := NewQueryBus()
+	RegisterQuery(bus, &testSlowQueryHandler{})
+
+	started := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		close(started)
+		_, _ = bus.Execute(context.Background(), &testSlowQuery{Duration: 100 * time.Millisecond})
+		close(done)
+	}()
+
+	<-started
+	time.Sleep(20 * time.Millisecond)
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		shutdownDone <- bus.Shutdown(context.Background())
+	}()
+
+	select {
+	case <-shutdownDone:
+		t.Fatal("shutdown should wait for in-flight query")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	<-done
+
+	select {
+	case err := <-shutdownDone:
+		if err != nil {
+			t.Fatalf("unexpected shutdown error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown timed out")
+	}
+}
+
+func TestQueryBus_Shutdown_ContextCancelled(t *testing.T) {
+	bus := NewQueryBus()
+	RegisterQuery(bus, &testSlowQueryHandler{})
+
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		_, _ = bus.Execute(context.Background(), &testSlowQuery{Duration: 5 * time.Second})
+	}()
+
+	<-started
+	time.Sleep(20 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := bus.Shutdown(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got %v", err)
+	}
+}

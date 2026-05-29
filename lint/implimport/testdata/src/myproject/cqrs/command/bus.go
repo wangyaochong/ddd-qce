@@ -1,3 +1,5 @@
 package command
 
-type CommandBus interface{}
+type CommandBus interface {
+	RegisteredTypes() []string
+}

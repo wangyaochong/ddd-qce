@@ -82,3 +82,20 @@ func (e *SoftDeletableEntity) UnmarshalJSON(data []byte) error {
 	e.deletedAt = aux.DeletedAt
 	return nil
 }
+
+type SoftDeletableEntityJSON struct {
+	AuditableEntityJSON
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+}
+
+func (e *SoftDeletableEntity) ToJSON() SoftDeletableEntityJSON {
+	return SoftDeletableEntityJSON{
+		AuditableEntityJSON: e.AuditableEntity.ToJSON(),
+		DeletedAt:           e.deletedAt,
+	}
+}
+
+func (e *SoftDeletableEntity) FromJSON(j SoftDeletableEntityJSON) {
+	e.AuditableEntity.FromJSON(j.AuditableEntityJSON)
+	e.deletedAt = j.DeletedAt
+}

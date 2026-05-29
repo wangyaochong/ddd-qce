@@ -30,7 +30,7 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 	}
 
 	uid := uuid.New()
-	orderID := hex.EncodeToString(uid[:])
+	orderID := orderdomain.NewOrderID(hex.EncodeToString(uid[:]))
 	order, err := orderdomain.NewOrder(ctx, orderID, cmd.UserID, items)
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 		return nil, err
 	}
 
-	return &PlaceOrderResult{OrderID: order.ID(), TotalAmount: order.TotalAmount}, nil
+	return &PlaceOrderResult{OrderID: orderdomain.OrderID(order.ID()), TotalAmount: order.TotalAmount}, nil
 }
 
 type ConfirmPaymentHandler struct {
@@ -53,7 +53,7 @@ func NewConfirmPaymentHandler(repo repository.OrderRepositoryAdapter, eventBus c
 }
 
 func (h *ConfirmPaymentHandler) Handle(ctx context.Context, cmd *ConfirmPaymentCommand) (*ConfirmPaymentResult, error) {
-	order, err := h.Repo.FindByID(ctx, cmd.OrderID)
+	order, err := h.Repo.FindByID(ctx, cmd.OrderID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func NewShipOrderHandler(repo repository.OrderRepositoryAdapter, eventBus cqrsev
 }
 
 func (h *ShipOrderHandler) Handle(ctx context.Context, cmd *ShipOrderCommand) (*ShipOrderResult, error) {
-	order, err := h.Repo.FindByID(ctx, cmd.OrderID)
+	order, err := h.Repo.FindByID(ctx, cmd.OrderID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func NewCancelOrderHandler(repo repository.OrderRepositoryAdapter, eventBus cqrs
 }
 
 func (h *CancelOrderHandler) Handle(ctx context.Context, cmd *CancelOrderCommand) (*CancelOrderResult, error) {
-	order, err := h.Repo.FindByID(ctx, cmd.OrderID)
+	order, err := h.Repo.FindByID(ctx, cmd.OrderID.String())
 	if err != nil {
 		return nil, err
 	}

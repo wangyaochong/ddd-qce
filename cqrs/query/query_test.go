@@ -48,6 +48,14 @@ func (b *testQueryBus) RegisterHandler(handler any) error {
 	return nil
 }
 
+func (b *testQueryBus) RegisteredTypes() []string {
+	names := make([]string, 0, len(b.handlers))
+	for k := range b.handlers {
+		names = append(names, k)
+	}
+	return names
+}
+
 func TestQueryNameOf(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -57,7 +65,6 @@ func TestQueryNameOf(t *testing.T) {
 		{"struct type", testQuery{}, "testQuery"},
 		{"pointer type", &testQuery{}, "testQuery"},
 		{"base query", BaseQuery{}, "BaseQuery"},
-		{"nil query", nil, ""},
 	}
 
 	for _, tt := range tests {
@@ -68,6 +75,19 @@ func TestQueryNameOf(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestQueryNameOf_NilPanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("QueryNameOf(nil) should panic")
+		}
+		if msg, ok := r.(string); !ok || msg != "query: QueryNameOf called with nil query" {
+			t.Errorf("unexpected panic message: %v", r)
+		}
+	}()
+	QueryNameOf(nil)
 }
 
 func TestDispatch_Success(t *testing.T) {

@@ -1,0 +1,111 @@
+{{define "schema_tables"}}{{template "ddd_header" .}}
+
+<h1>DDD Tables</h1>
+
+<div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search tables..." oninput="filterTables()">
+</div>
+
+<div class="card">
+    <h2>Table Overview</h2>
+    <table>
+        <thead>
+            <tr>
+                <th onclick="sortTable(0)">Table Name <span class="sort-arrow" id="sort0"></span></th>
+                <th onclick="sortTable(1)">Description <span class="sort-arrow" id="sort1"></span></th>
+                <th onclick="sortTable(2)">Rows <span class="sort-arrow" id="sort2"></span></th>
+                <th onclick="sortTable(3)">Size <span class="sort-arrow" id="sort3"></span></th>
+                <th onclick="sortTable(4)">Last Updated <span class="sort-arrow" id="sort4"></span></th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+        {{range .Tables}}
+            <tr data-name="{{.Name}}" data-desc="{{.Description}}">
+                <td><a href="{{$.Prefix}}/ddd_schema/{{.Name}}">{{.Name}}</a></td>
+                <td>{{.Description}}</td>
+                <td>{{formatCount .RowCount}}</td>
+                <td>{{formatSize .DiskSize}}</td>
+                <td>{{formatTime .LastUpdated}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+
+{{if .Relations}}
+<div class="card relations">
+    <h2>Relations</h2>
+    {{range .Relations}}
+    <div class="relation-item">
+        <span class="relation-table">{{.FromTable}}</span><span class="relation-col">.{{.FromColumn}}</span>
+        <span class="relation-arrow">&rarr;</span>
+        <span class="relation-table">{{.ToTable}}</span><span class="relation-col">.{{.ToColumn}}</span>
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+<script>
+function filterTables() {
+    const query = document.getElementById('searchInput').value.toLowerCase();
+    const rows = document.querySelectorAll('#tableBody tr');
+    rows.forEach(row => {
+        const name = row.dataset.name.toLowerCase();
+        const desc = row.dataset.desc.toLowerCase();
+        row.style.display = (name.includes(query) || desc.includes(query)) ? '' : 'none';
+    });
+}
+
+let sortCol = -1;
+let sortAsc = true;
+
+function sortTable(colIdx) {
+    if (sortCol === colIdx) {
+        sortAsc = !sortAsc;
+    } else {
+        sortCol = colIdx;
+        sortAsc = true;
+    }
+
+    const tbody = document.getElementById('tableBody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    rows.sort((a, b) => {
+        let aVal = a.children[colIdx].textContent.trim();
+        let bVal = b.children[colIdx].textContent.trim();
+
+        if (colIdx === 2) {
+            aVal = parseNumeric(aVal);
+            bVal = parseNumeric(bVal);
+        } else if (colIdx === 3) {
+            aVal = parseByteSize(aVal);
+            bVal = parseByteSize(bVal);
+        }
+
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+            return sortAsc ? aVal - bVal : bVal - aVal;
+        }
+        return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+
+    document.querySelectorAll('.sort-arrow').forEach(el => el.textContent = '');
+    const arrow = document.getElementById('sort' + colIdx);
+    if (arrow) arrow.textContent = sortAsc ? '▲' : '▼';
+}
+
+function parseNumeric(s) {
+    const n = parseInt(s.replace(/,/g, ''), 10);
+    return isNaN(n) ? -1 : n;
+}
+
+function parseByteSize(s) {
+    const units = {'B': 1, 'KB': 1024, 'MB': 1024*1024, 'GB': 1024*1024*1024};
+    const match = s.match(/([\d.]+)\s*(B|KB|MB|GB)/i);
+    if (!match) return -1;
+    return parseFloat(match[1]) * (units[match[2].toUpperCase()] || 1);
+}
+</script>
+
+{{template "ddd_footer" .}}{{end}}

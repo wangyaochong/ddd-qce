@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 )
 
 type TestAggregate struct {
@@ -30,18 +31,18 @@ func NewTestAggregate(id, name string) *TestAggregate {
 	return ta
 }
 
-func (a *TestAggregate) When(_ event.Event) error { return nil }
+func (a *TestAggregate) When(_ domainevent.Event) error { return nil }
 
-func (a *TestAggregate) Apply(ctx context.Context, evt event.Event) error {
+func (a *TestAggregate) Apply(ctx context.Context, evt domainevent.Event) error {
 	return aggregate.ApplyChange(a, ctx, evt)
 }
 
-func (a *TestAggregate) LoadFromHistory(events []event.Event) error {
+func (a *TestAggregate) LoadFromHistory(events []domainevent.Event) error {
 	return aggregate.LoadFromHistory(a, events)
 }
 
 type TestEvent struct {
-	event.BaseEvent
+	cqrsevent.BaseEvent
 }
 
 type InMemoryRepository struct {
@@ -81,12 +82,12 @@ func (r *InMemoryRepository) Delete(ctx context.Context, id string) error {
 
 type InMemoryEventSourcingRepository struct {
 	mu     sync.Mutex
-	events map[string][]event.Event
+	events map[string][]domainevent.Event
 }
 
 func NewInMemoryEventSourcingRepository() *InMemoryEventSourcingRepository {
 	return &InMemoryEventSourcingRepository{
-		events: make(map[string][]event.Event),
+		events: make(map[string][]domainevent.Event),
 	}
 }
 
@@ -168,7 +169,7 @@ func TestEventSourcingRepository_SaveAndLoad(t *testing.T) {
 
 	agg := NewTestAggregate("agg-003", "Event Sourced")
 	agg.Apply(context.Background(), &TestEvent{
-		BaseEvent: event.NewBaseEvent("agg-003", time.Now()),
+		BaseEvent: cqrsevent.NewBaseEvent("agg-003", time.Now()),
 	})
 
 	err := repo.Save(ctx, agg)
@@ -197,3 +198,87 @@ func TestEventSourcingRepository_Load_NotFound(t *testing.T) {
 
 var _ Repository[*TestAggregate] = (*InMemoryRepository)(nil)
 var _ EventSourcingRepository[*TestAggregate] = (*InMemoryEventSourcingRepository)(nil)
+
+type JSONTestAggregate struct {
+	aggregate.AggregateRoot
+	Name    string `json:"name"`
+	Version int    `json:"version"`
+}
+
+func NewJSONTestAggregate(id, name string) *JSONTestAggregate {
+	a := &JSONTestAggregate{Name: name, Version: 0}
+	ar, err := aggregate.NewAggregateRoot(id)
+	if err != nil {
+		panic(err)
+	}
+	a.AggregateRoot = *ar
+	return a
+}
+
+func (a *JSONTestAggregate) When(_ domainevent.Event) error { return nil }
+
+func (a *JSONTestAggregate) Apply(ctx context.Context, evt domainevent.Event) error {
+	return aggregate.ApplyChange(a, ctx, evt)
+}
+
+func (a *JSONTestAggregate) LoadFromHistory(events []domainevent.Event) error {
+	return aggregate.LoadFromHistory(a, events)
+}
+
+func (a *JSONTestAggregate) MarshalJSON() ([]byte, error) {
+	return aggregate.MarshalAggregate(a)
+}
+
+func (a *JSONTestAggregate) UnmarshalJSON(data []byte) error {
+	return aggregate.UnmarshalAggregate(data, a)
+}
+
+func TestJSONSerializer_SerializeAndDeserialize(t *testing.T) {
+	serializer := JSONSerializer[*JSONTestAggregate]{}
+	agg := NewJSONTestAggregate("agg-100", "Serialize Test")
+	agg.Version = 3
+
+	data, err := serializer.Serialize(agg)
+	if err != nil {
+		t.Fatalf("unexpected error on serialize: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("expected non-empty serialized data")
+	}
+
+	result, err := serializer.Deserialize(data)
+	if err != nil {
+		t.Fatalf("unexpected error on deserialize: %v", err)
+	}
+	if result.Name != "Serialize Test" {
+		t.Errorf("expected Name 'Serialize Test', got %s", result.Name)
+	}
+	if result.Version != 3 {
+		t.Errorf("expected Version 3, got %d", result.Version)
+	}
+}
+
+func TestJSONSerializer_Serialize_NilAggregate(t *testing.T) {
+	serializer := JSONSerializer[*JSONTestAggregate]{}
+
+	data, err := serializer.Serialize(nil)
+	if err != nil {
+		t.Fatalf("unexpected error on serialize nil: %v", err)
+	}
+	if string(data) != "null" {
+		t.Errorf("expected 'null', got %s", string(data))
+	}
+}
+
+func TestJSONSerializer_Deserialize_InvalidJSON(t *testing.T) {
+	serializer := JSONSerializer[*JSONTestAggregate]{}
+
+	_, err := serializer.Deserialize([]byte("not valid json"))
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+}
+
+func TestJSONSerializer_ImplementsSnapshotSerializer(t *testing.T) {
+	var _ SnapshotSerializer[*JSONTestAggregate] = JSONSerializer[*JSONTestAggregate]{}
+}

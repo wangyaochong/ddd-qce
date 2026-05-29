@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/domain/repository"
 	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 )
@@ -66,13 +67,13 @@ func (r *OrderRepository) FindAll() []*orderdomain.Order {
 var _ repository.Repository[*orderdomain.Order] = (*OrderRepository)(nil)
 
 type OrderEventSourcedRepository struct {
-	eventStore event.EventSourceStore[event.Event]
+	eventStore event.EventSourceStore[domainevent.Event]
 	eventBus   event.EventBus
 	orderRepo  OrderRepositoryAdapter
 }
 
 func NewOrderEventSourcedRepository(
-	eventStore event.EventSourceStore[event.Event],
+	eventStore event.EventSourceStore[domainevent.Event],
 	eventBus event.EventBus,
 	orderRepo OrderRepositoryAdapter,
 ) *OrderEventSourcedRepository {
@@ -108,7 +109,7 @@ func (r *OrderEventSourcedRepository) Load(ctx context.Context, id string) (*ord
 	if len(events) == 0 {
 		return nil, fmt.Errorf("order %s not found in event store", id)
 	}
-	order := orderdomain.NewOrderForReplay(id)
+	order := orderdomain.NewOrderForReplay(orderdomain.OrderID(id))
 	if err := order.LoadFromHistory(events); err != nil {
 		return nil, fmt.Errorf("load order %s from history: %w", id, err)
 	}

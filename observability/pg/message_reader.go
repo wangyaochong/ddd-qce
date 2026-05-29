@@ -49,11 +49,22 @@ func (r *PgMessageStoreReader) QueryCommands(ctx context.Context, filter observa
 	var result []builtin.CommandEntry
 	for rows.Next() {
 		var e builtin.CommandEntry
-		var durationNs int64
-		if err := rows.Scan(&e.TraceID, &e.SpanID, &e.CommandType, &e.CommandData, &e.ResultType, &e.ResultData, &e.Error, &durationNs, &e.CreatedAt); err != nil {
+		var traceID, spanID, resultType sql.NullString
+		var commandData, resultData json.RawMessage
+		var errMsg sql.NullString
+		var durationNs sql.NullInt64
+		if err := rows.Scan(&traceID, &spanID, &e.CommandType, &commandData, &resultType, &resultData, &errMsg, &durationNs, &e.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan command: %w", err)
 		}
-		e.Duration = time.Duration(durationNs)
+		e.TraceID = traceID.String
+		e.SpanID = spanID.String
+		e.CommandData = commandData
+		e.ResultType = resultType.String
+		e.ResultData = resultData
+		e.Error = errMsg.String
+		if durationNs.Valid {
+			e.Duration = time.Duration(durationNs.Int64)
+		}
 		result = append(result, e)
 	}
 	return result, rows.Err()
@@ -87,11 +98,23 @@ func (r *PgMessageStoreReader) QueryQueries(ctx context.Context, filter observab
 	var result []builtin.QueryEntry
 	for rows.Next() {
 		var e builtin.QueryEntry
-		var durationNs int64
-		if err := rows.Scan(&e.TraceID, &e.SpanID, &e.QueryType, &e.QueryData, &e.ResultType, &e.ResultData, &e.Error, &durationNs, &e.CreatedAt); err != nil {
+		var traceID, spanID, resultType sql.NullString
+		var queryData json.RawMessage
+		var resultData json.RawMessage
+		var errMsg sql.NullString
+		var durationNs sql.NullInt64
+		if err := rows.Scan(&traceID, &spanID, &e.QueryType, &queryData, &resultType, &resultData, &errMsg, &durationNs, &e.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan query: %w", err)
 		}
-		e.Duration = time.Duration(durationNs)
+		e.TraceID = traceID.String
+		e.SpanID = spanID.String
+		e.QueryData = queryData
+		e.ResultType = resultType.String
+		e.ResultData = resultData
+		e.Error = errMsg.String
+		if durationNs.Valid {
+			e.Duration = time.Duration(durationNs.Int64)
+		}
 		result = append(result, e)
 	}
 	return result, rows.Err()
@@ -129,13 +152,25 @@ func (r *PgMessageStoreReader) QueryEvents(ctx context.Context, filter observabi
 	var result []builtin.EventEntry
 	for rows.Next() {
 		var e builtin.EventEntry
-		var durationNs int64
+		var traceID, spanID, aggregateID sql.NullString
 		var eventData json.RawMessage
-		if err := rows.Scan(&e.TraceID, &e.SpanID, &e.AggregateID, &e.EventType, &eventData, &e.HandlerCount, &e.Error, &durationNs, &e.CreatedAt); err != nil {
+		var handlerCount sql.NullInt64
+		var errMsg sql.NullString
+		var durationNs sql.NullInt64
+		if err := rows.Scan(&traceID, &spanID, &aggregateID, &e.EventType, &eventData, &handlerCount, &errMsg, &durationNs, &e.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan event: %w", err)
 		}
+		e.TraceID = traceID.String
+		e.SpanID = spanID.String
+		e.AggregateID = aggregateID.String
 		e.EventData = eventData
-		e.Duration = time.Duration(durationNs)
+		if handlerCount.Valid {
+			e.HandlerCount = int(handlerCount.Int64)
+		}
+		e.Error = errMsg.String
+		if durationNs.Valid {
+			e.Duration = time.Duration(durationNs.Int64)
+		}
 		result = append(result, e)
 	}
 	return result, rows.Err()
@@ -160,9 +195,9 @@ func buildWhereClause(parts []wherePart, status string, since time.Time) (string
 	}
 
 	if status == "error" {
-		conds = append(conds, "error != ''")
+		conds = append(conds, "(error IS NOT NULL AND error != '')")
 	} else if status == "success" {
-		conds = append(conds, "error = ''")
+		conds = append(conds, "(error IS NULL OR error = '')")
 	}
 
 	if !since.IsZero() {

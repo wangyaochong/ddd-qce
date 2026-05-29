@@ -8,14 +8,15 @@ import (
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
 )
 
-type globalEntry[T event.Event] struct {
+type globalEntry[T domainevent.Event] struct {
 	position int64
 	event    T
 }
 
-type EventSourceStore[T event.Event] struct {
+type EventSourceStore[T domainevent.Event] struct {
 	mu           sync.RWMutex
 	events       map[string][]T
 	globalEvents []globalEntry[T]
@@ -25,13 +26,13 @@ type EventSourceStore[T event.Event] struct {
 	shallowCopy  bool
 }
 
-type EventSourceStoreOption[T event.Event] func(*EventSourceStore[T])
+type EventSourceStoreOption[T domainevent.Event] func(*EventSourceStore[T])
 
-func WithFactory[T event.Event](factory func() T) EventSourceStoreOption[T] {
+func WithFactory[T domainevent.Event](factory func() T) EventSourceStoreOption[T] {
 	return func(s *EventSourceStore[T]) { s.newFunc = factory }
 }
 
-func NewEventSourceStore[T event.Event](opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
+func NewEventSourceStore[T domainevent.Event](opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
 	var zero T
 	t := reflect.TypeOf(zero)
 

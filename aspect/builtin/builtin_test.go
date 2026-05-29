@@ -362,6 +362,371 @@ func TestStdLogger_WithContext_TraceInfo(t *testing.T) {
 	}
 }
 
+func TestNewStdLogger(t *testing.T) {
+	logger := NewStdLogger()
+	if logger == nil {
+		t.Fatal("expected non-nil StdLogger")
+	}
+}
+
+func TestNewStdLoggerWithOptions(t *testing.T) {
+	logger := NewStdLoggerWithOptions(&slog.HandlerOptions{Level: slog.LevelWarn})
+	if logger == nil {
+		t.Fatal("expected non-nil StdLogger")
+	}
+}
+
+func TestStdLogger_Info(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	}
+	logger.Info("info message")
+	if !strings.Contains(buf.String(), "info message") {
+		t.Errorf("expected log to contain 'info message', got: %s", buf.String())
+	}
+}
+
+func TestStdLogger_Error(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError})),
+	}
+	logger.Error("error message")
+	if !strings.Contains(buf.String(), "error message") {
+		t.Errorf("expected log to contain 'error message', got: %s", buf.String())
+	}
+}
+
+func TestStdLogger_Debug(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+	}
+	logger.Debug("debug message")
+	if !strings.Contains(buf.String(), "debug message") {
+		t.Errorf("expected log to contain 'debug message', got: %s", buf.String())
+	}
+}
+
+func TestStdLogger_LogCommand_Success(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	}
+	ctx := trace.WithTrace(context.Background(), "trace-1", "span-1")
+	logger.LogCommand(ctx, "CreateOrder", 150*time.Millisecond, nil)
+
+	output := buf.String()
+	if !strings.Contains(output, "command executed") {
+		t.Error("expected 'command executed' in log")
+	}
+	if !strings.Contains(output, "CreateOrder") {
+		t.Error("expected command name in log")
+	}
+	if !strings.Contains(output, "trace-1") {
+		t.Error("expected trace_id in log")
+	}
+}
+
+func TestStdLogger_LogCommand_Error(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError})),
+	}
+	logger.LogCommand(context.Background(), "CreateOrder", 100*time.Millisecond, errors.New("fail"))
+
+	output := buf.String()
+	if !strings.Contains(output, "command failed") {
+		t.Error("expected 'command failed' in log")
+	}
+	if !strings.Contains(output, "CreateOrder") {
+		t.Error("expected command name in log")
+	}
+}
+
+func TestStdLogger_LogQuery_Success(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	}
+	ctx := trace.WithTrace(context.Background(), "trace-2", "span-2")
+	logger.LogQuery(ctx, "GetOrder", 50*time.Millisecond, nil)
+
+	output := buf.String()
+	if !strings.Contains(output, "query executed") {
+		t.Error("expected 'query executed' in log")
+	}
+	if !strings.Contains(output, "GetOrder") {
+		t.Error("expected query name in log")
+	}
+	if !strings.Contains(output, "trace-2") {
+		t.Error("expected trace_id in log")
+	}
+}
+
+func TestStdLogger_LogQuery_Error(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError})),
+	}
+	logger.LogQuery(context.Background(), "GetOrder", 50*time.Millisecond, errors.New("fail"))
+
+	output := buf.String()
+	if !strings.Contains(output, "query failed") {
+		t.Error("expected 'query failed' in log")
+	}
+}
+
+func TestStdLogger_LogEvent_Success(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	}
+	ctx := trace.WithTrace(context.Background(), "trace-3", "span-3")
+	logger.LogEvent(ctx, "OrderCreated", nil)
+
+	output := buf.String()
+	if !strings.Contains(output, "event published") {
+		t.Error("expected 'event published' in log")
+	}
+	if !strings.Contains(output, "OrderCreated") {
+		t.Error("expected event name in log")
+	}
+	if !strings.Contains(output, "trace-3") {
+		t.Error("expected trace_id in log")
+	}
+}
+
+func TestStdLogger_LogEvent_Error(t *testing.T) {
+	var buf bytes.Buffer
+	logger := &StdLogger{
+		logger: slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError})),
+	}
+	logger.LogEvent(context.Background(), "OrderCreated", errors.New("fail"))
+
+	output := buf.String()
+	if !strings.Contains(output, "event publish failed") {
+		t.Error("expected 'event publish failed' in log")
+	}
+}
+
+func TestNewLoggingAspect(t *testing.T) {
+	logger := &mockLogger{}
+	aspect := NewLoggingAspect(logger)
+	if aspect == nil {
+		t.Fatal("expected non-nil LoggingAspect")
+	}
+}
+
+func TestLoggingAspect_GetLogger(t *testing.T) {
+	logger := &mockLogger{}
+	aspect := NewLoggingAspect(logger)
+	if aspect.GetLogger() != logger {
+		t.Error("expected GetLogger to return the same logger")
+	}
+}
+
+
+
+func TestNewInMemMetricsRecorder(t *testing.T) {
+	recorder := NewInMemMetricsRecorder()
+	if recorder == nil {
+		t.Fatal("expected non-nil InMemMetricsRecorder")
+	}
+}
+
+func TestInMemMetricsRecorder_GetDurations(t *testing.T) {
+	recorder := NewInMemMetricsRecorder()
+	recorder.RecordDuration("test", 100*time.Millisecond)
+	recorder.RecordDuration("test", 200*time.Millisecond)
+
+	durations := recorder.GetDurations("test")
+	if len(durations) != 2 {
+		t.Fatalf("expected 2 durations, got %d", len(durations))
+	}
+	if durations[0] != 100*time.Millisecond || durations[1] != 200*time.Millisecond {
+		t.Errorf("unexpected durations: %v", durations)
+	}
+}
+
+func TestInMemMetricsRecorder_GetErrorCount(t *testing.T) {
+	recorder := NewInMemMetricsRecorder()
+	recorder.RecordError("test", errors.New("err1"))
+	recorder.RecordError("test", errors.New("err2"))
+
+	if count := recorder.GetErrorCount("test"); count != 2 {
+		t.Errorf("expected error count 2, got %d", count)
+	}
+}
+
+func TestInMemMetricsRecorder_GetTotalCount(t *testing.T) {
+	recorder := NewInMemMetricsRecorder()
+	recorder.RecordDuration("test", 100*time.Millisecond)
+	recorder.RecordError("test", errors.New("err"))
+
+	if count := recorder.GetTotalCount("test"); count != 2 {
+		t.Errorf("expected total count 2, got %d", count)
+	}
+}
+
+func TestInMemMetricsRecorder_GetAverageDuration(t *testing.T) {
+	recorder := NewInMemMetricsRecorder()
+	recorder.RecordDuration("test", 100*time.Millisecond)
+	recorder.RecordDuration("test", 200*time.Millisecond)
+
+	avg := recorder.GetAverageDuration("test")
+	if avg != 150*time.Millisecond {
+		t.Errorf("expected average 150ms, got %v", avg)
+	}
+}
+
+func TestInMemMetricsRecorder_GetAverageDuration_Empty(t *testing.T) {
+	recorder := NewInMemMetricsRecorder()
+	avg := recorder.GetAverageDuration("nonexistent")
+	if avg != 0 {
+		t.Errorf("expected 0 for nonexistent key, got %v", avg)
+	}
+}
+
+func TestInMemMetricsRecorder_Reset(t *testing.T) {
+	recorder := NewInMemMetricsRecorder()
+	recorder.RecordDuration("test", 100*time.Millisecond)
+	recorder.RecordError("test", errors.New("err"))
+
+	recorder.Reset()
+
+	if len(recorder.GetDurations("test")) != 0 {
+		t.Error("expected durations to be cleared after reset")
+	}
+	if recorder.GetErrorCount("test") != 0 {
+		t.Error("expected error count to be 0 after reset")
+	}
+	if recorder.GetTotalCount("test") != 0 {
+		t.Error("expected total count to be 0 after reset")
+	}
+}
+
+func TestNewMetricsAspect(t *testing.T) {
+	recorder := NewInMemMetricsRecorder()
+	aspect := NewMetricsAspect(recorder)
+	if aspect == nil {
+		t.Fatal("expected non-nil MetricsAspect")
+	}
+}
+
+func TestMetricsAspect_GetRecorder(t *testing.T) {
+	recorder := NewInMemMetricsRecorder()
+	aspect := NewMetricsAspect(recorder)
+	if aspect.GetRecorder() != recorder {
+		t.Error("expected GetRecorder to return the same recorder")
+	}
+}
+
+
+
+func TestNoOpTransactionManager(t *testing.T) {
+	mgr := NewNoOpTransactionManager()
+	ctx := context.Background()
+
+	ctx2, err := mgr.Begin(ctx)
+	if err != nil {
+		t.Fatalf("unexpected Begin error: %v", err)
+	}
+	if ctx2 != ctx {
+		t.Error("expected same context from Begin")
+	}
+
+	if err := mgr.Commit(ctx); err != nil {
+		t.Fatalf("unexpected Commit error: %v", err)
+	}
+
+	if err := mgr.Rollback(ctx); err != nil {
+		t.Fatalf("unexpected Rollback error: %v", err)
+	}
+}
+
+func TestNewTransactionAspect_Valid(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect, err := NewTransactionAspect(txMgr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if aspect == nil {
+		t.Fatal("expected non-nil TransactionAspect")
+	}
+}
+
+func TestTransactionAspect_GetTxManager(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect, _ := NewTransactionAspect(txMgr)
+	if aspect.GetTxManager() != txMgr {
+		t.Error("expected GetTxManager to return the same manager")
+	}
+}
+
+func TestTransactionAspect_BeforeQuery_NoOp(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect, _ := NewTransactionAspect(txMgr)
+	ctx := context.Background()
+	ctx2, err := aspect.BeforeQuery(ctx, &testQuery{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ctx2 != ctx {
+		t.Error("expected same context returned")
+	}
+	if txMgr.beginCalled {
+		t.Error("Begin should not be called for BeforeQuery")
+	}
+}
+
+func TestTransactionAspect_AfterQuery_NoOp(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect, _ := NewTransactionAspect(txMgr)
+	ctx := context.Background()
+	err := aspect.AfterQuery(ctx, &testQuery{}, nil, nil, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTransactionAspect_BeforeCommand_CallsBegin(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect, _ := NewTransactionAspect(txMgr)
+	ctx := context.Background()
+	_, err := aspect.BeforeCommand(ctx, &testCommand{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !txMgr.beginCalled {
+		t.Error("expected Begin to be called in BeforeCommand")
+	}
+}
+
+func TestTransactionAspect_BeforePublish_NoOp(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect, _ := NewTransactionAspect(txMgr)
+	ctx := context.Background()
+	ctx2, err := aspect.BeforePublish(ctx, &testEvent{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ctx2 != ctx {
+		t.Error("expected same context returned")
+	}
+}
+
+func TestTransactionAspect_AfterPublish_NoOp(t *testing.T) {
+	txMgr := &mockTransactionManager{}
+	aspect, _ := NewTransactionAspect(txMgr)
+	ctx := context.Background()
+	err := aspect.AfterPublish(ctx, &testEvent{}, nil, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestStdLogger_WithContext_NoTraceInfo(t *testing.T) {
 	var buf bytes.Buffer
 	logger := &StdLogger{

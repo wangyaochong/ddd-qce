@@ -42,6 +42,53 @@ func NewAspectChain() *AspectChain {
 	return &AspectChain{}
 }
 
+func (c *AspectChain) HasAspect(name string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, a := range c.commandAspects {
+		if a.Name() == name {
+			return true
+		}
+	}
+	for _, a := range c.queryAspects {
+		if a.Name() == name {
+			return true
+		}
+	}
+	for _, a := range c.eventAspects {
+		if a.Name() == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *AspectChain) RegisteredNames() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	seen := make(map[string]bool)
+	var names []string
+	for _, a := range c.commandAspects {
+		if !seen[a.Name()] {
+			seen[a.Name()] = true
+			names = append(names, a.Name())
+		}
+	}
+	for _, a := range c.queryAspects {
+		if !seen[a.Name()] {
+			seen[a.Name()] = true
+			names = append(names, a.Name())
+		}
+	}
+	for _, a := range c.eventAspects {
+		if !seen[a.Name()] {
+			seen[a.Name()] = true
+			names = append(names, a.Name())
+		}
+	}
+	return names
+}
+
 func (c *AspectChain) RegisterAspect(a any) {
 	if ca, ok := a.(CommandAspect); ok {
 		c.RegisterCommandAspect(ca)

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,8 +24,8 @@ func setupHTTPTest(t *testing.T, storeType string) (*httptest.Server, *infrastru
 	if err != nil {
 		t.Fatalf("wire app (%s): %v", storeType, err)
 	}
-	t.Cleanup(func() { app.Close() })
-	handler := NewHandler(app)
+	t.Cleanup(func() { app.Close(context.Background()) })
+	handler := NewHandler(app, nil)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handler.Dashboard)
 	mux.HandleFunc("GET /orders", handler.ListOrders)

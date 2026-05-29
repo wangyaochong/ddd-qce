@@ -73,3 +73,23 @@ func (e *AuditableEntity) UnmarshalJSON(data []byte) error {
 	e.updatedAt = aux.UpdatedAt
 	return nil
 }
+
+type AuditableEntityJSON struct {
+	EntityJSON
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func (e *AuditableEntity) ToJSON() AuditableEntityJSON {
+	return AuditableEntityJSON{
+		EntityJSON: e.Entity.ToJSON(),
+		CreatedAt:  e.createdAt,
+		UpdatedAt:  e.updatedAt,
+	}
+}
+
+func (e *AuditableEntity) FromJSON(j AuditableEntityJSON) {
+	e.Entity.FromJSON(j.EntityJSON)
+	e.createdAt = j.CreatedAt
+	e.updatedAt = j.UpdatedAt
+}

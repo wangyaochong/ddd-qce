@@ -33,20 +33,42 @@
 
 ## 二、聚合根生成规则
 
+### 2.0 Typed ID 定义
+
+每个跨聚合/跨限界上下文被引用的实体，在 `domain` 包中定义 typed ID：
+
+```go
+type OrderID string
+
+func (id OrderID) String() string { return string(id) }
+func NewOrderID(s string) OrderID { return OrderID(s) }
+
+type UserID string
+
+func (id UserID) String() string { return string(id) }
+func NewUserID(s string) UserID  { return UserID(s) }
+```
+
+**规则**：
+- 仅聚合根和被跨聚合引用的实体需要 typed ID，聚合内部子实体不需要
+- Typed ID 定义在 `domain` 包内，紧邻实体定义
+- Event 中 ID 字段保持 `string` 类型（避免循环依赖），在 `When` 方法中转换为 typed ID
+- 与框架核心（Entity、AggregateRoot、Repository 等）交互时使用 `id.String()` 转换
+
 ### 2.1 构造器
 
 聚合根必须提供两个构造器：
 
 ```go
 // 业务构造器 — 创建新聚合时使用
-func NewOrder(ctx context.Context, id, userID string, items []*OrderItem) (*Order, error) {
+func NewOrder(ctx context.Context, id OrderID, userID UserID, items []*OrderItem) (*Order, error) {
     o := &Order{
         UserID:    userID,
         Items:     items,
         Status:    OrderStatusPending,
         CreatedAt: time.Now(),
     }
-    ar, err := aggregate.NewAggregateRoot(id)
+    ar, err := aggregate.NewAggregateRoot(id.String())
     if err != nil {
         return nil, err
     }
@@ -64,9 +86,9 @@ func NewOrder(ctx context.Context, id, userID string, items []*OrderItem) (*Orde
 }
 
 // 回溯构造器 — 事件溯源 Load 时使用
-func NewOrderForReplay(id string) *Order {
+func NewOrderForReplay(id OrderID) *Order {
     o := &Order{}
-    ar, err := aggregate.NewAggregateRoot(id)
+    ar, err := aggregate.NewAggregateRoot(id.String())
     if err != nil {
         panic(err)
     }
@@ -82,31 +104,29 @@ func NewOrderForReplay(id string) *Order {
 
 ### 2.2 AggregateRef 接口实现
 
-聚合根必须实现 `AggregateRef` 接口的 `When(evt event.Event) error` 方法，并添加 `Apply` 和 `LoadFromHistory` 委托方法：
+聚合根必须实现 `AggregateRef` 接口的 `When(evt domainevent.Event) error` 方法，并添加 `Apply` 和 `LoadFromHistory` 委托方法：
 
 ```go
-func (o *Order) When(evt event.Event) error {
-    switch e := evt.(type) {
-    case *OrderCreatedEvent:
-        o.UserID = e.UserID
-        o.Status = OrderStatusPending
-        o.CreatedAt = e.OccurredAt()
-    case *OrderConfirmedEvent:
-        o.Status = OrderStatusConfirmed
-    case *OrderCancelledEvent:
-        o.Status = OrderStatusCancelled
-    default:
-        return fmt.Errorf("order: unhandled event type %T", evt)
-    }
-    return nil
+func (o *Order) When(evt domainevent.Event) error {
+	switch e := evt.(type) {
+	case *OrderCreatedEvent:
+		o.UserID = UserID(e.UserID)
+		o.Status = OrderStatusPending
+		o.CreatedAt = e.OccurredAt()
+	case *OrderConfirmedEvent:
+		o.Status = OrderStatusConfirmed
+	default:
+		return fmt.Errorf("order: unhandled event type %T", evt)
+	}
+	return nil
 }
 
-func (o *Order) Apply(ctx context.Context, evt event.Event) error {
-    return aggregate.ApplyChange(o, ctx, evt)
+func (o *Order) Apply(ctx context.Context, evt domainevent.Event) error {
+	return aggregate.ApplyChange(o, ctx, evt)
 }
 
-func (o *Order) LoadFromHistory(events []event.Event) error {
-    return aggregate.LoadFromHistory(o, events)
+func (o *Order) LoadFromHistory(events []domainevent.Event) error {
+	return aggregate.LoadFromHistory(o, events)
 }
 ```
 
@@ -116,6 +136,10 @@ func (o *Order) LoadFromHistory(events []event.Event) error {
 - 事件回溯时修改状态，不发布新事件
 - `Apply` 委托到 `aggregate.ApplyChange(o, ctx, evt)`
 - `LoadFromHistory` 委托到 `aggregate.LoadFromHistory(o, events)`
+- `When`/`Apply`/`LoadFromHistory` 的参数类型为 `domainevent.Event`（`github.com/ddd-qce/core/domain/event`）
+- 导入别名约定：`domainevent "github.com/ddd-qce/core/domain/event"`，`cqrsevent "github.com/ddd-qce/core/cqrs/event"`
+- `domainevent.Event` 接口包含 `AggregateID()`、`OccurredAt()`、`CorrelationID()`、`CausationID()` 四个方法
+- `When` 中可直接通过类型断言到具体事件类型后调用 `e.OccurredAt()`
 
 ### 2.3 业务方法
 
@@ -139,45 +163,51 @@ func (o *Order) Confirm(ctx context.Context) error {
 
 ### 2.4 JSON 序列化
 
-聚合根必须实现 `MarshalJSON` / `UnmarshalJSON` + 对应的 JSON 结构体：
+聚合根字段须加 `json` tag，`MarshalJSON`/`UnmarshalJSON` 委托到框架提供的反射辅助函数：
 
 ```go
-type OrderJSON struct {
-    aggregate.AggregateRootJSON
-    UserID    string        `json:"userId"`
-    Status    OrderStatus   `json:"status"`
-    Items     []*OrderItem  `json:"items"`
-    CreatedAt time.Time     `json:"createdAt"`
+type Order struct {
+    aggregate.AggregateRoot
+    UserID       UserID       `json:"userId"`
+    Status       OrderStatus  `json:"status"`
+    Items        []*OrderItem `json:"items"`
+    TotalAmount  float64      `json:"totalAmount"`
+    CreatedAt    time.Time    `json:"createdAt"`
 }
 
 func (o *Order) MarshalJSON() ([]byte, error) {
-    return json.Marshal(OrderJSON{
-        AggregateRootJSON: o.AggregateRoot.ToJSON(),
-        UserID:            o.UserID,
-        Status:            o.Status,
-        Items:             o.Items,
-        CreatedAt:         o.CreatedAt,
-    })
+    return aggregate.MarshalAggregate(o)
 }
 
 func (o *Order) UnmarshalJSON(data []byte) error {
-    var aux OrderJSON
-    if err := json.Unmarshal(data, &aux); err != nil {
-        return err
-    }
-    o.AggregateRoot.FromJSON(aux.AggregateRootJSON)
-    o.UserID = aux.UserID
-    o.Status = aux.Status
-    o.Items = aux.Items
-    o.CreatedAt = aux.CreatedAt
-    return nil
+    return aggregate.UnmarshalAggregate(data, o)
+}
+```
+
+嵌套实体同理，委托到 `entity.MarshalEntity` / `entity.UnmarshalEntity`：
+
+```go
+type OrderItem struct {
+    entity.Entity
+    ProductName string  `json:"productName"`
+    Price       float64 `json:"price"`
+    Quantity    int     `json:"quantity"`
+}
+
+func (i *OrderItem) MarshalJSON() ([]byte, error) {
+    return entity.MarshalEntity(i)
+}
+
+func (i *OrderItem) UnmarshalJSON(data []byte) error {
+    return entity.UnmarshalEntity(data, i)
 }
 ```
 
 **关键约束**：
-- 必须定义对应的 `XxxJSON` 结构体，嵌入 `aggregate.AggregateRootJSON`
-- `UnmarshalJSON` 中无需调用 `RestoreApplier`（已移除，`When` 是类型自身方法）
-- 嵌套实体也需要实现 `MarshalJSON` / `UnmarshalJSON`
+- 聚合根和嵌套实体的 exported 字段必须添加 `json` tag
+- `MarshalJSON`/`UnmarshalJSON` 委托到 `aggregate.MarshalAggregate`/`UnmarshalAggregate` 或 `entity.MarshalEntity`/`UnmarshalEntity`
+- 嵌入的 `AggregateRoot`/`Entity` 等基础类型由辅助函数自动处理（通过 `ToJSON`/`FromJSON`），无需手动映射
+- Typed ID（如 `UserID`）不需要转换为 `string`，Go 标准 json 包可直接序列化基于 `string` 的自定义类型
 
 ---
 
@@ -215,12 +245,12 @@ type OrderCancelledEvent struct {
 ```go
 type CreateOrderCommand struct {
     command.BaseCommand
-    UserID string
+    UserID UserID
     Items  []ItemInput
 }
 
 type CreateOrderResult struct {
-    OrderID     string
+    OrderID     OrderID
     TotalAmount float64
 }
 
@@ -241,12 +271,12 @@ var _ command.CommandHandler[*CreateOrderCommand, *CreateOrderResult] = (*Create
 ```go
 type GetOrderQuery struct {
     query.BaseQuery
-    OrderID string
+    OrderID OrderID
 }
 
 type GetOrderResult struct {
-    OrderID     string
-    UserID      string
+    OrderID     OrderID
+    UserID      UserID
     Status      string
     TotalAmount float64
 }
@@ -286,7 +316,7 @@ Result 是 Handler 的返回值类型，属于应用层公开契约，与 Comman
 
 ```go
 type PlaceOrderResult struct {
-    OrderID     string
+    OrderID     OrderID
     TotalAmount float64
 }
 
@@ -299,15 +329,15 @@ type ConfirmPaymentResult struct {
 
 ```go
 type OrderItem struct {
-    ProductID   string
+    ProductID   ProductID
     ProductName string
     Price       float64
     Quantity    int
 }
 
 type GetOrderResult struct {
-    OrderID     string
-    UserID      string
+    OrderID     OrderID
+    UserID      UserID
     Status      string
     TotalAmount float64
     Items       []OrderItem
@@ -329,21 +359,21 @@ Handler 中需将领域对象映射为 Result，**逐字段赋值**，不直接�
 
 ```go
 func (h *GetOrderHandler) Handle(ctx context.Context, q *GetOrderQuery) (*GetOrderResult, error) {
-    order, err := h.repo.FindByID(ctx, q.OrderID)
+    order, err := h.repo.FindByID(ctx, q.OrderID.String())
     if err != nil {
         return nil, err
     }
     items := make([]OrderItem, len(order.Items))
     for i, item := range order.Items {
         items[i] = OrderItem{
-            ProductID:   item.ProductID,
+            ProductID:   ProductID(item.ProductID),
             ProductName: item.ProductName,
             Price:       item.Price,
             Quantity:    item.Quantity,
         }
     }
     return &GetOrderResult{
-        OrderID:     order.ID(),
+        OrderID:     OrderID(order.ID()),
         UserID:      order.UserID,
         Status:      string(order.Status),
         TotalAmount: order.TotalAmount,
@@ -360,7 +390,7 @@ func (h *GetOrderHandler) Handle(ctx context.Context, q *GetOrderQuery) (*GetOrd
 - Handler 通过 `Dispatch[T,R](ctx, bus, cmd)` 调用，不直接调用 Handle 方法
 - Result 与 Command/Query 同包同文件定义，是公开类型
 - Result 统一使用指针返回 `*XxxResult`，便于错误时返回 `nil`
-- Result 字段只包含标量值和同包内定义的嵌套结构体，**禁止**引用 `domain` 包的实体类型
+- Result 字段只包含标量值、typed ID 和同包内定义的嵌套结构体，**禁止**引用 `domain` 包的实体类型
 - `Dispatch[T, R]` 调用时 R 必须与 Handler 的 Result 类型一致
 
 ---
@@ -404,8 +434,9 @@ type OrderRepositoryAdapter interface {
 
 ```go
 type OrderEventSourcedRepository struct {
-    eventStore event.EventSourceStore[event.Event]
-    snapshotRepo OrderRepositoryAdapter
+    eventStore cqrsevent.EventSourceStore[domainevent.Event]
+    eventBus   cqrsevent.EventBus
+    orderRepo  OrderRepositoryAdapter
 }
 
 func (r *OrderEventSourcedRepository) Save(ctx context.Context, order *domain.Order) error {
@@ -415,8 +446,13 @@ func (r *OrderEventSourcedRepository) Save(ctx context.Context, order *domain.Or
             return err
         }
         order.MarkEventsAsCommitted()
+        for _, evt := range uncommitted {
+            if err := r.eventBus.Publish(ctx, evt); err != nil {
+                return fmt.Errorf("publish event %T: %w", evt, err)
+            }
+        }
     }
-    return r.snapshotRepo.Save(ctx, order)
+    return r.orderRepo.Save(ctx, order)
 }
 
 func (r *OrderEventSourcedRepository) Load(ctx context.Context, id string) (*domain.Order, error) {
@@ -427,7 +463,7 @@ func (r *OrderEventSourcedRepository) Load(ctx context.Context, id string) (*dom
     if len(events) == 0 {
         return nil, fmt.Errorf("order %s not found", id)
     }
-    order := domain.NewOrderForReplay(id)
+    order := domain.NewOrderForReplay(domain.OrderID(id))
     if err := order.LoadFromHistory(events); err != nil {
         return nil, err
     }
@@ -480,6 +516,9 @@ func Setup(buses AppBuses, backend *infra.Backend) {
 | 6 | Handler 直接 import `cqrs/*/memory` 或 `cqrs/*/pg` | 违反依赖倒置，无法切换存储后端 | 通过接口包 `cqrs/command` 等 + Dispatch 调用 |
 | 7 | 聚合根使用 `NewEntity(id)` 时传入空字符串 | 运行时 panic | 始终确保 ID 非空 |
 | 8 | Result 中引用 `domain` 包的实体类型 | 泄露内部模型，破坏限界上下文边界 | Result 只包含标量和同包嵌套结构体，在 Handler 中逐字段映射 |
+| 9 | Event 中使用 typed ID 类型 | 导致 domain 与 event 包循环依赖 | Event 中 ID 字段保持 `string`，在 `When` / Handler 中转换为 typed ID |
+| 10 | 传 nil 给 `CommandNameOf` / `QueryNameOf` / `EventTypeOf` | 运行时 panic，生产环境不可恢复 | 确保传入的对象非 nil；如需安全获取类型名可先判空再调用 |
+| 10 | 对 `domain/event.Event` 做类型断言转 `cqrs/event.Event` | 事件接口已统一，不再需要类型断言 | 直接传递 `domain/event.Event`，EventBus 和 EventStore 均接受 `domain/event.Event` |
 
 ---
 

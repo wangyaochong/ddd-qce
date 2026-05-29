@@ -147,3 +147,19 @@ func mustNewSoftDeletableEntity(id string) *SoftDeletableEntity {
 	}
 	return e
 }
+
+func TestNewSoftDeletableEntity_EmptyID_ReturnsError(t *testing.T) {
+	_, err := NewSoftDeletableEntity("")
+	if err == nil {
+		t.Error("expected error for empty ID")
+	}
+}
+
+func TestNewSoftDeletableEntityFromData_EmptyID_ReturnsError(t *testing.T) {
+	ct := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	ut := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	_, err := NewSoftDeletableEntityFromData("", ct, ut, nil)
+	if err == nil {
+		t.Error("expected error for empty ID")
+	}
+}

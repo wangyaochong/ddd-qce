@@ -12,6 +12,7 @@ import (
 	inventorycommand "github.com/ddd-qce/exampleapp/ddd/inventory/command"
 	inventorydomain "github.com/ddd-qce/exampleapp/ddd/inventory/domain"
 	inventoryquery "github.com/ddd-qce/exampleapp/ddd/inventory/query"
+	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 )
 
@@ -54,8 +55,8 @@ func NewOrderPlacedInventoryHandler(cmdBus command.CommandBus) *OrderPlacedInven
 func (h *OrderPlacedInventoryHandler) Handle(ctx context.Context, evt *orderevent.OrderPlacedEvent) error {
 	log.Printf("[EventHandler] OrderPlaced: reserving inventory for order %s", evt.AggregateID())
 	_, err := command.Dispatch[*inventorycommand.ReserveInventoryCommand, *inventorycommand.ReserveInventoryResult](ctx, h.CmdBus, &inventorycommand.ReserveInventoryCommand{
-		OrderID:   evt.AggregateID(),
-		ProductID: "laptop",
+		OrderID:   orderdomain.OrderID(evt.AggregateID()),
+		ProductID: orderdomain.ProductID("laptop"),
 		Quantity:  1,
 	})
 	return err
@@ -72,8 +73,8 @@ func NewOrderCancelledInventoryHandler(cmdBus command.CommandBus) *OrderCancelle
 func (h *OrderCancelledInventoryHandler) Handle(ctx context.Context, evt *orderevent.OrderCancelledEvent) error {
 	log.Printf("[EventHandler] OrderCancelled: releasing inventory for order %s", evt.AggregateID())
 	_, err := command.Dispatch[*inventorycommand.ReleaseInventoryCommand, *inventorycommand.ReleaseInventoryResult](ctx, h.CmdBus, &inventorycommand.ReleaseInventoryCommand{
-		OrderID:   evt.AggregateID(),
-		ProductID: "laptop",
+		OrderID:   orderdomain.OrderID(evt.AggregateID()),
+		ProductID: orderdomain.ProductID("laptop"),
 		Quantity:  1,
 	})
 	return err

@@ -768,3 +768,174 @@ func TestJobManager_Recovery_NoRecoveryOption(t *testing.T) {
 		t.Errorf("expected pending (no recovery), got %s", status.GetStatus())
 	}
 }
+
+type testShutdownBlockCommand struct {
+	command.BaseCommand
+	UnblockCh chan struct{}
+}
+
+type testShutdownBlockHandler struct{}
+
+func (h *testShutdownBlockHandler) Handle(ctx context.Context, cmd *testShutdownBlockCommand) (*testLongResult, error) {
+	select {
+	case <-cmd.UnblockCh:
+		return &testLongResult{Message: "completed"}, nil
+	case <-ctx.Done():
+		<-cmd.UnblockCh
+		return nil, ctx.Err()
+	}
+}
+
+func newTestShutdownCommandBus() *commandmemory.CommandBus {
+	chain := aspect.NewAspectChain()
+	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	commandmemory.RegisterCommand(bus, &testShutdownBlockHandler{})
+	return bus
+}
+
+func TestJobManager_Shutdown_Normal(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestCommandBus(100 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+	job, err := manager.Submit(ctx, &testLongCommand{Duration: 100 * time.Millisecond})
+	require.NoError(t, err)
+
+	_, err = manager.Wait(ctx, job.ID, 2*time.Second)
+	require.NoError(t, err)
+
+	err = manager.Shutdown(ctx)
+	require.NoError(t, err)
+}
+
+func TestJobManager_Shutdown_WaitsForInFlightJobs(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestCommandBus(10 * time.Second)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+	job, err := manager.Submit(ctx, &testLongCommand{Duration: 10 * time.Second})
+	require.NoError(t, err)
+
+	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		shutdownDone <- manager.Shutdown(ctx)
+	}()
+
+	select {
+	case err := <-shutdownDone:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown did not complete within timeout")
+	}
+}
+
+func TestJobManager_Shutdown_Idempotent(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestCommandBus(100 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+
+	err := manager.Shutdown(ctx)
+	require.NoError(t, err)
+
+	err = manager.Shutdown(ctx)
+	require.NoError(t, err)
+}
+
+func TestJobManager_Shutdown_ContextCancelled(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestShutdownCommandBus()
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+	unblockCh := make(chan struct{})
+	defer close(unblockCh)
+
+	_, err := manager.Submit(ctx, &testShutdownBlockCommand{UnblockCh: unblockCh})
+	require.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond)
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+
+	err = manager.Shutdown(shutdownCtx)
+	require.Error(t, err)
+	require.Equal(t, context.DeadlineExceeded, err)
+}
+
+func TestJobManager_SubmitAfterShutdown(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestCommandBus(100 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+	err := manager.Shutdown(ctx)
+	require.NoError(t, err)
+
+	job, err := manager.Submit(ctx, &testLongCommand{Duration: 100 * time.Millisecond})
+	require.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+
+	result, err := manager.GetStatus(ctx, job.ID)
+	require.NoError(t, err)
+	require.Equal(t, jobcore.JobStatusPending, result.GetStatus())
+}
+
+func TestJobManager_Cancel_NotInLiveJobs_StoreGetError(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestCommandBus(100 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+	err := manager.Cancel(ctx, "nonexistent")
+	require.Error(t, err)
+}
+
+func TestJobManager_Retry_NotInLiveJobs(t *testing.T) {
+	store := NewJobStore()
+	cmdBus := newTestCommandBus(100 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+	job := jobcore.NewJob("retry-notlive-test", &testLongCommand{Duration: 100 * time.Millisecond})
+	job.RestoreJobState(jobcore.JobStatusFailed, nil, "", "previous error", time.Time{}, time.Now())
+	require.NoError(t, store.Create(ctx, job))
+
+	err := manager.Retry(ctx, "retry-notlive-test")
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		s, err := manager.GetStatus(ctx, "retry-notlive-test")
+		if err != nil {
+			return false
+		}
+		return s.GetStatus() == jobcore.JobStatusCompleted
+	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestJobManager_Retry_NotInLiveJobs_StoreUpdateError(t *testing.T) {
+	innerStore := NewJobStore()
+	store := &failingUpdateJobStore{
+		JobStore:  innerStore,
+		updateErr: fmt.Errorf("update failed"),
+	}
+	cmdBus := newTestCommandBus(100 * time.Millisecond)
+	manager := NewJobManager(store, cmdBus)
+
+	ctx := context.Background()
+	job := jobcore.NewJob("retry-notlive-update-err", &testLongCommand{Duration: 100 * time.Millisecond})
+	job.RestoreJobState(jobcore.JobStatusFailed, nil, "", "previous error", time.Time{}, time.Now())
+	require.NoError(t, innerStore.Create(ctx, job))
+
+	err := manager.Retry(ctx, "retry-notlive-update-err")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to reset job for retry")
+	require.Contains(t, err.Error(), "update failed")
+}

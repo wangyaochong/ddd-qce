@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ddd-qce/core/aspect"
@@ -8,7 +9,6 @@ import (
 	"github.com/ddd-qce/core/config"
 	"github.com/ddd-qce/core/cqrs/command"
 	"github.com/ddd-qce/core/cqrs/event"
-	"github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/query"
 	"github.com/ddd-qce/core/infra"
 )
@@ -20,7 +20,8 @@ type App struct {
 	Chain     *aspect.AspectChain
 	Backend   *infra.Backend
 	Config    *config.Config
-	cleanup   []func() error
+	lifecycles []Lifecycle
+	cleanup    []func() error
 }
 
 type AppOption func(*App) error
@@ -39,17 +40,29 @@ func NewApp(opts ...AppOption) (*App, error) {
 	return app, nil
 }
 
-func (a *App) Close() error {
+func (a *App) Close(ctx context.Context) error {
 	var errs []error
+	for _, l := range a.lifecycles {
+		if err := l.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
 	for _, fn := range a.cleanup {
 		if err := fn(); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	if len(errs) > 0 {
-		return fmt.Errorf("cleanup errors: %v", errs)
+		return fmt.Errorf("shutdown errors: %v", errs)
 	}
 	return nil
+}
+
+func (a *App) RegisterLifecycle(l Lifecycle) {
+	a.lifecycles = append(a.lifecycles, l)
 }
 
 func WithAutoBackend() AppOption {
@@ -84,9 +97,16 @@ func WithConfigFile(path string) AppOption {
 	}
 }
 
+func ensureChain(chain *aspect.AspectChain) *aspect.AspectChain {
+	if chain == nil {
+		return aspect.NewAspectChain()
+	}
+	return chain
+}
+
 func WithDefaultAspects() AppOption {
 	return func(a *App) error {
-		chain := aspect.NewAspectChain()
+		a.Chain = ensureChain(a.Chain)
 
 		logger := builtin.NewStdLogger()
 		metrics := builtin.NewInMemMetricsRecorder()
@@ -98,64 +118,76 @@ func WithDefaultAspects() AppOption {
 		}
 
 		if a.Config.Aspect.EnableLogging {
-			chain.RegisterAspect(builtin.NewLoggingAspect(logger))
+			a.Chain.RegisterAspect(builtin.NewLoggingAspect(logger))
 		}
 		if a.Config.Aspect.EnableTracing {
 			if a.Backend != nil && a.Backend.TraceStore != nil {
-				chain.RegisterAspect(builtin.NewTracingAspect(a.Backend.TraceStore))
+				a.Chain.RegisterAspect(builtin.NewTracingAspect(a.Backend.TraceStore))
 			}
 		}
 		if a.Config.Aspect.EnableMetrics {
-			chain.RegisterAspect(builtin.NewMetricsAspect(metrics))
+			a.Chain.RegisterAspect(builtin.NewMetricsAspect(metrics))
 		}
 		if a.Config.Aspect.EnableTransaction {
 			ta, err := builtin.NewTransactionAspect(txManager)
 			if err != nil {
 				return fmt.Errorf("create transaction aspect: %w", err)
 			}
-			chain.RegisterCommandAspect(ta)
+			a.Chain.RegisterCommandAspect(ta)
 		}
 
-		a.Chain = chain
 		return nil
 	}
 }
 
+func (a *App) busFactory() *infra.BusFactory {
+	if a.Backend != nil && a.Backend.BusFactory != nil {
+		return a.Backend.BusFactory
+	}
+	return infra.NewMemoryBusFactory()
+}
+
 func WithCommandHandlers(handlers ...any) AppOption {
 	return func(a *App) error {
-		bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(a.Chain))
+		if a.CmdBus == nil {
+			a.Chain = ensureChain(a.Chain)
+			a.CmdBus = a.busFactory().NewCommandBus(a.Chain)
+		}
 		for _, h := range handlers {
-			if err := bus.RegisterHandler(h); err != nil {
+			if err := a.CmdBus.RegisterHandler(h); err != nil {
 				return fmt.Errorf("register command handler %T: %w", h, err)
 			}
 		}
-		a.CmdBus = bus
 		return nil
 	}
 }
 
 func WithQueryHandlers(handlers ...any) AppOption {
 	return func(a *App) error {
-		bus := memory.NewQueryBus(memory.WithQueryBusAspectChain(a.Chain))
+		if a.QueryBus == nil {
+			a.Chain = ensureChain(a.Chain)
+			a.QueryBus = a.busFactory().NewQueryBus(a.Chain)
+		}
 		for _, h := range handlers {
-			if err := bus.RegisterHandler(h); err != nil {
+			if err := a.QueryBus.RegisterHandler(h); err != nil {
 				return fmt.Errorf("register query handler %T: %w", h, err)
 			}
 		}
-		a.QueryBus = bus
 		return nil
 	}
 }
 
 func WithEventSubscriptions(subs ...any) AppOption {
 	return func(a *App) error {
-		bus := memory.NewEventBus(memory.WithBusAspectChain(a.Chain))
+		if a.EventBus == nil {
+			a.Chain = ensureChain(a.Chain)
+			a.EventBus = a.busFactory().NewEventBus(a.Chain)
+		}
 		for _, s := range subs {
-			if err := bus.SubscribeHandler(s); err != nil {
+			if err := a.EventBus.SubscribeHandler(s); err != nil {
 				return fmt.Errorf("subscribe event handler %T: %w", s, err)
 			}
 		}
-		a.EventBus = bus
 		return nil
 	}
 }

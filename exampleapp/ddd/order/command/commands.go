@@ -2,10 +2,11 @@ package command
 
 import (
 	"github.com/ddd-qce/core/cqrs/command"
+	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 )
 
 type ItemInput struct {
-	ProductID   string
+	ProductID   orderdomain.ProductID
 	ProductName string
 	Price       float64
 	Quantity    int
@@ -13,18 +14,18 @@ type ItemInput struct {
 
 type PlaceOrderCommand struct {
 	command.BaseCommand
-	UserID string
+	UserID orderdomain.UserID
 	Items  []ItemInput
 }
 
 type PlaceOrderResult struct {
-	OrderID     string
+	OrderID     orderdomain.OrderID
 	TotalAmount float64
 }
 
 type ConfirmPaymentCommand struct {
 	command.BaseCommand
-	OrderID string
+	OrderID orderdomain.OrderID
 }
 
 type ConfirmPaymentResult struct {
@@ -33,7 +34,7 @@ type ConfirmPaymentResult struct {
 
 type ShipOrderCommand struct {
 	command.BaseCommand
-	OrderID string
+	OrderID orderdomain.OrderID
 }
 
 type ShipOrderResult struct {
@@ -42,7 +43,7 @@ type ShipOrderResult struct {
 
 type CancelOrderCommand struct {
 	command.BaseCommand
-	OrderID string
+	OrderID orderdomain.OrderID
 	Reason  string
 }
 
@@ -52,12 +53,12 @@ type CancelOrderResult struct {
 
 type GenerateReportCommand struct {
 	command.BaseCommand
-	OrderID string
+	OrderID orderdomain.OrderID
 }
 
 type GenerateReportResult struct {
 	ReportID  string
-	OrderID   string
+	OrderID   orderdomain.OrderID
 	Content   string
 	Generated bool
 }

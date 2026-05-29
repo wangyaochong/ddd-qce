@@ -30,6 +30,29 @@ func TestOptimisticLockError_ZeroValues(t *testing.T) {
 	if msg == "" {
 		t.Error("Error() should not be empty")
 	}
-	// Should not panic
 	_ = msg
+}
+
+func TestOptimisticLockError_VersionMismatch(t *testing.T) {
+	err := &OptimisticLockError{
+		AggregateID:     "agg-456",
+		ExpectedVersion: 3,
+		VersionMismatch: true,
+	}
+
+	msg := err.Error()
+	if msg != "optimistic lock error: aggregate agg-456 version 3 conflicts with existing version" {
+		t.Errorf("Error() = %q, want version mismatch message", msg)
+	}
+}
+
+func TestOptimisticLockError_Unwrap(t *testing.T) {
+	err := &OptimisticLockError{
+		AggregateID:     "agg-789",
+		ExpectedVersion: 1,
+	}
+
+	if !errors.Is(err, ddderror.ErrConcurrency) {
+		t.Error("errors.Is(err, ErrConcurrency) should be true")
+	}
 }

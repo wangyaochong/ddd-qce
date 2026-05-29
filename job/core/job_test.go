@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -369,4 +370,78 @@ type testSampleCmd struct {
 
 type testSampleResult struct {
 	File string
+}
+
+func TestJob_ResetDone(t *testing.T) {
+	job := NewJob("job-1", nil)
+	oldDone := job.Done()
+	job.MarkDone()
+
+	select {
+	case <-oldDone:
+	default:
+		t.Fatal("expected old done channel to be closed after MarkDone")
+	}
+
+	job.ResetDone()
+	newDone := job.Done()
+
+	select {
+	case <-newDone:
+		t.Error("expected new done channel to be open after ResetDone")
+	default:
+	}
+
+	select {
+	case <-oldDone:
+	default:
+		t.Error("old done channel should still be closed")
+	}
+}
+
+func TestJob_Done_CreatesChannel(t *testing.T) {
+	job := &Job{}
+	done := job.Done()
+	if done == nil {
+		t.Error("expected Done() to create a channel")
+	}
+}
+
+func TestJob_MarkDone_AlreadyClosed(t *testing.T) {
+	job := NewJob("job-1", nil)
+	job.MarkDone()
+	job.MarkDone()
+
+	select {
+	case <-job.Done():
+	default:
+		t.Error("expected done channel to be closed")
+	}
+}
+
+func TestStoreError_Error(t *testing.T) {
+	inner := errors.New("db connection lost")
+	storeErr := &StoreError{
+		JobID:     "job-1",
+		Operation: "create",
+		Err:       inner,
+	}
+
+	expected := "store create failed for job job-1: db connection lost"
+	if storeErr.Error() != expected {
+		t.Errorf("Error() = %q, want %q", storeErr.Error(), expected)
+	}
+}
+
+func TestStoreError_Unwrap(t *testing.T) {
+	inner := errors.New("db connection lost")
+	storeErr := &StoreError{
+		JobID:     "job-1",
+		Operation: "update",
+		Err:       inner,
+	}
+
+	if !errors.Is(storeErr, inner) {
+		t.Error("errors.Is should find the underlying error")
+	}
 }

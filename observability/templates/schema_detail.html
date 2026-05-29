@@ -1,0 +1,68 @@
+{{define "schema_detail"}}{{template "ddd_header" .}}
+
+<a href="{{.Prefix}}/ddd_schema/" class="back-link">&larr; Back to tables</a>
+
+<div class="detail-header">
+    <h1>{{.Table.Name}}</h1>
+    <span style="color:#666;font-size:1.1rem;">{{.Table.Description}}</span>
+</div>
+
+<div class="detail-meta">
+    <span>Rows: <strong>{{formatCount .Table.RowCount}}</strong></span>
+    <span>Size: <strong>{{formatSize .Table.DiskSize}}</strong></span>
+    <span>Updated: <strong>{{formatTime .Table.LastUpdated}}</strong></span>
+</div>
+
+<div class="card" style="margin-top:1.5rem;">
+    <h2>Columns ({{len .Table.Columns}})</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Nullable</th>
+                <th>Default</th>
+                <th>Key</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Table.Columns}}
+            <tr>
+                <td><strong>{{.Name}}</strong></td>
+                <td><code>{{.Type}}</code></td>
+                <td>{{if .Nullable}}<span class="badge badge-yes">YES</span>{{else}}<span class="badge badge-no">NO</span>{{end}}</td>
+                <td>{{if .DefaultValue}}<code>{{.DefaultValue}}</code>{{else}}<span class="na">-</span>{{end}}</td>
+                <td>{{if .IsPrimaryKey}}<span class="badge badge-pk">PK</span>{{else}}<span class="na">-</span>{{end}}</td>
+                <td>{{.Description}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+
+{{if .Table.Indexes}}
+<div class="card">
+    <h2>Indexes ({{len .Table.Indexes}})</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Columns</th>
+                <th>Unique</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{range .Table.Indexes}}
+            <tr>
+                <td><code>{{.Name}}</code></td>
+                <td>{{range $i, $c := .Columns}}{{if $i}}, {{end}}<code>{{$c}}</code>{{end}}</td>
+                <td>{{if .Unique}}<span class="badge badge-yes">YES</span>{{else}}<span class="badge badge-no">NO</span>{{end}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{template "ddd_footer" .}}{{end}}

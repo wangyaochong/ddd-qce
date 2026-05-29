@@ -2,10 +2,15 @@ package infra
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
+	"github.com/ddd-qce/core/cqrs/command"
+	"github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/query"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )
@@ -198,5 +203,192 @@ func TestMemoryTransactionManager_TripleNesting(t *testing.T) {
 	}
 	if err := m.Commit(l1); err != nil {
 		t.Fatalf("l1 Commit failed: %v", err)
+	}
+}
+
+func TestBackend_Shutdown_NilCloserNilTraceStore(t *testing.T) {
+	b := &Backend{}
+	if err := b.Shutdown(context.Background()); err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+}
+
+func TestBackend_Shutdown_CloserError(t *testing.T) {
+	b := &Backend{closer: func() error { return fmt.Errorf("close failed") }}
+	err := b.Shutdown(context.Background())
+	if err == nil {
+		t.Fatal("expected error from closer")
+	}
+	if err.Error() != "backend shutdown errors: [close failed]" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+type closeableTraceStore struct {
+	trace.TraceStore
+	closed bool
+}
+
+func (c *closeableTraceStore) Close() { c.closed = true }
+
+func TestBackend_Shutdown_TraceStoreWithClose(t *testing.T) {
+	ts := &closeableTraceStore{}
+	b := &Backend{TraceStore: ts}
+	if err := b.Shutdown(context.Background()); err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if !ts.closed {
+		t.Error("expected TraceStore.Close() to be called")
+	}
+}
+
+func TestBackend_Shutdown_BothErrors(t *testing.T) {
+	ts := &closeableTraceStore{}
+	b := &Backend{
+		TraceStore: ts,
+		closer:     func() error { return fmt.Errorf("closer error") },
+	}
+	err := b.Shutdown(context.Background())
+	if err == nil {
+		t.Fatal("expected aggregated error")
+	}
+	if !ts.closed {
+		t.Error("expected TraceStore.Close() to be called")
+	}
+	if err.Error() != "backend shutdown errors: [closer error]" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestBackend_Close_NilCloser(t *testing.T) {
+	b := &Backend{}
+	if err := b.Close(); err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+}
+
+func TestBackend_Close_WithCloserError(t *testing.T) {
+	b := &Backend{closer: func() error { return fmt.Errorf("close err") }}
+	err := b.Close()
+	if err == nil {
+		t.Fatal("expected error from closer")
+	}
+	if err.Error() != "close err" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestWithTypeRegistry(t *testing.T) {
+	reg := jobcore.NewTypeRegistry()
+	b := NewBackend(WithTypeRegistry(reg))
+	if b.TypeRegistry != reg {
+		t.Error("expected TypeRegistry to be set")
+	}
+}
+
+func TestWithCloser(t *testing.T) {
+	called := false
+	b := NewBackend(WithCloser(func() error { called = true; return nil }))
+	if err := b.Close(); err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if !called {
+		t.Error("expected closer to be called")
+	}
+}
+
+func TestNewMemoryBusFactory(t *testing.T) {
+	f := NewMemoryBusFactory()
+	if f == nil {
+		t.Fatal("expected non-nil BusFactory")
+	}
+	if f.NewCommandBus == nil {
+		t.Error("expected NewCommandBus to be set")
+	}
+	if f.NewQueryBus == nil {
+		t.Error("expected NewQueryBus to be set")
+	}
+	if f.NewEventBus == nil {
+		t.Error("expected NewEventBus to be set")
+	}
+}
+
+type testCommand struct{ command.BaseCommand }
+
+type testCommandHandler struct{}
+
+func (testCommandHandler) Handle(_ context.Context, _ testCommand) (string, error) {
+	return "ok", nil
+}
+
+type testQuery struct{ query.BaseQuery }
+
+type testQueryHandler struct{}
+
+func (testQueryHandler) Handle(_ context.Context, _ testQuery) (string, error) {
+	return "result", nil
+}
+
+type testEvent struct{ event.BaseEvent }
+
+func (testEvent) AggregateID() string     { return "agg1" }
+func (testEvent) OccurredAt() time.Time   { return time.Now() }
+func (testEvent) CorrelationID() string   { return "" }
+func (testEvent) CausationID() string     { return "" }
+
+type testEventHandler struct{}
+
+func (testEventHandler) Handle(_ context.Context, _ testEvent) error { return nil }
+
+func TestNewMemoryBusFactory_CommandBus(t *testing.T) {
+	f := NewMemoryBusFactory()
+	chain := aspect.NewAspectChain()
+	bus := f.NewCommandBus(chain)
+	if bus == nil {
+		t.Fatal("expected non-nil CommandBus")
+	}
+	if err := bus.RegisterHandler(testCommandHandler{}); err != nil {
+		t.Fatalf("RegisterHandler failed: %v", err)
+	}
+	result, err := bus.Execute(context.Background(), testCommand{})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if result != "ok" {
+		t.Errorf("expected 'ok', got %v", result)
+	}
+}
+
+func TestNewMemoryBusFactory_QueryBus(t *testing.T) {
+	f := NewMemoryBusFactory()
+	chain := aspect.NewAspectChain()
+	bus := f.NewQueryBus(chain)
+	if bus == nil {
+		t.Fatal("expected non-nil QueryBus")
+	}
+	if err := bus.RegisterHandler(testQueryHandler{}); err != nil {
+		t.Fatalf("RegisterHandler failed: %v", err)
+	}
+	result, err := bus.Execute(context.Background(), testQuery{})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if result != "result" {
+		t.Errorf("expected 'result', got %v", result)
+	}
+}
+
+func TestNewMemoryBusFactory_EventBus(t *testing.T) {
+	f := NewMemoryBusFactory()
+	chain := aspect.NewAspectChain()
+	bus := f.NewEventBus(chain)
+	if bus == nil {
+		t.Fatal("expected non-nil EventBus")
+	}
+	if err := bus.SubscribeHandler(testEventHandler{}); err != nil {
+		t.Fatalf("SubscribeHandler failed: %v", err)
+	}
+	if err := bus.Publish(context.Background(), testEvent{}); err != nil {
+		t.Fatalf("Publish failed: %v", err)
 	}
 }

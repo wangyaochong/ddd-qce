@@ -1,10 +1,11 @@
+version: "2"
+
 run:
   go: "1.26"
   timeout: 5m
-  max-same-issues: 50
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
     - govet
@@ -15,8 +16,6 @@ linters:
     - exhaustive
     - gochecknoglobals
     - gocritic
-    - gofmt
-    - goimports
     - gosec
     - misspell
     - nilerr
@@ -26,93 +25,103 @@ linters:
     - unconvert
     - unparam
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-    exclude-functions:
-      - fmt.Fprintf
-      - fmt.Printf
-      - fmt.Sprintf
-      - fmt.Print
-      - fmt.Println
-      - fmt.Fprint
-      - fmt.Fprintln
-      - log.Printf
-      - log.Println
-      - log.Print
-      - log.Fatal
-      - log.Fatalf
-      - log.Panic
-      - log.Panicf
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Printf
+        - fmt.Sprintf
+        - fmt.Print
+        - fmt.Println
+        - fmt.Fprint
+        - fmt.Fprintln
+        - log.Printf
+        - log.Println
+        - log.Print
+        - log.Fatal
+        - log.Fatalf
+        - log.Panic
+        - log.Panicf
 
-  gocritic:
-    enabled-checks:
-      - unlabelStmt
-      - unnecessaryBlock
-      - sloppyReassign
-      - builtinShadow
-      - importShadow
+    gocritic:
+      enabled-checks:
+        - unlabelStmt
+        - unnecessaryBlock
+        - sloppyReassign
+        - builtinShadow
+        - importShadow
 
-  gosec:
-    excludes:
-      - G104
+    gosec:
+      excludes:
+        - G104
 
-  revive:
+    revive:
+      rules:
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: context-as-argument
+        - name: error-return
+        - name: var-naming
+        - name: package-comments
+          disabled: true
+        - name: exported
+          disabled: true
+
+  exclusions:
     rules:
-      - name: unused-parameter
-      - name: unreachable-code
-      - name: context-as-argument
-      - name: error-return
-      - name: var-naming
-      - name: package-comments
-        disabled: true
-      - name: exported
-        disabled: true
+      - path: (example|exampleapp)/
+        linters:
+          - gosec
+          - gochecknoglobals
+          - revive
+          - errcheck
+          - noctx
 
-  goimports:
-    local-prefixes: github.com/ddd-qce
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - gochecknoglobals
+          - unparam
+          - revive
+          - unused
+          - noctx
+          - errname
+          - staticcheck
+          - prealloc
+          - gofmt
+          - goimports
+
+      - linters:
+          - revive
+        text: "unused-parameter"
+
+      - linters:
+          - errcheck
+        source: "Dispatch\\["
+
+      - linters:
+          - gosec
+        text: "G112"
+
+      - path: nop\.go
+        text: "error return value not checked"
+
+      - linters:
+          - errcheck
+        text: "Error return value of `rows.Close`"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/ddd-qce
 
 issues:
-  exclude-rules:
-    - path: (example|exampleapp)/
-      linters:
-        - gosec
-        - gochecknoglobals
-        - revive
-        - errcheck
-        - noctx
-
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
-        - gochecknoglobals
-        - unparam
-        - revive
-        - unused
-        - noctx
-        - errname
-        - staticcheck
-        - prealloc
-        - gofmt
-        - goimports
-
-    - linters:
-        - revive
-      text: "unused-parameter"
-
-    - linters:
-        - errcheck
-      source: "Dispatch\\["
-
-    - linters:
-        - gosec
-      text: "G112"
-
-    - path: nop\.go
-      text: "error return value not checked"
-
-    - linters:
-        - errcheck
-      text: "Error return value of `rows.Close`"
+  max-same-issues: 50

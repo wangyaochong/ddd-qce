@@ -2,10 +2,11 @@ package query
 
 import (
 	"github.com/ddd-qce/core/cqrs/query"
+	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 )
 
 type InventoryItem struct {
-	ID    string
+	ID    orderdomain.ProductID
 	Name  string
 	Price float64
 	Stock int

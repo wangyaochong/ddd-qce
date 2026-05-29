@@ -11,22 +11,35 @@ import (
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	corepg "github.com/ddd-qce/core/pg"
 )
 
-type EventSourceStore[T event.Event] struct {
-	db      *sql.DB
-	pool    sync.Pool
-	newFunc func() T
+type EventSourceStore[T domainevent.Event] struct {
+	db         *sql.DB
+	pool       sync.Pool
+	newFunc    func() T
+	factoryMap map[string]func() T
 }
 
-type EventSourceStoreOption[T event.Event] func(*EventSourceStore[T])
+type EventSourceStoreOption[T domainevent.Event] func(*EventSourceStore[T])
 
-func WithFactory[T event.Event](factory func() T) EventSourceStoreOption[T] {
+func WithFactory[T domainevent.Event](factory func() T) EventSourceStoreOption[T] {
 	return func(s *EventSourceStore[T]) { s.newFunc = factory }
 }
 
-func NewEventSourceStore[T event.Event](db *sql.DB, opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
+func WithFactoryMap[T domainevent.Event](m map[string]func() T) EventSourceStoreOption[T] {
+	return func(s *EventSourceStore[T]) {
+		if s.factoryMap == nil {
+			s.factoryMap = make(map[string]func() T, len(m))
+		}
+		for k, v := range m {
+			s.factoryMap[k] = v
+		}
+	}
+}
+
+func NewEventSourceStore[T domainevent.Event](db *sql.DB, opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
 	var zero T
 	t := reflect.TypeOf(zero)
 
@@ -39,8 +52,8 @@ func NewEventSourceStore[T event.Event](db *sql.DB, opts ...EventSourceStoreOpti
 	}
 
 	if t == nil {
-		if s.newFunc == nil {
-			return nil, fmt.Errorf("PgEventSourceStore[T]: WithFactory is required when T is an interface type")
+		if s.newFunc == nil && s.factoryMap == nil {
+			return nil, fmt.Errorf("PgEventSourceStore[T]: WithFactory or WithFactoryMap is required when T is an interface type")
 		}
 		return s, nil
 	}
@@ -76,7 +89,12 @@ func isUniqueViolation(err error) bool {
 	return false
 }
 
-func (s *EventSourceStore[T]) alloc() (T, error) {
+func (s *EventSourceStore[T]) alloc(eventType string) (T, error) {
+	if s.factoryMap != nil {
+		if fn, ok := s.factoryMap[eventType]; ok {
+			return fn(), nil
+		}
+	}
 	if s.newFunc != nil {
 		return s.newFunc(), nil
 	}
@@ -131,7 +149,7 @@ func (s *EventSourceStore[T]) appendEvents(ctx context.Context, q corepg.DBTX, a
 func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error) {
 	q := corepg.GetQuerier(ctx, s.db)
 	rows, err := q.QueryContext(ctx,
-		`SELECT event_data, aggregate_id, occurred_at, correlation_id, causation_id FROM ddd_domain_events
+		`SELECT event_type, event_data, aggregate_id, occurred_at, correlation_id, causation_id FROM ddd_domain_events
 		 WHERE aggregate_id = $1 AND version > $2
 		 ORDER BY version`,
 		aggregateID, afterVersion,
@@ -143,15 +161,16 @@ func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afte
 
 	result := make([]T, 0)
 	for rows.Next() {
+		var eventType string
 		var data []byte
 		var aggID string
 		var occurredAt time.Time
 		var correlationID string
 		var causationID string
-		if err := rows.Scan(&data, &aggID, &occurredAt, &correlationID, &causationID); err != nil {
+		if err := rows.Scan(&eventType, &data, &aggID, &occurredAt, &correlationID, &causationID); err != nil {
 			return nil, fmt.Errorf("scan event: %w", err)
 		}
-		evt, err := s.alloc()
+		evt, err := s.alloc(eventType)
 		if err != nil {
 			return nil, fmt.Errorf("allocate event: %w", err)
 		}
@@ -170,7 +189,7 @@ func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afte
 func (s *EventSourceStore[T]) LoadAll(ctx context.Context, afterPosition int64, limit int) ([]event.GlobalEvent[T], error) {
 	q := corepg.GetQuerier(ctx, s.db)
 
-	query := `SELECT id, event_data, aggregate_id, occurred_at, correlation_id, causation_id FROM ddd_domain_events
+	query := `SELECT id, event_type, event_data, aggregate_id, occurred_at, correlation_id, causation_id FROM ddd_domain_events
 			  WHERE id > $1 ORDER BY id ASC`
 	args := []any{afterPosition}
 
@@ -188,15 +207,16 @@ func (s *EventSourceStore[T]) LoadAll(ctx context.Context, afterPosition int64, 
 	result := make([]event.GlobalEvent[T], 0)
 	for rows.Next() {
 		var id int64
+		var eventType string
 		var data []byte
 		var aggID string
 		var occurredAt time.Time
 		var correlationID string
 		var causationID string
-		if err := rows.Scan(&id, &data, &aggID, &occurredAt, &correlationID, &causationID); err != nil {
+		if err := rows.Scan(&id, &eventType, &data, &aggID, &occurredAt, &correlationID, &causationID); err != nil {
 			return nil, fmt.Errorf("scan event: %w", err)
 		}
-		evt, err := s.alloc()
+		evt, err := s.alloc(eventType)
 		if err != nil {
 			return nil, fmt.Errorf("allocate event: %w", err)
 		}
@@ -216,7 +236,7 @@ func (s *EventSourceStore[T]) LoadAll(ctx context.Context, afterPosition int64, 
 }
 
 func restoreBaseEvent(evt any, aggregateID string, occurredAt time.Time, correlationID string, causationID string) {
-	e, ok := evt.(event.Event)
+	e, ok := evt.(domainevent.Event)
 	if !ok {
 		return
 	}

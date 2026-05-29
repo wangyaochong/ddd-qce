@@ -2,9 +2,11 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/cqrs/command"
@@ -12,11 +14,15 @@ import (
 
 type commandInvoker func(cmd any, ctx context.Context) (any, error)
 
+var ErrBusClosed = errors.New("bus is closed")
+
 type CommandBus struct {
 	handlers map[reflect.Type]any
 	invokers map[reflect.Type]commandInvoker
 	chain    *aspect.AspectChain
 	mu       sync.RWMutex
+	closed   atomic.Bool
+	inFlight sync.WaitGroup
 }
 
 var _ command.CommandBus = (*CommandBus)(nil)
@@ -45,7 +51,7 @@ func RegisterCommand[T command.Command, R any](bus *CommandBus, handler command.
 
 func (b *CommandBus) RegisterHandler(handler any) error {
 	handlerType := reflect.TypeOf(handler)
-	evtType, ok := extractCommandHandlerCommandType(handlerType)
+	evtType, ok := extractHandlerPayloadType(handlerType)
 	if !ok {
 		return fmt.Errorf("RegisterHandler: handler must implement command.CommandHandler[T], got %T", handler)
 	}
@@ -66,37 +72,13 @@ func (b *CommandBus) RegisterHandler(handler any) error {
 	return nil
 }
 
-func extractCommandHandlerCommandType(handlerType reflect.Type) (reflect.Type, bool) {
-	if handlerType.Kind() != reflect.Ptr {
-		for i := 0; i < handlerType.NumMethod(); i++ {
-			method := handlerType.Method(i)
-			if method.Name != "Handle" {
-				continue
-			}
-			return extractCommandTypeFromHandleMethod(method.Type), true
-		}
-		return nil, false
-	}
-
-	handleMethod, ok := handlerType.MethodByName("Handle")
-	if !ok {
-		return nil, false
-	}
-	ct := extractCommandTypeFromHandleMethod(handleMethod.Type)
-	if ct == nil {
-		return nil, false
-	}
-	return ct, true
-}
-
-func extractCommandTypeFromHandleMethod(methodType reflect.Type) reflect.Type {
-	if methodType.NumIn() != 3 {
-		return nil
-	}
-	return methodType.In(2)
-}
-
 func (b *CommandBus) Execute(ctx context.Context, cmd any) (any, error) {
+	if b.closed.Load() {
+		return nil, ErrBusClosed
+	}
+	b.inFlight.Add(1)
+	defer b.inFlight.Done()
+
 	cmdType := reflect.TypeOf(cmd)
 
 	b.mu.RLock()
@@ -135,4 +117,14 @@ func makeCommandInvoker(handler any, handlerType reflect.Type) (commandInvoker, 
 		}
 		return nil, err
 	}, nil
+}
+
+func (b *CommandBus) RegisteredTypes() []string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return typeNamesFromMap(b.handlers)
+}
+
+func (b *CommandBus) Shutdown(ctx context.Context) error {
+	return shutdownBus(&b.closed, &b.inFlight, ctx)
 }

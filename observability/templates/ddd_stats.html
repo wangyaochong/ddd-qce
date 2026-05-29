@@ -1,0 +1,31 @@
+{{define "ddd_stats"}}{{template "ddd_header" .}}
+
+<h1>Operation Statistics</h1>
+
+{{if .AllStats}}
+<div class="card">
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Type</th><th>Count</th><th>Errors</th><th>Min</th><th>Avg</th><th>P50</th><th>P99</th><th>Max</th><th>Last Error</th></tr>
+        </thead>
+        <tbody>
+        {{range .AllStats}}
+            <tr>
+                <td><strong>{{.Name}}</strong></td>
+                <td><span class="badge badge-{{.Type}}">{{.Type}}</span></td>
+                <td>{{.Count}}</td>
+                <td>{{if gt .ErrorCount 0}}<span class="err">{{.ErrorCount}}</span>{{else}}0{{end}}</td>
+                <td>{{formatDuration .MinDuration}}</td>
+                <td>{{formatDuration .AvgDuration}}</td>
+                <td>{{formatDuration .P50Duration}}</td>
+                <td>{{formatDuration .P99Duration}}</td>
+                <td>{{formatDuration .MaxDuration}}</td>
+                <td>{{if .LastError}}<span class="err" title="{{.LastError}}">{{shortID .LastError}}</span>{{else}}<span class="na">-</span>{{end}}</td>
+            </tr>
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}<div class="card"><div class="empty">No statistics recorded yet. Try executing some commands!</div></div>{{end}}
+
+{{template "ddd_footer" .}}{{end}}

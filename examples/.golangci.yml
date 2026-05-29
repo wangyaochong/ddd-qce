@@ -1,0 +1,79 @@
+version: "2"
+
+run:
+  go: "1.26"
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - bodyclose
+    - errname
+    - exhaustive
+    - gochecknoglobals
+    - gocritic
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    gocritic:
+      enabled-checks:
+        - unlabelStmt
+        - unnecessaryBlock
+        - sloppyReassign
+        - builtinShadow
+        - importShadow
+
+    gosec:
+      excludes:
+        - G104
+
+    revive:
+      rules:
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: context-as-argument
+        - name: error-return
+        - name: var-naming
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - gochecknoglobals
+          - unparam
+          - revive
+          - unused
+          - noctx
+          - errname
+          - staticcheck
+          - prealloc
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/ddd-qce
+
+issues:
+  max-same-issues: 50

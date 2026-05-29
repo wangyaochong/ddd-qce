@@ -9,6 +9,7 @@ import (
 
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/domain/repository"
 	"github.com/ddd-qce/core/cqrs/event"
 	corepg "github.com/ddd-qce/core/pg"
@@ -44,6 +45,13 @@ func NewRepository[T aggregate.AggregateRef](db *sql.DB, opts ...RepoOption[T]) 
 	return r
 }
 
+func isUniqueViolation(err error) bool {
+	if sq, ok := err.(interface{ SQLState() string }); ok {
+		return sq.SQLState() == "23505"
+	}
+	return false
+}
+
 func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 	q := corepg.GetQuerier(ctx, r.db)
 	data, err := r.serializer.Serialize(agg)
@@ -51,13 +59,33 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		return fmt.Errorf("serialize aggregate: %w", err)
 	}
 	root := agg.GetAggregateRoot()
-	expectedVersion := root.ExpectedVersion()
+	snapshotVersion := root.SnapshotVersion()
+	newVersion := root.Version()
+
+	if snapshotVersion < 0 {
+		res, err := q.ExecContext(ctx,
+			`INSERT INTO ddd_aggregate_snapshots (aggregate_id, aggregate_type, snapshot_data, version, updated_at)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			root.ID(), r.typeName, data, newVersion, time.Now(),
+		)
+		if err != nil {
+			if isUniqueViolation(err) {
+				return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: snapshotVersion}
+			}
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: snapshotVersion}
+		}
+		root.SetSnapshotVersion(newVersion)
+		return nil
+	}
+
 	res, err := q.ExecContext(ctx,
-		`INSERT INTO ddd_aggregate_snapshots (aggregate_id, aggregate_type, snapshot_data, version, updated_at)
-		 VALUES ($1, $2, $3, $4, $5)
-		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
-		 WHERE ddd_aggregate_snapshots.version = $6 AND ddd_aggregate_snapshots.version < $4`,
-		root.ID(), r.typeName, data, root.Version(), time.Now(), expectedVersion,
+		`UPDATE ddd_aggregate_snapshots SET snapshot_data = $3, version = $4, updated_at = $5
+		 WHERE aggregate_id = $1 AND aggregate_type = $2 AND version = $6`,
+		root.ID(), r.typeName, data, newVersion, time.Now(), snapshotVersion,
 	)
 	if err != nil {
 		return err
@@ -67,8 +95,9 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: expectedVersion}
+		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: snapshotVersion}
 	}
+	root.SetSnapshotVersion(newVersion)
 	return nil
 }
 
@@ -119,7 +148,7 @@ type AggregateReconstructor[T aggregate.AggregateRef] func(id string) T
 
 type PgEventSourcedRepository[T aggregate.AggregateRef] struct {
 	db            *sql.DB
-	eventStore    event.EventSourceStore[event.Event]
+	eventStore    event.EventSourceStore[domainevent.Event]
 	reconstructor AggregateReconstructor[T]
 	serializer    repository.SnapshotSerializer[T]
 	typeName      string
@@ -128,7 +157,7 @@ type PgEventSourcedRepository[T aggregate.AggregateRef] struct {
 
 func NewEventSourcedRepository[T aggregate.AggregateRef](
 	db *sql.DB,
-	eventStore event.EventSourceStore[event.Event],
+	eventStore event.EventSourceStore[domainevent.Event],
 	reconstructor AggregateReconstructor[T],
 	opts ...EventSourcedRepoOption[T],
 ) *PgEventSourcedRepository[T] {
@@ -163,11 +192,11 @@ func WithSerializer[T aggregate.AggregateRef](s repository.SnapshotSerializer[T]
 
 func (r *PgEventSourcedRepository[T]) Save(ctx context.Context, agg T) error {
 	root := agg.GetAggregateRoot()
-	events := root.UncommittedEvents()
-	if len(events) == 0 {
+	domainEvents := root.UncommittedEvents()
+	if len(domainEvents) == 0 {
 		return nil
 	}
-	if err := r.eventStore.Append(ctx, root.ID(), root.Version()-len(events), events); err != nil {
+	if err := r.eventStore.Append(ctx, root.ID(), root.Version()-len(domainEvents), domainEvents); err != nil {
 		return fmt.Errorf("append events: %w", err)
 	}
 	if r.snapshotEvery > 0 && root.Version()%r.snapshotEvery == 0 {
@@ -217,13 +246,33 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 	if err != nil {
 		return err
 	}
-	expectedVersion := root.ExpectedVersion()
+	snapshotVersion := root.SnapshotVersion()
+	newVersion := root.Version()
+
+	if snapshotVersion < 0 {
+		res, err := q.ExecContext(ctx,
+			`INSERT INTO ddd_aggregate_snapshots (aggregate_id, aggregate_type, snapshot_data, version, updated_at)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			root.ID(), r.typeName, data, newVersion, time.Now(),
+		)
+		if err != nil {
+			if isUniqueViolation(err) {
+				return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: snapshotVersion}
+			}
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: snapshotVersion}
+		}
+		root.SetSnapshotVersion(newVersion)
+		return nil
+	}
+
 	res, err := q.ExecContext(ctx,
-		`INSERT INTO ddd_aggregate_snapshots (aggregate_id, aggregate_type, snapshot_data, version, updated_at)
-		 VALUES ($1, $2, $3, $4, $5)
-		 ON CONFLICT (aggregate_id) DO UPDATE SET snapshot_data = $3, version = $4, updated_at = $5
-		 WHERE ddd_aggregate_snapshots.version = $6 AND ddd_aggregate_snapshots.version < $4`,
-		root.ID(), r.typeName, data, root.Version(), time.Now(), expectedVersion,
+		`UPDATE ddd_aggregate_snapshots SET snapshot_data = $3, version = $4, updated_at = $5
+		 WHERE aggregate_id = $1 AND aggregate_type = $2 AND version = $6`,
+		root.ID(), r.typeName, data, newVersion, time.Now(), snapshotVersion,
 	)
 	if err != nil {
 		return err
@@ -233,8 +282,9 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: expectedVersion}
+		return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: snapshotVersion}
 	}
+	root.SetSnapshotVersion(newVersion)
 	return nil
 }
 

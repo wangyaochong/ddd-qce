@@ -1,0 +1,60 @@
+{{define "ddd_queries"}}{{template "ddd_header" .}}
+
+<h1>Queries</h1>
+
+<div class="search-box">
+    <form method="GET" class="filter-row">
+        <div class="filter-group">
+            <label>Type</label>
+            <input type="text" name="type" value="{{.Filter.Type}}" placeholder="e.g. GetOrder">
+        </div>
+        <div class="filter-group">
+            <label>Trace ID</label>
+            <input type="text" name="traceID" value="{{.Filter.TraceID}}" placeholder="trace id">
+        </div>
+        <div class="filter-group">
+            <label>Status</label>
+            <select name="status">
+                <option value="">All</option>
+                <option value="success" {{if eq .Filter.Status "success"}}selected{{end}}>Success</option>
+                <option value="error" {{if eq .Filter.Status "error"}}selected{{end}}>Error</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn btn-primary">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    {{if .Entries}}
+    <table>
+        <thead>
+            <tr><th>Type</th><th>Trace ID</th><th>Duration</th><th>Status</th><th>Time</th></tr>
+        </thead>
+        <tbody>
+        {{range .Entries}}
+            <tr>
+                <td><strong>{{.QueryType}}</strong></td>
+                <td>{{shortID .TraceID}}</td>
+                <td>{{formatDuration .Duration}}</td>
+                <td>{{if .Error}}<span class="badge badge-error">error</span>{{else}}<span class="badge badge-success">ok</span>{{end}}</td>
+                <td>{{formatTime .CreatedAt}}</td>
+            </tr>
+            {{if .QueryData}}
+            <tr class="detail-row"><td colspan="5">
+                <div class="detail-content">
+                    {{if .Error}}<div style="color:#c62828;margin-bottom:0.5rem;"><strong>Error:</strong> {{.Error}}</div>{{end}}
+                    <details><summary style="cursor:pointer;color:#1565c0;">Query Data</summary><div class="json-preview">{{formatData .QueryData}}</div></details>
+                    {{if .ResultData}}<details><summary style="cursor:pointer;color:#1565c0;">Result Data</summary><div class="json-preview">{{formatData .ResultData}}</div></details>{{end}}
+                </div>
+            </td></tr>
+            {{end}}
+        {{end}}
+        </tbody>
+    </table>
+    {{else}}<div class="empty">No queries recorded yet.</div>{{end}}
+</div>
+
+{{template "ddd_footer" .}}{{end}}

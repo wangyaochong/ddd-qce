@@ -6,17 +6,20 @@ import (
 	"fmt"
 
 	"github.com/ddd-qce/core/infra"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventpg "github.com/ddd-qce/core/cqrs/impl/pg"
-	domainevent "github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	inventoryevent "github.com/ddd-qce/exampleapp/ddd/inventory/event"
+	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 	"github.com/ddd-qce/exampleapp/ddd/order/repository"
 )
 
 type StoreComponents struct {
 	Backend      *infra.Backend
-	EventStore   domainevent.EventSourceStore[domainevent.Event]
+	EventStore   cqrsevent.EventSourceStore[domainevent.Event]
 	OrderRepo    repository.OrderRepositoryAdapter
 	DB           *sql.DB
 }
@@ -35,6 +38,17 @@ func NewProvider(cfg *Config) (*StoreComponents, error) {
 	}
 }
 
+func domainEventFactoryMap() map[string]func() domainevent.Event {
+	return map[string]func() domainevent.Event{
+		"OrderPlacedEvent":       func() domainevent.Event { return &orderevent.OrderPlacedEvent{} },
+		"PaymentConfirmedEvent":  func() domainevent.Event { return &orderevent.PaymentConfirmedEvent{} },
+		"OrderShippedEvent":      func() domainevent.Event { return &orderevent.OrderShippedEvent{} },
+		"OrderCancelledEvent":    func() domainevent.Event { return &orderevent.OrderCancelledEvent{} },
+		"InventoryReservedEvent": func() domainevent.Event { return &inventoryevent.InventoryReservedEvent{} },
+		"InventoryReleasedEvent": func() domainevent.Event { return &inventoryevent.InventoryReleasedEvent{} },
+	}
+}
+
 func newMemoryProvider() (*StoreComponents, error) {
 	eventStore, err := newMemoryEventStore()
 	if err != nil {
@@ -47,7 +61,7 @@ func newMemoryProvider() (*StoreComponents, error) {
 	}, nil
 }
 
-func newMemoryEventStore() (domainevent.EventSourceStore[domainevent.Event], error) {
+func newMemoryEventStore() (cqrsevent.EventSourceStore[domainevent.Event], error) {
 	return eventmemory.NewEventSourceStore[domainevent.Event]()
 }
 
@@ -67,7 +81,9 @@ func newPgProvider(dsn string) (*StoreComponents, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
-	eventStore, err := eventpg.NewEventSourceStore[domainevent.Event](db)
+	eventStore, err := eventpg.NewEventSourceStore[domainevent.Event](db,
+		eventpg.WithFactoryMap(domainEventFactoryMap()),
+	)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create pg event store: %w", err)

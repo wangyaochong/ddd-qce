@@ -3,10 +3,12 @@ package domain
 import (
 	"fmt"
 	"sync"
+
+	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 )
 
 type Product struct {
-	ID    string
+	ID    orderdomain.ProductID
 	Name  string
 	Price float64
 	Stock int
@@ -25,10 +27,10 @@ func NewInventory() *Inventory {
 	return inv
 }
 
-func (inv *Inventory) Reserve(productID string, quantity int) error {
+func (inv *Inventory) Reserve(productID orderdomain.ProductID, quantity int) error {
 	inv.mu.Lock()
 	defer inv.mu.Unlock()
-	p, ok := inv.products[productID]
+	p, ok := inv.products[productID.String()]
 	if !ok {
 		return fmt.Errorf("product %s not found", productID)
 	}
@@ -39,10 +41,10 @@ func (inv *Inventory) Reserve(productID string, quantity int) error {
 	return nil
 }
 
-func (inv *Inventory) Release(productID string, quantity int) error {
+func (inv *Inventory) Release(productID orderdomain.ProductID, quantity int) error {
 	inv.mu.Lock()
 	defer inv.mu.Unlock()
-	p, ok := inv.products[productID]
+	p, ok := inv.products[productID.String()]
 	if !ok {
 		return fmt.Errorf("product %s not found", productID)
 	}
@@ -60,10 +62,10 @@ func (inv *Inventory) GetAll() []Product {
 	return result
 }
 
-func (inv *Inventory) GetByID(id string) (Product, bool) {
+func (inv *Inventory) GetByID(id orderdomain.ProductID) (Product, bool) {
 	inv.mu.RLock()
 	defer inv.mu.RUnlock()
-	p, ok := inv.products[id]
+	p, ok := inv.products[id.String()]
 	if !ok {
 		return Product{}, false
 	}
@@ -72,14 +74,14 @@ func (inv *Inventory) GetByID(id string) (Product, bool) {
 
 func (inv *Inventory) seed() {
 	items := []Product{
-		{ID: "laptop", Name: "Laptop", Price: 999.99, Stock: 10},
-		{ID: "mouse", Name: "Mouse", Price: 29.99, Stock: 50},
-		{ID: "keyboard", Name: "Keyboard", Price: 79.99, Stock: 30},
-		{ID: "monitor", Name: "Monitor", Price: 499.99, Stock: 15},
-		{ID: "headphone", Name: "Headphone", Price: 149.99, Stock: 25},
+		{ID: orderdomain.ProductID("laptop"), Name: "Laptop", Price: 999.99, Stock: 10},
+		{ID: orderdomain.ProductID("mouse"), Name: "Mouse", Price: 29.99, Stock: 50},
+		{ID: orderdomain.ProductID("keyboard"), Name: "Keyboard", Price: 79.99, Stock: 30},
+		{ID: orderdomain.ProductID("monitor"), Name: "Monitor", Price: 499.99, Stock: 15},
+		{ID: orderdomain.ProductID("headphone"), Name: "Headphone", Price: 149.99, Stock: 25},
 	}
 	for _, item := range items {
 		p := item
-		inv.products[p.ID] = &p
+		inv.products[p.ID.String()] = &p
 	}
 }

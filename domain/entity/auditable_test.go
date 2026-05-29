@@ -104,3 +104,20 @@ func TestAuditableEntity_JSONRoundTrip(t *testing.T) {
 		t.Errorf("expected ID 'user-1', got '%s'", e2.ID())
 	}
 }
+
+func TestNewAuditableEntityWithID(t *testing.T) {
+	e := NewAuditableEntityWithID("user-1")
+	if e.ID() != "user-1" {
+		t.Errorf("expected ID 'user-1', got '%s'", e.ID())
+	}
+}
+
+func TestMustNewAuditableEntity_PanicWithEmptyID(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Error("MustNewAuditableEntity('') should panic")
+		}
+	}()
+	MustNewAuditableEntity("")
+}

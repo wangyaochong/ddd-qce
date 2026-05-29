@@ -1,0 +1,29 @@
+{{define "test_result"}}{{template "header" .}}
+
+<h1 style="margin-bottom:0.5rem;">{{.Title}}</h1>
+<p style="margin-bottom:1.5rem;color:#666;">Total: {{.Total}} | <span class="ok">Passed: {{.Passed}}</span> | <span class="err">Failed: {{.Failed}}</span> | Duration: {{.Duration}}</p>
+
+<div class="card">
+    <table>
+        <tr><th>Type</th><th>Name</th><th>Duration</th><th>Status</th><th>Detail</th></tr>
+        {{range .Steps}}
+        <tr>
+            <td><span class="badge badge-{{.Type}}">{{.Type}}</span></td>
+            <td>{{.Name}}</td>
+            <td>{{.Duration}}</td>
+            {{if .Success}}
+            <td><span class="ok">PASS</span></td>
+            {{else}}
+            <td><span class="err">FAIL</span></td>
+            {{end}}
+            <td style="font-size:0.85rem;color:#666;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{if .Error}}{{.Error}}{{else}}{{.Detail}}{{end}}</td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+
+<div style="margin-top:1rem;">
+    <a href="/" class="btn btn-primary">Back to Dashboard</a>
+</div>
+
+{{template "footer" .}}{{end}}

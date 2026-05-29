@@ -176,7 +176,7 @@ const (
 ### 2. 实现 EventApplier（推荐方式）
 
 ```go
-func (o *Order) When(evt event.Event) error {
+func (o *Order) When(evt domainevent.Event) error {
     switch e := evt.(type) {
     case OrderCreatedEvent:
         o.Items = e.Items

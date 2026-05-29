@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ddd-qce/core/aspect/builtin"
 	jobcore "github.com/ddd-qce/core/job/core"
@@ -23,12 +24,29 @@ type Backend struct {
 	TraceStore         trace.TraceStore
 	MessageStore       builtin.MessageStore
 	Migrator           Migrator
+	BusFactory         *BusFactory
 	closer             func() error
 }
 
 func (b *Backend) Close() error {
 	if b.closer != nil {
 		return b.closer()
+	}
+	return nil
+}
+
+func (b *Backend) Shutdown(ctx context.Context) error {
+	var errs []error
+	if ts, ok := b.TraceStore.(interface{ Close() }); ok {
+		ts.Close()
+	}
+	if b.closer != nil {
+		if err := b.closer(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("backend shutdown errors: %v", errs)
 	}
 	return nil
 }
@@ -57,6 +75,10 @@ func WithMessageStore(store builtin.MessageStore) BackendOption {
 
 func WithMigrator(m Migrator) BackendOption {
 	return func(b *Backend) { b.Migrator = m }
+}
+
+func WithBusFactory(f *BusFactory) BackendOption {
+	return func(b *Backend) { b.BusFactory = f }
 }
 
 func WithCloser(closer func() error) BackendOption {

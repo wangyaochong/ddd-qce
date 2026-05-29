@@ -17,7 +17,7 @@ type Config struct {
 func LoadConfig() *Config {
 	return &Config{
 		StoreType:   envOr("DDD_STORE_TYPE", StoreTypePostgreSQL),
-		PostgresURI: os.Getenv("DDD_POSTGRES_URI"),
+		PostgresURI: envOr("DDD_POSTGRES_URI", "postgres://wyc:wyc@localhost:5432/ddd_qce"),
 	}
 }
 

@@ -130,14 +130,24 @@ func (s *PgJobStore) Update(ctx context.Context, job *jobcore.Job) error {
 	if err != nil {
 		return fmt.Errorf("marshal result: %w", err)
 	}
-	_, err = q.ExecContext(ctx,
+	res, err := q.ExecContext(ctx,
 		`UPDATE ddd_jobs SET status=$2, result=$3, result_type=$4, error=$5, started_at=$6, completed_at=$7, timeout_ns=$8, retry_count=$9, max_retries=$10
 		 WHERE id=$1`,
 		job.ID, string(job.GetStatus()), resultData, corepg.NullString(resultType), corepg.NullString(job.GetError()),
 		corepg.NullTime(job.GetStartedAt()), corepg.NullTime(job.GetCompletedAt()),
 		job.Timeout.Nanoseconds(), job.RetryCount, job.MaxRetries,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("job %s: %w", job.ID, ddderror.ErrNotFound)
+	}
+	return nil
 }
 
 func (s *PgJobStore) List(ctx context.Context, status jobcore.JobStatus) ([]*jobcore.Job, error) {

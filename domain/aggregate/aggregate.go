@@ -2,11 +2,11 @@ package aggregate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/ddd-qce/core/domain/entity"
-	"github.com/ddd-qce/core/cqrs/event"
-	"github.com/ddd-qce/core/trace"
+	"github.com/ddd-qce/core/domain/event"
 )
 
 type AggregateRef interface {
@@ -17,6 +17,7 @@ type AggregateRef interface {
 type AggregateRoot struct {
 	entity.Entity
 	version           int
+	snapshotVersion   int
 	uncommittedEvents []event.Event
 }
 
@@ -26,7 +27,8 @@ func NewAggregateRoot(id string) (*AggregateRoot, error) {
 		return nil, err
 	}
 	return &AggregateRoot{
-		Entity: *e,
+		Entity:          *e,
+		snapshotVersion: -1,
 	}, nil
 }
 
@@ -51,13 +53,15 @@ func (a *AggregateRoot) ExpectedVersion() int {
 
 func (a *AggregateRoot) SetSnapshotVersion(v int) {
 	a.version = v
+	a.snapshotVersion = v
+}
+
+func (a *AggregateRoot) SnapshotVersion() int {
+	return a.snapshotVersion
 }
 
 func ApplyChange[T AggregateRef](agg T, ctx context.Context, evt event.Event) error {
 	root := agg.GetAggregateRoot()
-	if evt.CorrelationID() == "" {
-		event.ApplyCorrelation(evt, trace.GetTraceID(ctx), trace.GetSpanID(ctx))
-	}
 	if err := agg.When(evt); err != nil {
 		return fmt.Errorf("apply event %T: %w", evt, err)
 	}
@@ -109,8 +113,9 @@ func (a *AggregateRoot) Clone() *AggregateRoot {
 		return nil
 	}
 	clone := &AggregateRoot{
-		Entity:  *a.Entity.Clone(),
-		version: a.version,
+		Entity:          *a.Entity.Clone(),
+		version:         a.version,
+		snapshotVersion: a.snapshotVersion,
 	}
 	clone.uncommittedEvents = make([]event.Event, len(a.uncommittedEvents))
 	copy(clone.uncommittedEvents, a.uncommittedEvents)
@@ -119,19 +124,35 @@ func (a *AggregateRoot) Clone() *AggregateRoot {
 
 type AggregateRootJSON struct {
 	entity.EntityJSON
-	Version int `json:"version"`
+	Version         int `json:"version"`
+	SnapshotVersion int `json:"snapshotVersion"`
 }
 
 func (a *AggregateRoot) ToJSON() AggregateRootJSON {
 	return AggregateRootJSON{
-		EntityJSON: a.Entity.ToJSON(),
-		Version:    a.version,
+		EntityJSON:      a.Entity.ToJSON(),
+		Version:         a.version,
+		SnapshotVersion: a.snapshotVersion,
 	}
 }
 
 func (a *AggregateRoot) FromJSON(j AggregateRootJSON) {
 	a.Entity.FromJSON(j.EntityJSON)
 	a.version = j.Version
+	a.snapshotVersion = j.SnapshotVersion
+}
+
+func (a *AggregateRoot) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.ToJSON())
+}
+
+func (a *AggregateRoot) UnmarshalJSON(data []byte) error {
+	var aux AggregateRootJSON
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	a.FromJSON(aux)
+	return nil
 }
 
 func CloneAggregate[T AggregateRef](agg T) *AggregateRoot {

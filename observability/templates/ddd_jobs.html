@@ -1,0 +1,40 @@
+{{define "ddd_jobs"}}{{template "ddd_header" .}}
+
+<h1>Jobs</h1>
+
+{{range .Groups}}
+{{if .Jobs}}
+<div class="card">
+    <h2>{{.Status}} ({{len .Jobs}})</h2>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Command Type</th><th>Status</th><th>Retries</th><th>Created</th></tr>
+        </thead>
+        <tbody>
+        {{range .Jobs}}
+            <tr>
+                <td><code>{{shortID .ID}}</code></td>
+                <td>{{.CommandType}}</td>
+                <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+                <td>{{.RetryCount}}/{{.MaxRetries}}</td>
+                <td>{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+            </tr>
+            {{if .Error}}
+            <tr class="detail-row"><td colspan="5">
+                <div class="detail-content">
+                    <div style="color:#c62828;"><strong>Error:</strong> {{.Error}}</div>
+                </div>
+            </td></tr>
+            {{end}}
+        {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+{{end}}
+
+{{if not .Groups}}
+<div class="card"><div class="empty">No jobs found.</div></div>
+{{end}}
+
+{{template "ddd_footer" .}}{{end}}

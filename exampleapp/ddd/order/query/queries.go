@@ -2,10 +2,11 @@ package query
 
 import (
 	"github.com/ddd-qce/core/cqrs/query"
+	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 )
 
 type OrderViewItem struct {
-	ProductID   string
+	ProductID   orderdomain.ProductID
 	ProductName string
 	Price       float64
 	Quantity    int
@@ -14,12 +15,12 @@ type OrderViewItem struct {
 
 type GetOrderQuery struct {
 	query.BaseQuery
-	OrderID string
+	OrderID orderdomain.OrderID
 }
 
 type GetOrderResult struct {
-	OrderID      string
-	UserID       string
+	OrderID      orderdomain.OrderID
+	UserID       orderdomain.UserID
 	Status       string
 	TotalAmount  float64
 	Items        []OrderViewItem

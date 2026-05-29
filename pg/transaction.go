@@ -41,6 +41,7 @@ func (m *PgTransactionManager) Begin(ctx context.Context) (context.Context, erro
 			state.parentSp = state.parentSp[:len(state.parentSp)-1]
 			return nil, fmt.Errorf("create savepoint: %w", err)
 		}
+		state.aborted = false
 		return ctx, nil
 	}
 
@@ -81,7 +82,8 @@ func (m *PgTransactionManager) Commit(ctx context.Context) error {
 	}
 
 	if state.aborted {
-		return state.tx.Rollback()
+		_ = state.tx.Rollback()
+		return fmt.Errorf("transaction aborted by inner rollback")
 	}
 	return state.tx.Commit()
 }

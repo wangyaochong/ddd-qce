@@ -6,24 +6,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 )
 
 type testDomainEvent struct {
-	event.BaseEvent
+	cqrsevent.BaseEvent
 }
 
 type orderCreatedEvent struct {
-	event.BaseEvent
+	cqrsevent.BaseEvent
 	amount float64
 }
 
 type orderConfirmedEvent struct {
-	event.BaseEvent
+	cqrsevent.BaseEvent
 }
 
 type orderCancelledEvent struct {
-	event.BaseEvent
+	cqrsevent.BaseEvent
 	reason string
 }
 
@@ -44,7 +45,7 @@ func newTestOrder(id string) *testOrder {
 	return o
 }
 
-func (o *testOrder) When(evt event.Event) error {
+func (o *testOrder) When(evt domainevent.Event) error {
 	switch e := evt.(type) {
 	case *orderCreatedEvent:
 		o.Status = "created"
@@ -60,11 +61,11 @@ func (o *testOrder) When(evt event.Event) error {
 	return nil
 }
 
-func (o *testOrder) Apply(ctx context.Context, evt event.Event) error {
+func (o *testOrder) Apply(ctx context.Context, evt domainevent.Event) error {
 	return ApplyChange(o, ctx, evt)
 }
 
-func (o *testOrder) LoadFromHistory(events []event.Event) error {
+func (o *testOrder) LoadFromHistory(events []domainevent.Event) error {
 	return LoadFromHistory(o, events)
 }
 
@@ -82,13 +83,13 @@ func newTestEventCollector(id string) *testEventCollector {
 	return c
 }
 
-func (c *testEventCollector) When(_ event.Event) error { return nil }
+func (c *testEventCollector) When(_ domainevent.Event) error { return nil }
 
-func (c *testEventCollector) Apply(ctx context.Context, evt event.Event) error {
+func (c *testEventCollector) Apply(ctx context.Context, evt domainevent.Event) error {
 	return ApplyChange(c, ctx, evt)
 }
 
-func (c *testEventCollector) LoadFromHistory(events []event.Event) error {
+func (c *testEventCollector) LoadFromHistory(events []domainevent.Event) error {
 	return LoadFromHistory(c, events)
 }
 
@@ -107,7 +108,7 @@ func TestNewAggregateRoot_Initial(t *testing.T) {
 
 func TestApply_SingleEvent(t *testing.T) {
 	agg := newTestEventCollector("order-1")
-	evt := &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())}
+	evt := &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())}
 
 	_ = agg.Apply(context.Background(), evt)
 
@@ -127,9 +128,9 @@ func TestApply_SingleEvent(t *testing.T) {
 func TestApply_MultipleEvents(t *testing.T) {
 	agg := newTestEventCollector("order-1")
 
-	evt1 := &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())}
-	evt2 := &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())}
-	evt3 := &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())}
+	evt1 := &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())}
+	evt2 := &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())}
+	evt3 := &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())}
 
 	_ = agg.Apply(context.Background(), evt1)
 	_ = agg.Apply(context.Background(), evt2)
@@ -147,7 +148,7 @@ func TestApply_MultipleEvents(t *testing.T) {
 
 func TestUncommittedEvents_ReturnsCopy(t *testing.T) {
 	agg := newTestEventCollector("order-1")
-	evt := &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())}
+	evt := &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())}
 	_ = agg.Apply(context.Background(), evt)
 
 	events1 := agg.UncommittedEvents()
@@ -170,8 +171,8 @@ func TestUncommittedEvents_Empty(t *testing.T) {
 
 func TestMarkEventsAsCommitted(t *testing.T) {
 	agg := newTestEventCollector("order-1")
-	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())})
-	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())})
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
 
 	if len(agg.UncommittedEvents()) != 2 {
 		t.Fatal("expected 2 uncommitted events before marking")
@@ -197,7 +198,7 @@ func TestMarkEventsAsCommitted_Empty(t *testing.T) {
 
 func TestLoadFromHistory_Empty(t *testing.T) {
 	agg := newTestEventCollector("order-1")
-	_ = agg.LoadFromHistory([]event.Event{})
+	_ = agg.LoadFromHistory([]domainevent.Event{})
 
 	if agg.Version() != 0 {
 		t.Errorf("expected version 0 after loading empty history, got %d", agg.Version())
@@ -207,10 +208,10 @@ func TestLoadFromHistory_Empty(t *testing.T) {
 func TestLoadFromHistory_MultipleEvents(t *testing.T) {
 	agg := newTestEventCollector("order-1")
 
-	events := []event.Event{
-		&testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())},
-		&testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())},
-		&testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())},
+	events := []domainevent.Event{
+		&testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())},
+		&testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())},
+		&testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())},
 	}
 
 	_ = agg.LoadFromHistory(events)
@@ -227,7 +228,7 @@ func TestLoadFromHistory_MultipleEvents(t *testing.T) {
 
 func TestValidate_Valid(t *testing.T) {
 	agg := newTestEventCollector("order-1")
-	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())})
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
 
 	err := agg.Validate()
 	if err != nil {
@@ -257,7 +258,7 @@ func TestValidate_NegativeVersion(t *testing.T) {
 func TestApply_NewEventMutatesState(t *testing.T) {
 	order := newTestOrder("ORD-001")
 
-	_ = order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), amount: 99.99})
+	_ = order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now()), amount: 99.99})
 
 	if order.Status != "created" {
 		t.Errorf("expected status 'created', got '%s'", order.Status)
@@ -269,7 +270,7 @@ func TestApply_NewEventMutatesState(t *testing.T) {
 		t.Errorf("expected version 1, got %d", order.Version())
 	}
 
-	_ = order.Apply(context.Background(), &orderConfirmedEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now())})
+	_ = order.Apply(context.Background(), &orderConfirmedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now())})
 
 	if order.Status != "confirmed" {
 		t.Errorf("expected status 'confirmed', got '%s'", order.Status)
@@ -282,10 +283,10 @@ func TestApply_NewEventMutatesState(t *testing.T) {
 func TestLoadFromHistory_StateRebuild(t *testing.T) {
 	order := newTestOrder("ORD-001")
 
-	history := []event.Event{
-		&orderCreatedEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), amount: 500.00},
-		&orderConfirmedEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now())},
-		&orderCancelledEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), reason: "customer request"},
+	history := []domainevent.Event{
+		&orderCreatedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now()), amount: 500.00},
+		&orderConfirmedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now())},
+		&orderCancelledEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now()), reason: "customer request"},
 	}
 
 	_ = order.LoadFromHistory(history)
@@ -310,7 +311,7 @@ func TestLoadFromHistory_StateRebuild(t *testing.T) {
 func TestApply_ThenLoadFromHistory(t *testing.T) {
 	order := newTestOrder("ORD-001")
 
-	_ = order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), amount: 100.00})
+	_ = order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now()), amount: 100.00})
 
 	if order.Status != "created" {
 		t.Errorf("expected status 'created', got '%s'", order.Status)
@@ -335,7 +336,7 @@ func TestNewAggregateRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	evt := &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())}
+	evt := &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())}
 
 	collector := newTestEventCollector(agg.ID())
 	_ = collector.Apply(context.Background(), evt)
@@ -344,9 +345,9 @@ func TestNewAggregateRoot(t *testing.T) {
 		t.Errorf("expected version 1, got %d", collector.Version())
 	}
 
-	history := []event.Event{
-		&testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())},
-		&testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())},
+	history := []domainevent.Event{
+		&testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())},
+		&testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())},
 	}
 	_ = collector.LoadFromHistory(history)
 
@@ -358,9 +359,9 @@ func TestNewAggregateRoot(t *testing.T) {
 func TestAggregateRoot_OrderLifecycle(t *testing.T) {
 	order := newTestOrder("order-123")
 
-	_ = order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: event.NewBaseEvent("order-123", time.Now()), amount: 100})
-	_ = order.Apply(context.Background(), &orderConfirmedEvent{BaseEvent: event.NewBaseEvent("order-123", time.Now())})
-	_ = order.Apply(context.Background(), &orderCancelledEvent{BaseEvent: event.NewBaseEvent("order-123", time.Now()), reason: "test"})
+	_ = order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: cqrsevent.NewBaseEvent("order-123", time.Now()), amount: 100})
+	_ = order.Apply(context.Background(), &orderConfirmedEvent{BaseEvent: cqrsevent.NewBaseEvent("order-123", time.Now())})
+	_ = order.Apply(context.Background(), &orderCancelledEvent{BaseEvent: cqrsevent.NewBaseEvent("order-123", time.Now()), reason: "test"})
 
 	if order.Version() != 3 {
 		t.Errorf("expected version 3, got %d", order.Version())
@@ -435,7 +436,7 @@ func TestAggregateRoot_Equals_BothNil(t *testing.T) {
 
 func TestCloneAggregate(t *testing.T) {
 	order := newTestOrder("ORD-001")
-	order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), amount: 100})
+	order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now()), amount: 100})
 
 	clone := CloneAggregate(order)
 	if clone == nil {
@@ -467,7 +468,7 @@ func TestAggregateRoot_Validate_NegativeVersion(t *testing.T) {
 
 func TestAggregateRoot_Clone(t *testing.T) {
 	agg := newTestEventCollector("order-1")
-	agg.Apply(context.Background(), &testDomainEvent{BaseEvent: event.NewBaseEvent("order-1", time.Now())})
+	agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
 
 	clone := agg.GetAggregateRoot().Clone()
 	if clone == nil {
@@ -480,7 +481,7 @@ func TestAggregateRoot_Clone(t *testing.T) {
 
 func TestApply_EventHandlerError(t *testing.T) {
 	order := newTestOrder("ORD-001")
-	unknownEvent := &testDomainEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now())}
+	unknownEvent := &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now())}
 
 	err := order.Apply(context.Background(), unknownEvent)
 	if err == nil {
@@ -490,9 +491,9 @@ func TestApply_EventHandlerError(t *testing.T) {
 
 func TestLoadFromHistory_Error(t *testing.T) {
 	order := newTestOrder("ORD-001")
-	unknownEvent := &testDomainEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now())}
+	unknownEvent := &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now())}
 
-	err := order.LoadFromHistory([]event.Event{unknownEvent})
+	err := order.LoadFromHistory([]domainevent.Event{unknownEvent})
 	if err == nil {
 		t.Error("LoadFromHistory() should return error for unhandled event type")
 	}
@@ -500,8 +501,8 @@ func TestLoadFromHistory_Error(t *testing.T) {
 
 func TestApply_CollectsUncommittedEvents(t *testing.T) {
 	order := newTestOrder("ORD-001")
-	evt1 := &orderCreatedEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), amount: 100}
-	evt2 := &orderConfirmedEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now())}
+	evt1 := &orderCreatedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now()), amount: 100}
+	evt2 := &orderConfirmedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now())}
 
 	_ = order.Apply(context.Background(), evt1)
 	_ = order.Apply(context.Background(), evt2)
@@ -514,12 +515,138 @@ func TestApply_CollectsUncommittedEvents(t *testing.T) {
 
 func TestMarkEventsAsCommitted_ClearsEvents(t *testing.T) {
 	order := newTestOrder("ORD-001")
-	_ = order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: event.NewBaseEvent("ORD-001", time.Now()), amount: 100})
+	_ = order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now()), amount: 100})
 
 	order.MarkEventsAsCommitted()
 
 	events := order.UncommittedEvents()
 	if len(events) != 0 {
 		t.Errorf("expected 0 uncommitted events after MarkEventsAsCommitted, got %d", len(events))
+	}
+}
+
+func TestAggregateRoot_ExpectedVersion_NoUncommitted(t *testing.T) {
+	agg := newTestEventCollector("order-1")
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+	agg.MarkEventsAsCommitted()
+
+	if agg.ExpectedVersion() != agg.Version() {
+		t.Errorf("ExpectedVersion() = %d, want %d (same as Version with no uncommitted events)", agg.ExpectedVersion(), agg.Version())
+	}
+}
+
+func TestAggregateRoot_ExpectedVersion_WithUncommitted(t *testing.T) {
+	agg := newTestEventCollector("order-1")
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+	agg.MarkEventsAsCommitted()
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+
+	if agg.ExpectedVersion() != 2 {
+		t.Errorf("ExpectedVersion() = %d, want 2 (Version=3 minus 1 uncommitted)", agg.ExpectedVersion())
+	}
+	if agg.ExpectedVersion() >= agg.Version() {
+		t.Errorf("ExpectedVersion() = %d should be less than Version() = %d", agg.ExpectedVersion(), agg.Version())
+	}
+}
+
+func TestAggregateRoot_SnapshotVersion_Initial(t *testing.T) {
+	agg, _ := NewAggregateRoot("order-1")
+	if agg.SnapshotVersion() != -1 {
+		t.Errorf("SnapshotVersion() = %d, want -1 initially", agg.SnapshotVersion())
+	}
+}
+
+func TestAggregateRoot_SnapshotVersion_AfterSet(t *testing.T) {
+	agg, _ := NewAggregateRoot("order-1")
+	agg.SetSnapshotVersion(5)
+	if agg.SnapshotVersion() != 5 {
+		t.Errorf("SnapshotVersion() = %d, want 5", agg.SnapshotVersion())
+	}
+	if agg.Version() != 5 {
+		t.Errorf("Version() = %d, want 5 after SetSnapshotVersion", agg.Version())
+	}
+}
+
+func TestAggregateRoot_ToJSON(t *testing.T) {
+	agg := newTestEventCollector("order-1")
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+	agg.SetSnapshotVersion(1)
+
+	j := agg.ToJSON()
+	if j.ID != "order-1" {
+		t.Errorf("ToJSON().ID = %q, want %q", j.ID, "order-1")
+	}
+	if j.Version != 1 {
+		t.Errorf("ToJSON().Version = %d, want 1", j.Version)
+	}
+	if j.SnapshotVersion != 1 {
+		t.Errorf("ToJSON().SnapshotVersion = %d, want 1", j.SnapshotVersion)
+	}
+}
+
+func TestAggregateRoot_FromJSON(t *testing.T) {
+	agg := newTestEventCollector("order-1")
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+	agg.SetSnapshotVersion(1)
+
+	j := agg.ToJSON()
+
+	agg2, _ := NewAggregateRoot("placeholder")
+	agg2.FromJSON(j)
+
+	if agg2.ID() != "order-1" {
+		t.Errorf("FromJSON: ID = %q, want %q", agg2.ID(), "order-1")
+	}
+	if agg2.Version() != 1 {
+		t.Errorf("FromJSON: Version = %d, want 1", agg2.Version())
+	}
+	if agg2.SnapshotVersion() != 1 {
+		t.Errorf("FromJSON: SnapshotVersion = %d, want 1", agg2.SnapshotVersion())
+	}
+}
+
+func TestAggregateRoot_ToJSON_FromJSON_RoundTrip(t *testing.T) {
+	agg := newTestEventCollector("order-1")
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+	agg.MarkEventsAsCommitted()
+	agg.SetSnapshotVersion(2)
+
+	j := agg.ToJSON()
+
+	agg2, _ := NewAggregateRoot("x")
+	agg2.FromJSON(j)
+
+	if agg2.ID() != agg.ID() {
+		t.Errorf("round-trip ID = %q, want %q", agg2.ID(), agg.ID())
+	}
+	if agg2.Version() != agg.Version() {
+		t.Errorf("round-trip Version = %d, want %d", agg2.Version(), agg.Version())
+	}
+	if agg2.SnapshotVersion() != agg.SnapshotVersion() {
+		t.Errorf("round-trip SnapshotVersion = %d, want %d", agg2.SnapshotVersion(), agg.SnapshotVersion())
+	}
+}
+
+func TestCloneAggregate_Nil(t *testing.T) {
+	var order *testOrder
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("CloneAggregate with typed nil pointer should panic")
+		}
+	}()
+	CloneAggregate(order)
+}
+
+func TestCloneAggregate_Independence(t *testing.T) {
+	order := newTestOrder("ORD-001")
+	_ = order.Apply(context.Background(), &orderCreatedEvent{BaseEvent: cqrsevent.NewBaseEvent("ORD-001", time.Now()), amount: 100})
+
+	clone := CloneAggregate(order)
+	clone.version = 99
+
+	if order.Version() == 99 {
+		t.Error("modifying clone should not affect original")
 	}
 }

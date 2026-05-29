@@ -2,12 +2,13 @@ package command
 
 import (
 	"github.com/ddd-qce/core/cqrs/command"
+	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 )
 
 type ReserveInventoryCommand struct {
 	command.BaseCommand
-	OrderID   string
-	ProductID string
+	OrderID   orderdomain.OrderID
+	ProductID orderdomain.ProductID
 	Quantity  int
 }
 
@@ -17,8 +18,8 @@ type ReserveInventoryResult struct {
 
 type ReleaseInventoryCommand struct {
 	command.BaseCommand
-	OrderID   string
-	ProductID string
+	OrderID   orderdomain.OrderID
+	ProductID orderdomain.ProductID
 	Quantity  int
 }
 

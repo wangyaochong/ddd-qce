@@ -29,6 +29,9 @@
         .badge-completed { background: #e8f5e9; color: #2e7d32; }
         .badge-running { background: #e3f2fd; color: #1565c0; }
         .badge-failed { background: #fce4ec; color: #c62828; }
+        .badge-query { background: #e3f2fd; color: #1565c0; }
+        .badge-command { background: #e8f5e9; color: #2e7d32; }
+        .badge-event { background: #fff3e0; color: #e65100; }
         .btn { display: inline-block; padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
         .btn-primary { background: #1a1a2e; color: #fff; }
         .btn-primary:hover { background: #16213e; }
@@ -60,6 +63,7 @@
         <a href="/inventory" class="{{if eq .Page "inventory"}}active{{end}}">Inventory</a>
         <a href="/jobs" class="{{if eq .Page "jobs"}}active{{end}}">Jobs</a>
         <a href="/traces" class="{{if eq .Page "traces"}}active{{end}}">Traces</a>
+        <a href="/api/ddd/ddd_overview" target="_blank" style="margin-left:auto;">DDD Viewer</a>
     </nav>
     <div class="container">
 {{end}}

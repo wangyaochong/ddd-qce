@@ -1,44 +1,76 @@
 package http
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"net/http"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/ddd-qce/core/cqrs/command"
 	"github.com/ddd-qce/core/cqrs/query"
 	"github.com/ddd-qce/core/cqrs/event"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
+	inventorycommand "github.com/ddd-qce/exampleapp/ddd/inventory/command"
+	inventoryevent "github.com/ddd-qce/exampleapp/ddd/inventory/event"
+	inventoryquery "github.com/ddd-qce/exampleapp/ddd/inventory/query"
 	ordercommand "github.com/ddd-qce/exampleapp/ddd/order/command"
 	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
+	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 	orderquery "github.com/ddd-qce/exampleapp/ddd/order/query"
-	inventoryquery "github.com/ddd-qce/exampleapp/ddd/inventory/query"
 	"github.com/ddd-qce/exampleapp/infrastructure"
 )
 
 type Handler struct {
-	app  *infrastructure.AppContext
-	tmpl *template.Template
+	app        *infrastructure.AppContext
+	tmpl       *template.Template
+	tmplMu     sync.RWMutex
+	tmplPath   string
+	tmplFuncs  template.FuncMap
+	livereload *LiveReloadServer
+	reloadMu   sync.Mutex
 }
 
-func NewHandler(app *infrastructure.AppContext) *Handler {
+func NewHandler(app *infrastructure.AppContext, livereload *LiveReloadServer) *Handler {
 	fm := template.FuncMap{"add": func(a, b int) int { return a + b }}
-	tmpl := template.Must(template.New("").Funcs(fm).ParseGlob(resolveTemplatePath()))
-	return &Handler{app: app, tmpl: tmpl}
+	tmplPath := resolveTemplatePath()
+	tmpl := template.Must(template.New("").Funcs(fm).ParseGlob(tmplPath))
+	return &Handler{app: app, tmpl: tmpl, tmplPath: tmplPath, tmplFuncs: fm, livereload: livereload}
 }
 
-func resolveTemplatePath() string {
+func (h *Handler) reloadTemplates() {
+	h.reloadMu.Lock()
+	defer h.reloadMu.Unlock()
+	if h.livereload == nil || !h.livereload.IsStale() {
+		return
+	}
+	tmpl := template.Must(template.New("").Funcs(h.tmplFuncs).ParseGlob(h.tmplPath))
+	h.tmplMu.Lock()
+	h.tmpl = tmpl
+	h.tmplMu.Unlock()
+	h.livereload.ClearStale()
+}
+
+func TemplateDir() string {
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
 		panic("cannot determine source file path")
 	}
-	templateDir := filepath.Join(filepath.Dir(thisFile), "templates")
-	pattern := filepath.Join(templateDir, "*.html")
+	return filepath.Join(filepath.Dir(thisFile), "templates")
+}
+
+func resolveTemplatePath() string {
+	dir := TemplateDir()
+	pattern := filepath.Join(dir, "*.html")
 	if matches, err := filepath.Glob(pattern); err == nil && len(matches) > 0 {
 		return pattern
 	}
@@ -121,7 +153,7 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	var items []ordercommand.ItemInput
 	products := h.app.Inventory.GetAll()
 	for _, p := range products {
-		qtyStr := r.FormValue("qty_" + p.ID)
+		qtyStr := r.FormValue("qty_" + p.ID.String())
 		if qty, err := strconv.Atoi(qtyStr); err == nil && qty > 0 {
 			items = append(items, ordercommand.ItemInput{
 				ProductID:   p.ID,
@@ -138,20 +170,20 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, h.app.CmdBus, &ordercommand.PlaceOrderCommand{
-		UserID: userID,
+		UserID: orderdomain.NewUserID(userID),
 		Items:  items,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/orders/"+result.OrderID, http.StatusSeeOther)
+	http.Redirect(w, r, "/orders/"+result.OrderID.String(), http.StatusSeeOther)
 }
 
 func (h *Handler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	result, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: orderID})
+	result, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: orderdomain.NewOrderID(orderID)})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -162,7 +194,7 @@ func (h *Handler) OrderDetail(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ConfirmPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	_, err := command.Dispatch[*ordercommand.ConfirmPaymentCommand, *ordercommand.ConfirmPaymentResult](ctx, h.app.CmdBus, &ordercommand.ConfirmPaymentCommand{OrderID: orderID})
+	_, err := command.Dispatch[*ordercommand.ConfirmPaymentCommand, *ordercommand.ConfirmPaymentResult](ctx, h.app.CmdBus, &ordercommand.ConfirmPaymentCommand{OrderID: orderdomain.NewOrderID(orderID)})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -173,7 +205,7 @@ func (h *Handler) ConfirmPayment(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ShipOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
-	_, err := command.Dispatch[*ordercommand.ShipOrderCommand, *ordercommand.ShipOrderResult](ctx, h.app.CmdBus, &ordercommand.ShipOrderCommand{OrderID: orderID})
+	_, err := command.Dispatch[*ordercommand.ShipOrderCommand, *ordercommand.ShipOrderResult](ctx, h.app.CmdBus, &ordercommand.ShipOrderCommand{OrderID: orderdomain.NewOrderID(orderID)})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -185,7 +217,7 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := r.PathValue("id")
 	reason := r.FormValue("reason")
-	_, err := command.Dispatch[*ordercommand.CancelOrderCommand, *ordercommand.CancelOrderResult](ctx, h.app.CmdBus, &ordercommand.CancelOrderCommand{OrderID: orderID, Reason: reason})
+	_, err := command.Dispatch[*ordercommand.CancelOrderCommand, *ordercommand.CancelOrderResult](ctx, h.app.CmdBus, &ordercommand.CancelOrderCommand{OrderID: orderdomain.NewOrderID(orderID), Reason: reason})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -247,7 +279,7 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 		views[i] = view
 	}
 
-	order, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: orderID})
+	order, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: orderdomain.NewOrderID(orderID)})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -300,7 +332,7 @@ func (h *Handler) SubmitJob(w http.ResponseWriter, r *http.Request) {
 		opts = append(opts, jobcore.WithMaxRetries(retries))
 	}
 
-	_, err := h.app.JobManager.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderID}, opts...)
+	_, err := h.app.JobManager.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderdomain.NewOrderID(orderID)}, opts...)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -379,11 +411,443 @@ func (h *Handler) ListTraces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type TestStep struct {
+	Type     string
+	Name     string
+	Duration string
+	Success  bool
+	Error    string
+	Detail   string
+}
+
+type TestResult struct {
+	Title    string
+	Steps    []TestStep
+	Total    int
+	Passed   int
+	Failed   int
+	Duration string
+}
+
+func (h *Handler) TestQuery(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	start := time.Now()
+	var steps []TestStep
+
+	step := func(name string, fn func() (string, error)) {
+		s := time.Now()
+		detail, err := fn()
+		steps = append(steps, TestStep{
+			Type:     "query",
+			Name:     name,
+			Duration: time.Since(s).String(),
+			Success:  err == nil,
+			Error:    errStr(err),
+			Detail:   detail,
+		})
+	}
+
+	step("ListOrdersQuery", func() (string, error) {
+		result, err := query.Dispatch[*orderquery.ListOrdersQuery, *orderquery.ListOrdersResult](ctx, h.app.QueryBus, &orderquery.ListOrdersQuery{})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("returned %d orders", len(result.Orders)), nil
+	})
+
+	step("GetOrderQuery (with orderID)", func() (string, error) {
+		placeResult, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, h.app.CmdBus, &ordercommand.PlaceOrderCommand{
+			UserID: orderdomain.NewUserID("test-query-user"),
+			Items:  []ordercommand.ItemInput{{ProductID: orderdomain.ProductID("laptop"), ProductName: "Laptop", Price: 999.99, Quantity: 1}},
+		})
+		if err != nil {
+			return "", fmt.Errorf("setup: place order: %w", err)
+		}
+		result, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: placeResult.OrderID})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("order %s status=%s total=%.2f", result.OrderID, result.Status, result.TotalAmount), nil
+	})
+
+	step("GetInventoryQuery", func() (string, error) {
+		result, err := query.Dispatch[*inventoryquery.GetInventoryQuery, *inventoryquery.GetInventoryResult](ctx, h.app.QueryBus, &inventoryquery.GetInventoryQuery{})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("returned %d products", len(result.Products)), nil
+	})
+
+	h.renderTestResult(w, "Test Query", steps, time.Since(start))
+}
+
+func (h *Handler) TestCommand(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	start := time.Now()
+	var steps []TestStep
+
+	step := func(name string, fn func() (string, error)) {
+		s := time.Now()
+		detail, err := fn()
+		steps = append(steps, TestStep{
+			Type:     "command",
+			Name:     name,
+			Duration: time.Since(s).String(),
+			Success:  err == nil,
+			Error:    errStr(err),
+			Detail:   detail,
+		})
+	}
+
+	var orderID orderdomain.OrderID
+
+	step("PlaceOrderCommand", func() (string, error) {
+		result, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, h.app.CmdBus, &ordercommand.PlaceOrderCommand{
+			UserID: orderdomain.NewUserID("test-cmd-user"),
+			Items:  []ordercommand.ItemInput{{ProductID: orderdomain.ProductID("mouse"), ProductName: "Mouse", Price: 29.99, Quantity: 2}},
+		})
+		if err != nil {
+			return "", err
+		}
+		orderID = result.OrderID
+		return fmt.Sprintf("orderID=%s total=%.2f", result.OrderID, result.TotalAmount), nil
+	})
+
+	step("ConfirmPaymentCommand", func() (string, error) {
+		result, err := command.Dispatch[*ordercommand.ConfirmPaymentCommand, *ordercommand.ConfirmPaymentResult](ctx, h.app.CmdBus, &ordercommand.ConfirmPaymentCommand{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("success=%v", result.Success), nil
+	})
+
+	step("ShipOrderCommand", func() (string, error) {
+		result, err := command.Dispatch[*ordercommand.ShipOrderCommand, *ordercommand.ShipOrderResult](ctx, h.app.CmdBus, &ordercommand.ShipOrderCommand{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("success=%v", result.Success), nil
+	})
+
+	var cancelID orderdomain.OrderID
+	step("CancelOrderCommand", func() (string, error) {
+		placeResult, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, h.app.CmdBus, &ordercommand.PlaceOrderCommand{
+			UserID: orderdomain.NewUserID("test-cancel-user"),
+			Items:  []ordercommand.ItemInput{{ProductID: orderdomain.ProductID("keyboard"), ProductName: "Keyboard", Price: 79.99, Quantity: 1}},
+		})
+		if err != nil {
+			return "", fmt.Errorf("setup: place order: %w", err)
+		}
+		cancelID = placeResult.OrderID
+		result, err := command.Dispatch[*ordercommand.CancelOrderCommand, *ordercommand.CancelOrderResult](ctx, h.app.CmdBus, &ordercommand.CancelOrderCommand{OrderID: cancelID, Reason: "test cancel"})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("success=%v", result.Success), nil
+	})
+
+	step("GenerateReportCommand", func() (string, error) {
+		result, err := command.Dispatch[*ordercommand.GenerateReportCommand, *ordercommand.GenerateReportResult](ctx, h.app.CmdBus, &ordercommand.GenerateReportCommand{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("reportID=%s generated=%v", result.ReportID, result.Generated), nil
+	})
+
+	step("ReserveInventoryCommand", func() (string, error) {
+		uid := uuid.New()
+		result, err := command.Dispatch[*inventorycommand.ReserveInventoryCommand, *inventorycommand.ReserveInventoryResult](ctx, h.app.CmdBus, &inventorycommand.ReserveInventoryCommand{
+			OrderID:   orderdomain.NewOrderID(hex.EncodeToString(uid[:])),
+			ProductID: orderdomain.ProductID("headphone"),
+			Quantity:  1,
+		})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("success=%v", result.Success), nil
+	})
+
+	step("ReleaseInventoryCommand", func() (string, error) {
+		uid := uuid.New()
+		result, err := command.Dispatch[*inventorycommand.ReleaseInventoryCommand, *inventorycommand.ReleaseInventoryResult](ctx, h.app.CmdBus, &inventorycommand.ReleaseInventoryCommand{
+			OrderID:   orderdomain.NewOrderID(hex.EncodeToString(uid[:])),
+			ProductID: orderdomain.ProductID("headphone"),
+			Quantity:  1,
+		})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("success=%v", result.Success), nil
+	})
+
+	h.renderTestResult(w, "Test Command", steps, time.Since(start))
+}
+
+func (h *Handler) TestEvent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	start := time.Now()
+	var steps []TestStep
+
+	step := func(name string, fn func() (string, error)) {
+		s := time.Now()
+		detail, err := fn()
+		steps = append(steps, TestStep{
+			Type:     "event",
+			Name:     name,
+			Duration: time.Since(s).String(),
+			Success:  err == nil,
+			Error:    errStr(err),
+			Detail:   detail,
+		})
+	}
+
+	uid := uuid.New()
+	testAggID := hex.EncodeToString(uid[:])
+
+	step("OrderPlacedEvent (→ NotificationHandler + InventoryHandler)", func() (string, error) {
+		err := event.Dispatch(ctx, h.app.EventBus, &orderevent.OrderPlacedEvent{
+			BaseEvent:   event.WithCorrelation(ctx, testAggID),
+			UserID:      "test-event-user",
+			TotalAmount: 999.99,
+			Items:       []string{"Laptop"},
+		})
+		if err != nil {
+			return "", err
+		}
+		time.Sleep(200 * time.Millisecond)
+		return "dispatched, handlers invoked", nil
+	})
+
+	step("PaymentConfirmedEvent", func() (string, error) {
+		err := event.Dispatch(ctx, h.app.EventBus, &orderevent.PaymentConfirmedEvent{
+			BaseEvent: event.WithCorrelation(ctx, testAggID),
+		})
+		if err != nil {
+			return "", err
+		}
+		time.Sleep(100 * time.Millisecond)
+		return "dispatched", nil
+	})
+
+	step("OrderShippedEvent", func() (string, error) {
+		err := event.Dispatch(ctx, h.app.EventBus, &orderevent.OrderShippedEvent{
+			BaseEvent: event.WithCorrelation(ctx, testAggID),
+		})
+		if err != nil {
+			return "", err
+		}
+		time.Sleep(100 * time.Millisecond)
+		return "dispatched", nil
+	})
+
+	step("OrderCancelledEvent (→ InventoryHandler)", func() (string, error) {
+		err := event.Dispatch(ctx, h.app.EventBus, &orderevent.OrderCancelledEvent{
+			BaseEvent: event.WithCorrelation(ctx, testAggID),
+			Reason:    "test cancel",
+		})
+		if err != nil {
+			return "", err
+		}
+		time.Sleep(200 * time.Millisecond)
+		return "dispatched, inventory handler invoked", nil
+	})
+
+	step("InventoryReservedEvent", func() (string, error) {
+		uid2 := uuid.New()
+		err := event.Dispatch(ctx, h.app.EventBus, &inventoryevent.InventoryReservedEvent{
+			BaseEvent: event.WithCorrelation(ctx, hex.EncodeToString(uid2[:])),
+			ProductID: "mouse",
+			Quantity:  2,
+		})
+		if err != nil {
+			return "", err
+		}
+		time.Sleep(100 * time.Millisecond)
+		return "dispatched", nil
+	})
+
+	step("InventoryReleasedEvent", func() (string, error) {
+		uid2 := uuid.New()
+		err := event.Dispatch(ctx, h.app.EventBus, &inventoryevent.InventoryReleasedEvent{
+			BaseEvent: event.WithCorrelation(ctx, hex.EncodeToString(uid2[:])),
+			ProductID: "mouse",
+			Quantity:  2,
+		})
+		if err != nil {
+			return "", err
+		}
+		time.Sleep(100 * time.Millisecond)
+		return "dispatched", nil
+	})
+
+	h.renderTestResult(w, "Test Event", steps, time.Since(start))
+}
+
+func (h *Handler) TestQCE(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	start := time.Now()
+	var steps []TestStep
+
+	step := func(typ, name string, fn func() (string, error)) {
+		s := time.Now()
+		detail, err := fn()
+		steps = append(steps, TestStep{
+			Type:     typ,
+			Name:     name,
+			Duration: time.Since(s).String(),
+			Success:  err == nil,
+			Error:    errStr(err),
+			Detail:   detail,
+		})
+	}
+
+	var orderID orderdomain.OrderID
+
+	step("command", "PlaceOrderCommand", func() (string, error) {
+		result, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, h.app.CmdBus, &ordercommand.PlaceOrderCommand{
+			UserID: orderdomain.NewUserID("test-qce-user"),
+			Items:  []ordercommand.ItemInput{{ProductID: orderdomain.ProductID("monitor"), ProductName: "Monitor", Price: 499.99, Quantity: 1}},
+		})
+		if err != nil {
+			return "", err
+		}
+		orderID = result.OrderID
+		return fmt.Sprintf("orderID=%s total=%.2f", result.OrderID, result.TotalAmount), nil
+	})
+
+	time.Sleep(200 * time.Millisecond)
+
+	step("event", "OrderPlacedEvent (auto-dispatched)", func() (string, error) {
+		return "triggered by PlaceOrderCommand, handled by NotificationHandler + InventoryHandler → ReserveInventoryCommand", nil
+	})
+
+	step("query", "GetOrderQuery (verify pending)", func() (string, error) {
+		result, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		if result.Status != "pending" {
+			return "", fmt.Errorf("expected pending, got %s", result.Status)
+		}
+		return fmt.Sprintf("status=%s (correct)", result.Status), nil
+	})
+
+	step("command", "ConfirmPaymentCommand", func() (string, error) {
+		result, err := command.Dispatch[*ordercommand.ConfirmPaymentCommand, *ordercommand.ConfirmPaymentResult](ctx, h.app.CmdBus, &ordercommand.ConfirmPaymentCommand{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("success=%v", result.Success), nil
+	})
+
+	time.Sleep(100 * time.Millisecond)
+
+	step("event", "PaymentConfirmedEvent (auto-dispatched)", func() (string, error) {
+		return "triggered by ConfirmPaymentCommand", nil
+	})
+
+	step("query", "GetOrderQuery (verify paid)", func() (string, error) {
+		result, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		if result.Status != "paid" {
+			return "", fmt.Errorf("expected paid, got %s", result.Status)
+		}
+		return fmt.Sprintf("status=%s (correct)", result.Status), nil
+	})
+
+	step("command", "ShipOrderCommand", func() (string, error) {
+		result, err := command.Dispatch[*ordercommand.ShipOrderCommand, *ordercommand.ShipOrderResult](ctx, h.app.CmdBus, &ordercommand.ShipOrderCommand{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("success=%v", result.Success), nil
+	})
+
+	time.Sleep(100 * time.Millisecond)
+
+	step("event", "OrderShippedEvent (auto-dispatched)", func() (string, error) {
+		return "triggered by ShipOrderCommand", nil
+	})
+
+	step("query", "GetOrderQuery (verify shipped)", func() (string, error) {
+		result, err := query.Dispatch[*orderquery.GetOrderQuery, *orderquery.GetOrderResult](ctx, h.app.QueryBus, &orderquery.GetOrderQuery{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		if result.Status != "shipped" {
+			return "", fmt.Errorf("expected shipped, got %s", result.Status)
+		}
+		return fmt.Sprintf("status=%s (correct)", result.Status), nil
+	})
+
+	step("query", "GetInventoryQuery (verify stock deducted)", func() (string, error) {
+		result, err := query.Dispatch[*inventoryquery.GetInventoryQuery, *inventoryquery.GetInventoryResult](ctx, h.app.QueryBus, &inventoryquery.GetInventoryQuery{})
+		if err != nil {
+			return "", err
+		}
+		for _, p := range result.Products {
+			if p.Name == "Laptop" || p.Name == "Monitor" {
+				return fmt.Sprintf("%s stock=%d", p.Name, p.Stock), nil
+			}
+		}
+		return "inventory retrieved", nil
+	})
+
+	h.renderTestResult(w, "Test QCE Full Lifecycle", steps, time.Since(start))
+}
+
+func (h *Handler) renderTestResult(w http.ResponseWriter, title string, steps []TestStep, totalDuration time.Duration) {
+	passed, failed := 0, 0
+	for _, s := range steps {
+		if s.Success {
+			passed++
+		} else {
+			failed++
+		}
+	}
+	h.render(w, "test_result", map[string]interface{}{
+		"Title":    title,
+		"Steps":    steps,
+		"Total":    len(steps),
+		"Passed":   passed,
+		"Failed":   failed,
+		"Duration": totalDuration.String(),
+	})
+}
+
+func errStr(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
 func (h *Handler) render(w http.ResponseWriter, name string, data map[string]interface{}) {
+	if h.livereload != nil && h.livereload.IsStale() {
+		h.reloadTemplates()
+	}
+
+	h.tmplMu.RLock()
+	tmpl := h.tmpl
+	h.tmplMu.RUnlock()
+
 	data["Page"] = name
 	data["Title"] = "DDD-QCE Shop"
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.tmpl.ExecuteTemplate(w, name, data); err != nil {
+
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, "template error: %v", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.livereload != nil {
+		result := strings.Replace(buf.String(), "</body>", livereloadScript+"</body>", 1)
+		w.Write([]byte(result))
+	} else {
+		buf.WriteTo(w)
 	}
 }

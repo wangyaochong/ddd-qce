@@ -18,7 +18,7 @@ func NewGetOrderHandler(repo repository.OrderRepositoryAdapter) *GetOrderHandler
 }
 
 func (h *GetOrderHandler) Handle(ctx context.Context, q *GetOrderQuery) (*GetOrderResult, error) {
-	order, err := h.Repo.FindByID(ctx, q.OrderID)
+	order, err := h.Repo.FindByID(ctx, q.OrderID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func toOrderView(o *orderdomain.Order) *GetOrderResult {
 	items := make([]OrderViewItem, len(o.Items))
 	for i, item := range o.Items {
 		items[i] = OrderViewItem{
-			ProductID:   item.ID(),
+			ProductID:   orderdomain.ProductID(item.ID()),
 			ProductName: item.ProductName,
 			Price:       item.Price,
 			Quantity:    item.Quantity,
@@ -56,7 +56,7 @@ func toOrderView(o *orderdomain.Order) *GetOrderResult {
 		}
 	}
 	result := &GetOrderResult{
-		OrderID:     o.ID(),
+		OrderID:     orderdomain.OrderID(o.ID()),
 		UserID:      o.UserID,
 		Status:      string(o.Status),
 		TotalAmount: o.TotalAmount,

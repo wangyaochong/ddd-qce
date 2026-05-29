@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -202,28 +203,39 @@ func TestPersistenceAspect_AfterPublish_EventHandler(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	if len(store.GetEvents()) != 1 {
+		t.Fatalf("expected 1 event entry, got %d", len(store.GetEvents()))
+	}
 	if len(store.GetHandlers()) != 1 {
 		t.Fatalf("expected 1 handler entry, got %d", len(store.GetHandlers()))
 	}
-	if len(store.GetEvents()) != 0 {
-		t.Fatalf("expected 0 event entries, got %d", len(store.GetEvents()))
+
+	eventEntry := store.GetEvents()[0]
+	if eventEntry.AggregateID != "agg-2" {
+		t.Errorf("expected AggregateID 'agg-2', got '%s'", eventEntry.AggregateID)
+	}
+	if eventEntry.EventType != "persistenceTestEvent" {
+		t.Errorf("expected EventType 'persistenceTestEvent', got '%s'", eventEntry.EventType)
+	}
+	if eventEntry.Error != "" {
+		t.Errorf("expected empty Error, got '%s'", eventEntry.Error)
 	}
 
-	entry := store.GetHandlers()[0]
-	if entry.HandlerType != "MyHandler" {
-		t.Errorf("expected HandlerType 'MyHandler', got '%s'", entry.HandlerType)
+	handlerEntry := store.GetHandlers()[0]
+	if handlerEntry.HandlerType != "MyHandler" {
+		t.Errorf("expected HandlerType 'MyHandler', got '%s'", handlerEntry.HandlerType)
 	}
-	if entry.Status != "success" {
-		t.Errorf("expected Status 'success', got '%s'", entry.Status)
+	if handlerEntry.Status != "success" {
+		t.Errorf("expected Status 'success', got '%s'", handlerEntry.Status)
 	}
-	if entry.AggregateID != "agg-2" {
-		t.Errorf("expected AggregateID 'agg-2', got '%s'", entry.AggregateID)
+	if handlerEntry.AggregateID != "agg-2" {
+		t.Errorf("expected AggregateID 'agg-2', got '%s'", handlerEntry.AggregateID)
 	}
-	if entry.EventType != "persistenceTestEvent" {
-		t.Errorf("expected EventType 'persistenceTestEvent', got '%s'", entry.EventType)
+	if handlerEntry.EventType != "persistenceTestEvent" {
+		t.Errorf("expected EventType 'persistenceTestEvent', got '%s'", handlerEntry.EventType)
 	}
-	if entry.Error != "" {
-		t.Errorf("expected empty Error, got '%s'", entry.Error)
+	if handlerEntry.Error != "" {
+		t.Errorf("expected empty Error, got '%s'", handlerEntry.Error)
 	}
 }
 
@@ -242,16 +254,24 @@ func TestPersistenceAspect_AfterPublish_EventHandlerWithError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	if len(store.GetEvents()) != 1 {
+		t.Fatalf("expected 1 event entry, got %d", len(store.GetEvents()))
+	}
 	if len(store.GetHandlers()) != 1 {
 		t.Fatalf("expected 1 handler entry, got %d", len(store.GetHandlers()))
 	}
 
-	entry := store.GetHandlers()[0]
-	if entry.Status != "error" {
-		t.Errorf("expected Status 'error', got '%s'", entry.Status)
+	eventEntry := store.GetEvents()[0]
+	if eventEntry.Error != "handler crashed" {
+		t.Errorf("expected event Error 'handler crashed', got '%s'", eventEntry.Error)
 	}
-	if entry.Error != "handler crashed" {
-		t.Errorf("expected Error 'handler crashed', got '%s'", entry.Error)
+
+	handlerEntry := store.GetHandlers()[0]
+	if handlerEntry.Status != "error" {
+		t.Errorf("expected Status 'error', got '%s'", handlerEntry.Status)
+	}
+	if handlerEntry.Error != "handler crashed" {
+		t.Errorf("expected Error 'handler crashed', got '%s'", handlerEntry.Error)
 	}
 }
 
@@ -289,5 +309,151 @@ func TestPersistenceAspect_NameAndOrder(t *testing.T) {
 	}
 	if aspect.Order() != 200 {
 		t.Errorf("expected order 200, got %d", aspect.Order())
+	}
+}
+
+func TestPersistenceAspect_GetStore(t *testing.T) {
+	store := NewInMemoryMessageStore()
+	aspect := NewPersistenceAspect(store)
+
+	if aspect.GetStore() != store {
+		t.Error("expected GetStore to return the same store")
+	}
+}
+
+func TestPersistenceAspect_BeforeCommand(t *testing.T) {
+	store := NewInMemoryMessageStore()
+	aspect := NewPersistenceAspect(store)
+
+	ctx := context.Background()
+	cmd := &persistenceTestCommand{Name: "test"}
+
+	newCtx, err := aspect.BeforeCommand(ctx, cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if newCtx != ctx {
+		t.Error("expected context to be unchanged")
+	}
+}
+
+func TestPersistenceAspect_BeforeQuery(t *testing.T) {
+	store := NewInMemoryMessageStore()
+	aspect := NewPersistenceAspect(store)
+
+	ctx := context.Background()
+	query := &persistenceTestQuery{ID: "q1"}
+
+	newCtx, err := aspect.BeforeQuery(ctx, query)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if newCtx != ctx {
+		t.Error("expected context to be unchanged")
+	}
+}
+
+func TestPersistenceAspect_BeforePublish(t *testing.T) {
+	store := NewInMemoryMessageStore()
+	aspect := NewPersistenceAspect(store)
+
+	ctx := context.Background()
+	evt := &persistenceTestEvent{
+		BaseEvent: event.NewBaseEvent("agg-1", time.Now()),
+	}
+
+	newCtx, err := aspect.BeforePublish(ctx, evt)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if newCtx != ctx {
+		t.Error("expected context to be unchanged")
+	}
+}
+
+func TestPersistenceAspect_AfterCommand_MarshalError(t *testing.T) {
+	store := NewInMemoryMessageStore()
+	aspect := NewPersistenceAspect(store)
+
+	ctx := context.Background()
+	cmd := make(chan int)
+
+	err := aspect.AfterCommand(ctx, cmd, nil, nil, time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(store.GetCommands()) != 1 {
+		t.Fatalf("expected 1 command entry, got %d", len(store.GetCommands()))
+	}
+
+	entry := store.GetCommands()[0]
+	if !bytes.Contains(entry.CommandData, []byte("_marshal_error")) {
+		t.Errorf("expected _marshal_error in CommandData, got %s", entry.CommandData)
+	}
+}
+
+func TestPersistenceAspect_AfterQuery_MarshalError(t *testing.T) {
+	store := NewInMemoryMessageStore()
+	aspect := NewPersistenceAspect(store)
+
+	ctx := context.Background()
+	query := make(chan int)
+
+	err := aspect.AfterQuery(ctx, query, nil, nil, time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(store.GetQueries()) != 1 {
+		t.Fatalf("expected 1 query entry, got %d", len(store.GetQueries()))
+	}
+
+	entry := store.GetQueries()[0]
+	if !bytes.Contains(entry.QueryData, []byte("_marshal_error")) {
+		t.Errorf("expected _marshal_error in QueryData, got %s", entry.QueryData)
+	}
+}
+
+func TestPersistenceAspect_AfterPublish_MarshalError(t *testing.T) {
+	store := NewInMemoryMessageStore()
+	aspect := NewPersistenceAspect(store)
+
+	ctx := context.Background()
+	evt := make(chan int)
+
+	err := aspect.AfterPublish(ctx, evt, nil, time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(store.GetEvents()) != 1 {
+		t.Fatalf("expected 1 event entry, got %d", len(store.GetEvents()))
+	}
+
+	entry := store.GetEvents()[0]
+	if !bytes.Contains(entry.EventData, []byte("_marshal_error")) {
+		t.Errorf("expected _marshal_error in EventData, got %s", entry.EventData)
+	}
+}
+
+func TestPersistenceAspect_AfterCommand_NilResult(t *testing.T) {
+	store := NewInMemoryMessageStore()
+	aspect := NewPersistenceAspect(store)
+
+	ctx := context.Background()
+	cmd := &persistenceTestCommand{Name: "test"}
+
+	err := aspect.AfterCommand(ctx, cmd, nil, nil, time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	entry := store.GetCommands()[0]
+	if entry.ResultType != "" {
+		t.Errorf("expected empty ResultType for nil result, got '%s'", entry.ResultType)
+	}
+	if entry.ResultData != nil {
+		t.Errorf("expected nil ResultData for nil result, got %s", entry.ResultData)
 	}
 }

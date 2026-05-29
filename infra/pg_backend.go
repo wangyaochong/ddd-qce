@@ -26,6 +26,7 @@ func NewPgBackend(db *sql.DB, opts ...BackendOption) *Backend {
 		WithMessageStore(builtinpg.NewMessageStore(db)),
 		WithMigrator(&pgMigrator{db: db}),
 		WithCloser(db.Close),
+		WithBusFactory(NewMemoryBusFactory()),
 	}
 	return NewBackend(append(defaults, opts...)...)
 }

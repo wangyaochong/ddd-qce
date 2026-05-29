@@ -2,9 +2,11 @@ package builtin
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/trace"
 )
@@ -451,3 +453,154 @@ type testTracingError struct {
 }
 
 func (e *testTracingError) Error() string { return e.msg }
+
+type mockFailingTraceStore struct {
+	recordSpanErr error
+}
+
+func (m *mockFailingTraceStore) RecordSpan(_ context.Context, _ *trace.Span) error {
+	return m.recordSpanErr
+}
+
+func (m *mockFailingTraceStore) GetTrace(_ context.Context, _ string) ([]*trace.Span, error) {
+	return nil, nil
+}
+
+func (m *mockFailingTraceStore) ListTraces(_ context.Context, _ trace.TraceFilter) ([]string, error) {
+	return nil, nil
+}
+
+func TestTracingAspect_NewTracingAspect(t *testing.T) {
+	store := trace.NewInMemoryTraceStore()
+	aspect := NewTracingAspect(store)
+	if aspect == nil {
+		t.Fatal("expected non-nil TracingAspect")
+	}
+}
+
+func TestTracingAspect_GetStore(t *testing.T) {
+	store := trace.NewInMemoryTraceStore()
+	aspect := NewTracingAspect(store)
+	if aspect.GetStore() != store {
+		t.Error("expected GetStore to return the same store")
+	}
+}
+
+func TestTracingAspect_GetLogger_InitiallyNil(t *testing.T) {
+	aspect := NewTracingAspect(trace.NewInMemoryTraceStore())
+	if aspect.GetLogger() != nil {
+		t.Error("expected initial logger to be nil")
+	}
+}
+
+func TestTracingAspect_SetLogger(t *testing.T) {
+	aspect := NewTracingAspect(trace.NewInMemoryTraceStore())
+	logger := &mockLogger{}
+	aspect.SetLogger(logger)
+	if aspect.GetLogger() != logger {
+		t.Error("expected GetLogger to return the set logger")
+	}
+}
+
+func TestTracingAspect_AfterCommand_BusinessError(t *testing.T) {
+	store := trace.NewInMemoryTraceStore()
+	aspect := NewTracingAspect(store)
+
+	ctx := context.Background()
+	cmd := &tracingTestCommand{Name: "test"}
+
+	newCtx, _ := aspect.BeforeCommand(ctx, cmd)
+	domainErr := ddderror.NewDomainError("INVALID_STATE", "bad state")
+	err := aspect.AfterCommand(newCtx, cmd, nil, domainErr, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	traceIDs, _ := store.ListTraces(context.Background(), trace.TraceFilter{})
+	spans, _ := store.GetTrace(context.Background(), traceIDs[0])
+
+	if spans[0].Status != "business_error" {
+		t.Errorf("expected status 'business_error', got '%s'", spans[0].Status)
+	}
+	if spans[0].Error != domainErr.Error() {
+		t.Errorf("expected error '%s', got '%s'", domainErr.Error(), spans[0].Error)
+	}
+}
+
+func TestTracingAspect_AfterQuery_BusinessError(t *testing.T) {
+	store := trace.NewInMemoryTraceStore()
+	aspect := NewTracingAspect(store)
+
+	ctx := context.Background()
+	query := &tracingTestQuery{ID: "1"}
+
+	newCtx, _ := aspect.BeforeQuery(ctx, query)
+	domainErr := ddderror.NewDomainError("NOT_FOUND", "not found")
+	err := aspect.AfterQuery(newCtx, query, nil, domainErr, 30*time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	traceIDs, _ := store.ListTraces(context.Background(), trace.TraceFilter{})
+	spans, _ := store.GetTrace(context.Background(), traceIDs[0])
+
+	if spans[0].Status != "business_error" {
+		t.Errorf("expected status 'business_error', got '%s'", spans[0].Status)
+	}
+}
+
+func TestTracingAspect_AfterPublish_BusinessError(t *testing.T) {
+	store := trace.NewInMemoryTraceStore()
+	aspect := NewTracingAspect(store)
+
+	ctx := context.Background()
+	evt := &tracingTestEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())}
+
+	newCtx, _ := aspect.BeforePublish(ctx, evt)
+	domainErr := ddderror.NewDomainError("CONCURRENCY", "conflict")
+	err := aspect.AfterPublish(newCtx, evt, domainErr, 20*time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	traceIDs, _ := store.ListTraces(context.Background(), trace.TraceFilter{})
+	spans, _ := store.GetTrace(context.Background(), traceIDs[0])
+
+	if spans[0].Status != "business_error" {
+		t.Errorf("expected status 'business_error', got '%s'", spans[0].Status)
+	}
+}
+
+func TestTracingAspect_AfterCommand_RecordSpanError_WithLogger(t *testing.T) {
+	store := &mockFailingTraceStore{recordSpanErr: errors.New("store failed")}
+	logger := &mockLogger{}
+	aspect := NewTracingAspect(store)
+	aspect.SetLogger(logger)
+
+	ctx := context.Background()
+	cmd := &tracingTestCommand{Name: "test"}
+
+	newCtx, _ := aspect.BeforeCommand(ctx, cmd)
+	err := aspect.AfterCommand(newCtx, cmd, nil, nil, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(logger.errorCalls) == 0 {
+		t.Error("expected logger Error to be called when RecordSpan fails")
+	}
+}
+
+func TestTracingAspect_AfterCommand_RecordSpanError_WithoutLogger(t *testing.T) {
+	store := &mockFailingTraceStore{recordSpanErr: errors.New("store failed")}
+	aspect := NewTracingAspect(store)
+
+	ctx := context.Background()
+	cmd := &tracingTestCommand{Name: "test"}
+
+	newCtx, _ := aspect.BeforeCommand(ctx, cmd)
+	err := aspect.AfterCommand(newCtx, cmd, nil, nil, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

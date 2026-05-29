@@ -28,19 +28,14 @@
 //	└── inventory/
 //	    └── ...
 //
-// # Integration with golangci-lint
+// # Usage
 //
-// Add to .golangci.yml:
+// Run the analyzers directly:
 //
-//	linters-settings:
-//	  custom:
-//	    dddcrossdomain:
-//	      type: module
-//	      description: "Check cross-domain internal package imports"
-//	    dddpublicleak:
-//	      type: module
-//	      description: "Check domain type leaks in public packages"
-//	    dddimplimport:
-//	      type: module
-//	      description: "Check CQRS impl package imports outside wire layer"
+//	go run github.com/ddd-qce/core/lint/cmd/ddd-lint ./...
+//
+// Or add to your Makefile:
+//
+//	ddd-lint:
+//		go run github.com/ddd-qce/core/lint/cmd/ddd-lint ./...
 package lint

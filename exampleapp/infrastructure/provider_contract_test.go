@@ -65,8 +65,8 @@ func testProviderContract(t *testing.T, store *StoreComponents) {
 
 	t.Run("OrderRepositorySaveAndFind", func(t *testing.T) {
 		ctx := context.Background()
-		order, err := orderdomain.NewOrder(context.Background(), "contract-ord-1", "user-001", []*orderdomain.OrderItem{
-			orderdomain.NewOrderItem("laptop", "Laptop", 999, 1),
+		order, err := orderdomain.NewOrder(context.Background(), orderdomain.NewOrderID("contract-ord-1"), orderdomain.NewUserID("user-001"), []*orderdomain.OrderItem{
+			orderdomain.NewOrderItem(orderdomain.NewProductID("laptop"), "Laptop", 999, 1),
 		})
 		if err != nil {
 			t.Fatalf("create order: %v", err)
@@ -98,7 +98,7 @@ func testDSNFromEnv() string {
 	if dsn != "" {
 		return dsn
 	}
-	defaultDSN := "host=/var/run/postgresql dbname=postgres user=" + os.Getenv("USER") + " sslmode=disable"
+	defaultDSN := "host=/var/run/postgresql dbname=ddd_qce_test user=" + os.Getenv("USER") + " sslmode=disable"
 	db, err := sql.Open("pgx", defaultDSN)
 	if err != nil {
 		return ""

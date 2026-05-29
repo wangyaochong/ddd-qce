@@ -616,6 +616,76 @@ func (a *commandOnlyAspect) AfterCommand(ctx context.Context, cmd any, r any, er
 	return nil
 }
 
+func TestAspectChain_HasAspect(t *testing.T) {
+	chain := NewAspectChain()
+
+	if chain.HasAspect("test-query") {
+		t.Error("expected HasAspect to return false for empty chain")
+	}
+
+	chain.RegisterQueryAspect(&testQueryAspect{})
+
+	if !chain.HasAspect("test-query") {
+		t.Error("expected HasAspect to return true after registration")
+	}
+
+	if chain.HasAspect("non-existent") {
+		t.Error("expected HasAspect to return false for unregistered name")
+	}
+}
+
+func TestAspectChain_HasAspect_DedupAcrossCategories(t *testing.T) {
+	chain := NewAspectChain()
+
+	chain.RegisterCommandAspect(&testCommandAspect{})
+
+	if !chain.HasAspect("test-command") {
+		t.Error("expected HasAspect to find command aspect")
+	}
+
+	chain.RegisterQueryAspect(&testQueryAspect{})
+
+	if !chain.HasAspect("test-query") {
+		t.Error("expected HasAspect to find query aspect")
+	}
+
+	chain.RegisterEventAspect(&testEventAspect{})
+
+	if !chain.HasAspect("test-event") {
+		t.Error("expected HasAspect to find event aspect")
+	}
+}
+
+func TestAspectChain_RegisteredNames(t *testing.T) {
+	chain := NewAspectChain()
+
+	names := chain.RegisteredNames()
+	if len(names) != 0 {
+		t.Errorf("expected empty names for empty chain, got %v", names)
+	}
+
+	chain.RegisterCommandAspect(&multiAspect{name: "A", order: 1, calls: nil})
+	chain.RegisterCommandAspect(&multiAspect{name: "B", order: 2, calls: nil})
+	chain.RegisterEventAspect(&testEventAspect{})
+
+	names = chain.RegisteredNames()
+	if len(names) != 3 {
+		t.Errorf("expected 3 names, got %d: %v", len(names), names)
+	}
+}
+
+func TestAspectChain_RegisteredNames_DedupSameName(t *testing.T) {
+	chain := NewAspectChain()
+
+	chain.RegisterCommandAspect(&multiAspect{name: "A", order: 1, calls: nil})
+	chain.RegisterCommandAspect(&multiAspect{name: "A", order: 1, calls: nil})
+
+	names := chain.RegisteredNames()
+	if len(names) != 1 {
+		t.Errorf("expected 1 unique name, got %d: %v", len(names), names)
+	}
+}
+
 func TestAspectChain_EventAspectAfterError(t *testing.T) {
 	chain := NewAspectChain()
 	chain.RegisterEventAspect(&eventAspectAfterError{})

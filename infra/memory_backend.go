@@ -83,6 +83,7 @@ func NewMemoryBackend(opts ...BackendOption) *Backend {
 		WithTraceStore(trace.NewInMemoryTraceStore()),
 		WithMessageStore(builtin.NewInMemoryMessageStore()),
 		WithMigrator(NopMigrator{}),
+		WithBusFactory(NewMemoryBusFactory()),
 	}
 	return NewBackend(append(defaults, opts...)...)
 }

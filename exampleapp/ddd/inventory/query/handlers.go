@@ -4,6 +4,7 @@ import (
 	"context"
 
 	inventorydomain "github.com/ddd-qce/exampleapp/ddd/inventory/domain"
+	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 )
 
 type GetInventoryHandler struct {
@@ -19,7 +20,7 @@ func (h *GetInventoryHandler) Handle(ctx context.Context, q *GetInventoryQuery) 
 	items := make([]InventoryItem, len(products))
 	for i, p := range products {
 		items[i] = InventoryItem{
-			ID:    p.ID,
+			ID:    orderdomain.ProductID(p.ID.String()),
 			Name:  p.Name,
 			Price: p.Price,
 			Stock: p.Stock,

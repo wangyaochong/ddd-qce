@@ -3,10 +3,17 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"github.com/ddd-qce/core/app"
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
 	"github.com/ddd-qce/core/cqrs/command"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
@@ -15,6 +22,8 @@ import (
 	"github.com/ddd-qce/core/infra"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
+	"github.com/ddd-qce/core/observability"
+	observabilitypg "github.com/ddd-qce/core/observability/pg"
 	inventorydomain "github.com/ddd-qce/exampleapp/ddd/inventory/domain"
 	inventorywire "github.com/ddd-qce/exampleapp/ddd/inventory/wire"
 	orderrepo "github.com/ddd-qce/exampleapp/ddd/order/repository"
@@ -26,23 +35,56 @@ type AppContext struct {
 	CmdBus     command.CommandBus
 	QueryBus   query.QueryBus
 	EventBus   cqrsevent.EventBus
-	Backend    *infra.Backend
-	JobManager *jobmemory.JobManager
+	Backend       *infra.Backend
+	JobManager    *jobmemory.JobManager
+	DDDViewer     *observability.DDDViewer
 
 	OrderRepo        orderrepo.OrderRepositoryAdapter
 	EventSourcedRepo *orderrepo.OrderEventSourcedRepository
-	EventStore       cqrsevent.EventSourceStore[cqrsevent.Event]
+	EventStore       cqrsevent.EventSourceStore[domainevent.Event]
 	Inventory        *inventorydomain.Inventory
 
 	MetricsRecorder *AppMetricsRecorder
 	TxManager       *AppTransactionManager
 
-	store *StoreComponents
+	lifecycles []app.Lifecycle
+	store      *StoreComponents
 }
 
-func (app *AppContext) Close() {
+func (app *AppContext) RegisterLifecycle(l app.Lifecycle) {
+	app.lifecycles = append(app.lifecycles, l)
+}
+
+func (app *AppContext) Close(ctx context.Context) error {
+	var errs []error
+	for _, l := range app.lifecycles {
+		if err := l.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
 	if app.store != nil && app.store.DB != nil {
-		app.store.DB.Close()
+		if err := app.store.DB.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("shutdown errors: %v", errs)
+	}
+	return nil
+}
+
+func (app *AppContext) WaitForSignal(timeout time.Duration) {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	sig := <-sigCh
+	log.Printf("received %v, shutting down...", sig)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := app.Close(ctx); err != nil {
+		log.Printf("shutdown error: %v", err)
 	}
 }
 
@@ -73,7 +115,21 @@ func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext
 	chain := aspect.NewAspectChain()
 	chain.RegisterAspect(builtin.NewTracingAspect(backend.TraceStore))
 	chain.RegisterAspect(builtin.NewLoggingAspect(logger))
-	chain.RegisterAspect(builtin.NewMetricsAspect(metricsRecorder))
+
+	statsCollector := observability.NewStatsCollector()
+	composedMetrics := observability.ComposeMetrics(statsCollector, metricsRecorder)
+	chain.RegisterAspect(builtin.NewMetricsAspect(composedMetrics))
+
+	var msgStoreForReader builtin.MessageStore
+	if store.DB != nil {
+		chain.RegisterAspect(builtin.NewPersistenceAspect(backend.MessageStore))
+		msgStoreForReader = backend.MessageStore
+	} else {
+		memMsgStore := observability.NewInMemoryMessageStore()
+		chain.RegisterAspect(builtin.NewPersistenceAspect(memMsgStore))
+		msgStoreForReader = memMsgStore
+	}
+
 	ta, err := builtin.NewTransactionAspect(txManager)
 	if err != nil {
 		return nil, fmt.Errorf("create transaction aspect: %w", err)
@@ -107,6 +163,26 @@ func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext
 	}
 	jobManager := jobmemory.NewJobManager(backend.JobStore, cmdBus, jobManagerOpts...)
 
+	var dddViewer *observability.DDDViewer
+	dddViewerOpts := []observability.DDDViewerOption{
+		observability.WithDDDViewerStatsCollector(statsCollector),
+		observability.WithDDDViewerTraceStore(backend.TraceStore),
+		observability.WithDDDViewerJobManager(jobManager),
+		observability.WithDDDViewerBaseURL("http://localhost:8080"),
+	}
+	if store.DB != nil {
+		dddViewerOpts = append(dddViewerOpts,
+			observability.WithDDDViewerPgDB(store.DB),
+			observability.WithDDDViewerSchemaReader(observabilitypg.NewSchemaReader(store.DB), "PostgreSQL"),
+			observability.WithDDDViewerMessageReader(observabilitypg.NewMessageStoreReader(store.DB)),
+		)
+	} else {
+		if ms, ok := msgStoreForReader.(observability.MessageStoreReader); ok {
+			dddViewerOpts = append(dddViewerOpts, observability.WithDDDViewerMessageReader(ms))
+		}
+	}
+	dddViewer = observability.NewDDDViewer(dddViewerOpts...)
+
 	return &AppContext{
 		Chain:            chain,
 		CmdBus:           cmdBus,
@@ -114,12 +190,20 @@ func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext
 		EventBus:         eventBus,
 		Backend:          backend,
 		JobManager:       jobManager,
+		DDDViewer:        dddViewer,
 		OrderRepo:        orderRepo,
 		EventSourcedRepo: eventSourcedRepo,
 		EventStore:       eventStore,
 		Inventory:        inventory,
 		MetricsRecorder:  metricsRecorder,
 		TxManager:        txManager,
-		store:            store,
+		lifecycles: []app.Lifecycle{
+			eventBus,
+			cmdBus,
+			queryBus,
+			jobManager,
+			backend,
+		},
+		store: store,
 	}, nil
 }

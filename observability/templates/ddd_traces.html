@@ -1,0 +1,47 @@
+{{define "ddd_traces"}}{{template "ddd_header" .}}
+
+<h1>Distributed Traces</h1>
+
+<div class="search-box">
+    <form method="GET" class="filter-row">
+        <div class="filter-group">
+            <label>Type</label>
+            <select name="type">
+                <option value="">All</option>
+                <option value="command" {{if eq .FilterType "command"}}selected{{end}}>Command</option>
+                <option value="query" {{if eq .FilterType "query"}}selected{{end}}>Query</option>
+                <option value="event" {{if eq .FilterType "event"}}selected{{end}}>Event</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Status</label>
+            <select name="status">
+                <option value="">All</option>
+                <option value="success" {{if eq .FilterStatus "success"}}selected{{end}}>Success</option>
+                <option value="error" {{if eq .FilterStatus "error"}}selected{{end}}>Error</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn btn-primary">Filter</button>
+        </div>
+    </form>
+</div>
+
+{{range .Traces}}
+<div class="card">
+    <h2>Trace: {{shortID .TraceID}} ({{len .Spans}} spans)</h2>
+    <div class="trace-tree">
+        {{range .Spans}}
+        <div class="span-item">
+            [{{.Type}}] {{.Name}} {{if eq .Status "success"}}<span class="ok">OK</span>{{else}}<span class="err">ERR</span>{{end}} ({{formatDuration .Duration}})
+            {{if .Error}}<span class="err">{{.Error}}</span>{{end}}
+        </div>
+        {{end}}
+    </div>
+</div>
+{{else}}
+<div class="card"><div class="empty">No traces found. Try placing an order first!</div></div>
+{{end}}
+
+{{template "ddd_footer" .}}{{end}}

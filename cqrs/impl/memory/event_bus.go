@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/cqrs/event"
-	eventbus "github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
 )
 
 func handlerTypeName(h any) string {
@@ -24,21 +25,25 @@ func handlerTypeName(h any) string {
 
 type handlerEntry struct {
 	handler any
-	invoke  func(ctx context.Context, evt event.Event) error
+	invoke  func(ctx context.Context, evt domainevent.Event) error
 	name    string
 }
 
 const defaultHandlerTimeout = 30 * time.Second
 
+// EventBus dispatches events to registered handlers.
+// All handlers are invoked concurrently in separate goroutines; handlers MUST be concurrency-safe.
 type EventBus struct {
 	handlers       map[reflect.Type][]handlerEntry
 	chain          *aspect.AspectChain
 	handlerTimeout time.Duration
 	sem            chan struct{}
 	mu             sync.RWMutex
+	closed         atomic.Bool
+	inFlight       sync.WaitGroup
 }
 
-var _ eventbus.EventBus = (*EventBus)(nil)
+var _ event.EventBus = (*EventBus)(nil)
 
 type EventBusOption func(*EventBus)
 
@@ -68,9 +73,12 @@ func NewEventBus(opts ...EventBusOption) *EventBus {
 	return b
 }
 
+// SubscribeHandler registers a handler for its inferred event type.
+// The same handler instance must not be registered twice for the same event type.
+// Handlers are invoked concurrently; they MUST be concurrency-safe.
 func (b *EventBus) SubscribeHandler(handler any) error {
 	handlerType := reflect.TypeOf(handler)
-	evtType, ok := extractEventHandlerEventType(handlerType)
+	evtType, ok := extractHandlerPayloadType(handlerType)
 	if !ok {
 		return fmt.Errorf("SubscribeHandler: handler must implement event.EventHandler[T], got %T", handler)
 	}
@@ -98,7 +106,17 @@ func (b *EventBus) SubscribeHandler(handler any) error {
 	return nil
 }
 
-func (b *EventBus) Publish(ctx context.Context, evt event.Event) error {
+// Publish dispatches the event to all registered handlers concurrently.
+// Each handler runs in its own goroutine; the call blocks until all handlers
+// complete or their per-handler timeout expires.
+// A MultiError is returned when more than one handler fails.
+func (b *EventBus) Publish(ctx context.Context, evt domainevent.Event) error {
+	if b.closed.Load() {
+		return ErrBusClosed
+	}
+	b.inFlight.Add(1)
+	defer b.inFlight.Done()
+
 	evtType := reflect.TypeOf(evt)
 	if evtType == nil {
 		return fmt.Errorf("Publish: event must be a non-nil pointer implementing Event")
@@ -110,9 +128,6 @@ func (b *EventBus) Publish(ctx context.Context, evt event.Event) error {
 	b.mu.RUnlock()
 
 	handlerCount := len(entries)
-	if handlerCount == 0 {
-		return nil
-	}
 
 	timeout := b.handlerTimeout
 	if deadline, ok := ctx.Deadline(); ok {
@@ -121,17 +136,9 @@ func (b *EventBus) Publish(ctx context.Context, evt event.Event) error {
 		}
 	}
 
-	if handlerCount == 1 {
-		hCtx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-		hCtx = builtin.ContextWithHandlerType(hCtx, entries[0].name)
-		return b.chain.ExecuteWithEventAspects(hCtx, evt, func(ctx context.Context) (err error) {
-			defer func() {
-				if r := recover(); r != nil {
-					err = fmt.Errorf("handler %s panicked: %v", entries[0].name, r)
-				}
-			}()
-			return entries[0].invoke(ctx, evt)
+	if handlerCount == 0 {
+		return b.chain.ExecuteWithEventAspects(ctx, evt, func(ctx context.Context) error {
+			return nil
 		})
 	}
 
@@ -187,49 +194,34 @@ func (b *EventBus) HandlerCount(evtType reflect.Type) int {
 	return len(b.handlers[evtType])
 }
 
-func RegisterEvent[T event.Event](bus *EventBus, handler event.EventHandler[T]) error {
+func (b *EventBus) SubscribedTypes() []string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	names := make([]string, 0, len(b.handlers))
+	for t := range b.handlers {
+		name := t.Name()
+		if t.Kind() == reflect.Ptr {
+			name = t.Elem().Name()
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+func (b *EventBus) Shutdown(ctx context.Context) error {
+	return shutdownBus(&b.closed, &b.inFlight, ctx)
+}
+
+func RegisterEvent[T domainevent.Event](bus *EventBus, handler event.EventHandler[T]) error {
 	return bus.SubscribeHandler(handler)
 }
 
-func extractEventHandlerEventType(handlerType reflect.Type) (reflect.Type, bool) {
-	eventHandlerType := reflect.TypeOf((*event.EventHandler[event.Event])(nil)).Elem()
-
-	if handlerType.Kind() != reflect.Ptr {
-		for i := 0; i < handlerType.NumMethod(); i++ {
-			method := handlerType.Method(i)
-			if method.Name != "Handle" {
-				continue
-			}
-			return extractEventTypeFromHandleMethod(method.Type), true
-		}
-		return nil, false
-	}
-
-	handleMethod, ok := handlerType.MethodByName("Handle")
-	if !ok {
-		return nil, false
-	}
-	_ = eventHandlerType
-	et := extractEventTypeFromHandleMethod(handleMethod.Type)
-	if et == nil {
-		return nil, false
-	}
-	return et, true
-}
-
-func extractEventTypeFromHandleMethod(methodType reflect.Type) reflect.Type {
-	if methodType.NumIn() != 3 {
-		return nil
-	}
-	return methodType.In(2)
-}
-
-func makeHandlerInvoker(handler any, handlerType reflect.Type) (func(ctx context.Context, evt event.Event) error, error) {
+func makeHandlerInvoker(handler any, handlerType reflect.Type) (func(ctx context.Context, evt domainevent.Event) error, error) {
 	handleMethod, ok := handlerType.MethodByName("Handle")
 	if !ok {
 		return nil, fmt.Errorf("handler %T does not have a Handle method", handler)
 	}
-	invoker := func(ctx context.Context, evt event.Event) error {
+	invoker := func(ctx context.Context, evt domainevent.Event) error {
 		args := []reflect.Value{
 			reflect.ValueOf(handler),
 			reflect.ValueOf(ctx),

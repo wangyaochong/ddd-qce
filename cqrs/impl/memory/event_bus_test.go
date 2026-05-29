@@ -3,12 +3,16 @@ package memory
 import (
 	"context"
 	"errors"
+	"reflect"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
 )
 
 type testUserEvent struct {
@@ -418,12 +422,266 @@ func TestEventBus_WithAspects_MultipleHandlers(t *testing.T) {
 }
 
 func TestEventBus_NoHandlers(t *testing.T) {
-	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
+	var beforeCalled, afterCalled bool
+	chain := aspect.NewAspectChain()
+	chain.RegisterEventAspect(&testEventAspect{
+		beforeFn: func() { beforeCalled = true },
+		afterFn:  func() { afterCalled = true },
+	})
+
+	bus := NewEventBus(WithBusAspectChain(chain))
 
 	ctx := context.Background()
 	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 
 	if err != nil {
 		t.Fatalf("expected nil error with no handlers, got %v", err)
+	}
+	if !beforeCalled {
+		t.Error("expected BeforePublish to be called even with no handlers")
+	}
+	if !afterCalled {
+		t.Error("expected AfterPublish to be called even with no handlers")
+	}
+}
+
+func TestEventBus_HandlerCount(t *testing.T) {
+	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
+	h1 := &testUserEventHandler{}
+	h2 := &testUserEventHandler{}
+	RegisterEvent[*testUserEvent](bus, h1)
+
+	if count := bus.HandlerCount(reflect.TypeOf(&testUserEvent{})); count != 1 {
+		t.Errorf("expected 1 handler, got %d", count)
+	}
+
+	RegisterEvent[*testUserEvent](bus, h2)
+
+	if count := bus.HandlerCount(reflect.TypeOf(&testUserEvent{})); count != 2 {
+		t.Errorf("expected 2 handlers, got %d", count)
+	}
+
+	if count := bus.HandlerCount(reflect.TypeOf(&testOrderEvent{})); count != 0 {
+		t.Errorf("expected 0 handlers for unregistered type, got %d", count)
+	}
+}
+
+func TestEventBus_SubscribedTypes(t *testing.T) {
+	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
+	RegisterEvent[*testOrderEvent](bus, &testOrderEventHandler{})
+
+	types := bus.SubscribedTypes()
+	if len(types) != 2 {
+		t.Fatalf("expected 2 subscribed types, got %d", len(types))
+	}
+
+	nameSet := make(map[string]bool)
+	for _, name := range types {
+		nameSet[name] = true
+	}
+	if !nameSet["testUserEvent"] {
+		t.Error("expected testUserEvent in subscribed types")
+	}
+	if !nameSet["testOrderEvent"] {
+		t.Error("expected testOrderEvent in subscribed types")
+	}
+}
+
+func TestEventBus_SubscribedTypes_Empty(t *testing.T) {
+	bus := NewEventBus()
+	types := bus.SubscribedTypes()
+	if len(types) != 0 {
+		t.Errorf("expected 0 types, got %d", len(types))
+	}
+}
+
+func TestEventBus_Shutdown(t *testing.T) {
+	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
+
+	err := bus.Shutdown(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err = bus.Publish(context.Background(), &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+	if !errors.Is(err, ErrBusClosed) {
+		t.Errorf("expected ErrBusClosed after shutdown, got %v", err)
+	}
+}
+
+func TestEventBus_Shutdown_WaitsForInFlight(t *testing.T) {
+	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
+	RegisterEvent[*testUserEvent](bus, &testSlowEventHandler{duration: 100 * time.Millisecond})
+
+	started := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		close(started)
+		_ = bus.Publish(context.Background(), &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+		close(done)
+	}()
+
+	<-started
+	time.Sleep(20 * time.Millisecond)
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		shutdownDone <- bus.Shutdown(context.Background())
+	}()
+
+	select {
+	case <-shutdownDone:
+		t.Fatal("shutdown should wait for in-flight publish")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	<-done
+
+	select {
+	case err := <-shutdownDone:
+		if err != nil {
+			t.Fatalf("unexpected shutdown error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown timed out")
+	}
+}
+
+func TestEventBus_Shutdown_ContextCancelled(t *testing.T) {
+	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
+	RegisterEvent[*testUserEvent](bus, &testSlowEventHandler{duration: 5 * time.Second})
+
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		_ = bus.Publish(context.Background(), &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+	}()
+
+	<-started
+	time.Sleep(20 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := bus.Shutdown(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got %v", err)
+	}
+}
+
+func TestEventBus_WithHandlerTimeout(t *testing.T) {
+	bus := NewEventBus(
+		WithBusAspectChain(aspect.NewAspectChain()),
+		WithHandlerTimeout(50*time.Millisecond),
+	)
+
+	handler := &testSlowEventHandler{duration: 5 * time.Second}
+	RegisterEvent[*testUserEvent](bus, handler)
+
+	ctx := context.Background()
+	start := time.Now()
+	err := bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected timeout error from handler")
+	}
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("handler should have been canceled by timeout, took %v", elapsed)
+	}
+}
+
+func TestEventBus_WithConcurrencyLimit(t *testing.T) {
+	bus := NewEventBus(
+		WithBusAspectChain(aspect.NewAspectChain()),
+		WithConcurrencyLimit(1),
+	)
+
+	var mu sync.Mutex
+	var maxConcurrent int
+	var current int32
+
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
+
+	bus.mu.Lock()
+	bus.handlers[reflect.TypeOf(&testUserEvent{})] = []handlerEntry{{
+		handler: &testUserEventHandler{},
+		invoke: func(ctx context.Context, evt domainevent.Event) error {
+			atomic.AddInt32(&current, 1)
+			mu.Lock()
+			if int(atomic.LoadInt32(&current)) > maxConcurrent {
+				maxConcurrent = int(atomic.LoadInt32(&current))
+			}
+			mu.Unlock()
+			time.Sleep(50 * time.Millisecond)
+			atomic.AddInt32(&current, -1)
+			return nil
+		},
+		name: "counting",
+	}}
+	bus.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = bus.Publish(context.Background(), &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+		}()
+	}
+	wg.Wait()
+
+	mu.Lock()
+	mc := maxConcurrent
+	mu.Unlock()
+
+	if mc > 1 {
+		t.Errorf("expected max concurrent handlers <= 1, got %d", mc)
+	}
+}
+
+type nonPointerHandler struct{}
+
+func (h nonPointerHandler) Handle(ctx context.Context, evt *testUserEvent) error {
+	return nil
+}
+
+func TestEventBus_NonPointerHandler(t *testing.T) {
+	bus := NewEventBus()
+	err := bus.SubscribeHandler(nonPointerHandler{})
+	if err != nil {
+		t.Fatalf("non-pointer handler should be accepted: %v", err)
+	}
+
+	ctx := context.Background()
+	err = bus.Publish(ctx, &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestEventBus_Publish_PanickingHandler(t *testing.T) {
+	bus := NewEventBus(WithBusAspectChain(aspect.NewAspectChain()))
+
+	RegisterEvent[*testUserEvent](bus, &testUserEventHandler{})
+
+	bus.mu.Lock()
+	bus.handlers[reflect.TypeOf(&testUserEvent{})] = []handlerEntry{{
+		handler: &testUserEventHandler{},
+		invoke: func(ctx context.Context, evt domainevent.Event) error {
+			panic("boom")
+		},
+		name: "panicker",
+	}}
+	bus.mu.Unlock()
+
+	err := bus.Publish(context.Background(), &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
+	if err == nil {
+		t.Fatal("expected error from panicking handler")
+	}
+	if !strings.Contains(err.Error(), "panicked") {
+		t.Errorf("expected panic error message, got: %v", err)
 	}
 }

@@ -12,6 +12,17 @@
 </div>
 
 <div class="card">
+    <h2>QCE Testing</h2>
+    <p style="color:#666;margin-bottom:1rem;">One-click test for Query, Command, Event handlers and full DDD lifecycle</p>
+    <div class="actions">
+        <form method="POST" action="/test/query"><button type="submit" class="btn btn-primary">Test Query</button></form>
+        <form method="POST" action="/test/command"><button type="submit" class="btn btn-success">Test Command</button></form>
+        <form method="POST" action="/test/event"><button type="submit" class="btn btn-warning">Test Event</button></form>
+        <form method="POST" action="/test/qce"><button type="submit" class="btn btn-danger" style="background:#6a1b9a;">Test QCE Full Lifecycle</button></form>
+    </div>
+</div>
+
+<div class="card">
     <h2>Products</h2>
     <table>
         <tr><th>Product</th><th>Price</th><th>Stock</th></tr>

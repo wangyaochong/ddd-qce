@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"time"
 
+	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/trace"
 )
 
@@ -60,21 +61,28 @@ func (e *BaseEvent) Restore(aggregateID string, occurredAt time.Time, correlatio
 	e.causationID = causationID
 }
 
-func ApplyCorrelation(evt Event, correlationID, causationID string) {
-	if setter, ok := evt.(interface{ SetCorrelation(string, string) }); ok {
+func ApplyCorrelation(evt domainevent.Event, correlationID, causationID string) {
+	if setter, ok := evt.(domainevent.CorrelationSetter); ok {
 		setter.SetCorrelation(correlationID, causationID)
 	}
 }
 
-func RestoreBaseEvent(evt Event, aggregateID string, occurredAt time.Time, correlationID, causationID string) {
-	if restorer, ok := evt.(interface{ Restore(string, time.Time, string, string) }); ok {
+func RestoreBaseEvent(evt domainevent.Event, aggregateID string, occurredAt time.Time, correlationID, causationID string) {
+	if restorer, ok := evt.(domainevent.Restorer); ok {
 		restorer.Restore(aggregateID, occurredAt, correlationID, causationID)
 	}
 }
 
+// EventTypeOf returns the short type name of the given event.
+// Panics if event is nil — nil is a programming error that should be
+// caught early rather than silently producing an empty string.
+// This is consistent with CommandNameOf and QueryNameOf: all three
+// treat nil as misuse, not a valid input.
+// Note: a typed nil pointer like (*MyEvent)(nil) is NOT nil (the
+// interface has a type), so EventTypeOf((*MyEvent)(nil)) == "MyEvent".
 func EventTypeOf(event any) string {
 	if event == nil {
-		return ""
+		panic("event: EventTypeOf called with nil event")
 	}
 	t := reflect.TypeOf(event)
 	if t.Kind() == reflect.Ptr {
@@ -83,23 +91,16 @@ func EventTypeOf(event any) string {
 	return t.Name()
 }
 
-type Event interface {
-	AggregateID() string
-	OccurredAt() time.Time
-	CorrelationID() string
-	CausationID() string
-}
-
-type EventHandler[T Event] interface {
+type EventHandler[T domainevent.Event] interface {
 	Handle(ctx context.Context, event T) error
 }
 
-type GlobalEvent[T Event] struct {
+type GlobalEvent[T domainevent.Event] struct {
 	Position int64
 	Event    T
 }
 
-type EventSourceStore[T Event] interface {
+type EventSourceStore[T domainevent.Event] interface {
 	Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error
 	Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error)
 	LoadAll(ctx context.Context, afterPosition int64, limit int) ([]GlobalEvent[T], error)
