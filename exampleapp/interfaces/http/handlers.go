@@ -23,11 +23,13 @@ import (
 	inventorycommand "github.com/ddd-qce/exampleapp/ddd/inventory/command"
 	inventoryevent "github.com/ddd-qce/exampleapp/ddd/inventory/event"
 	inventoryquery "github.com/ddd-qce/exampleapp/ddd/inventory/query"
+	inventorydomain "github.com/ddd-qce/exampleapp/ddd/inventory/domain"
 	ordercommand "github.com/ddd-qce/exampleapp/ddd/order/command"
 	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 	orderquery "github.com/ddd-qce/exampleapp/ddd/order/query"
 	"github.com/ddd-qce/exampleapp/infrastructure"
+	pgmigrate "github.com/ddd-qce/core/pg"
 )
 
 type Handler struct {
@@ -90,35 +92,27 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pending, paid, shipped, cancelled := 0, 0, 0, 0
+	paid, shipped, cancelled := 0, 0, 0
 	for _, o := range ordersResult.Orders {
-		switch o.Status {
-		case "pending":
-			pending++
-		case "paid":
-			paid++
-		case "shipped":
-			shipped++
-		case "cancelled":
+		if o.CancelledAt != "" {
 			cancelled++
+			continue
 		}
-	}
-
-	traceIDs, err := h.app.Backend.TraceStore.ListTraces(ctx, trace.TraceFilter{})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		if o.PaidAt != "" {
+			paid++
+		}
+		if o.ShippedAt != "" {
+			shipped++
+		}
 	}
 
 	h.render(w, "dashboard", map[string]interface{}{
 		"TotalOrders":  len(ordersResult.Orders),
-		"Pending":      pending,
 		"Paid":         paid,
 		"Shipped":      shipped,
 		"Cancelled":    cancelled,
 		"Products":     inventoryResult.Products,
 		"RecentOrders": ordersResult.Orders,
-		"TraceCount":   len(traceIDs),
 	})
 }
 
@@ -251,6 +245,8 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 	type EventView struct {
 		EventType  string
 		OrderID    string
+		UserID     string
+		Amount     float64
 		Details    string
 		OccurredAt string
 	}
@@ -263,6 +259,8 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 		switch evt := e.(type) {
 		case *orderevent.OrderPlacedEvent:
 			view.OrderID = evt.AggregateID()
+			view.UserID = evt.UserID
+			view.Amount = evt.TotalAmount
 			view.Details = fmt.Sprintf("UserID: %s, Amount: %.2f", evt.UserID, evt.TotalAmount)
 		case *orderevent.PaymentConfirmedEvent:
 			view.OrderID = evt.AggregateID()
@@ -297,6 +295,48 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	h.render(w, "inventory", map[string]interface{}{"Products": result.Products})
 }
 
+func (h *Handler) InventoryManage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	
+	if r.Method == http.MethodPost {
+		productID := r.FormValue("product_id")
+		quantity := r.FormValue("quantity")
+		
+		if productID == "" || quantity == "" {
+			http.Error(w, "product_id and quantity are required", http.StatusBadRequest)
+			return
+		}
+		
+		qty, err := strconv.Atoi(quantity)
+		if err != nil || qty <= 0 {
+			http.Error(w, "quantity must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		
+		product, ok := h.app.Inventory.GetByID(orderdomain.ProductID(productID))
+		if !ok || product.ID == "" {
+			http.Error(w, "product not found", http.StatusNotFound)
+			return
+		}
+		
+		err = h.app.Inventory.AddStock(orderdomain.ProductID(productID), qty)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to add stock: %v", err), http.StatusInternalServerError)
+			return
+		}
+		
+		http.Redirect(w, r, "/inventory/manage", http.StatusFound)
+		return
+	}
+	
+	result, err := query.Dispatch[*inventoryquery.GetInventoryQuery, *inventoryquery.GetInventoryResult](ctx, h.app.QueryBus, &inventoryquery.GetInventoryQuery{})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.render(w, "inventory_manage", map[string]interface{}{"Products": result.Products})
+}
+
 func (h *Handler) ListJobs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var allJobs []*jobcore.Job
@@ -323,8 +363,11 @@ func (h *Handler) SubmitJob(w http.ResponseWriter, r *http.Request) {
 	orderID := r.FormValue("order_id")
 	timeoutStr := r.FormValue("timeout")
 	retriesStr := r.FormValue("retries")
+	durationStr := r.FormValue("duration")
 
 	var opts []jobcore.JobOption
+	var err error
+
 	if timeout, err := strconv.Atoi(timeoutStr); err == nil && timeout > 0 {
 		opts = append(opts, jobcore.WithTimeout(time.Duration(timeout)*time.Millisecond))
 	}
@@ -332,7 +375,16 @@ func (h *Handler) SubmitJob(w http.ResponseWriter, r *http.Request) {
 		opts = append(opts, jobcore.WithMaxRetries(retries))
 	}
 
-	_, err := h.app.JobManager.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderdomain.NewOrderID(orderID)}, opts...)
+	if duration, err := strconv.Atoi(durationStr); err == nil && duration > 0 {
+		cmd := &ordercommand.ProcessBatchCommand{
+			OrderID:  orderdomain.NewOrderID(orderID),
+			Duration: time.Duration(duration) * time.Millisecond,
+		}
+		_, err = h.app.JobManager.Submit(ctx, cmd, opts...)
+	} else {
+		_, err = h.app.JobManager.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderdomain.NewOrderID(orderID)}, opts...)
+	}
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -361,54 +413,7 @@ func (h *Handler) RetryJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListTraces(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	filterType := r.URL.Query().Get("type")
-	filterStatus := r.URL.Query().Get("status")
-
-	filter := trace.TraceFilter{Type: filterType, Status: filterStatus}
-	traceIDs, err := h.app.Backend.TraceStore.ListTraces(ctx, filter)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	type SpanView struct {
-		ID       string
-		TraceID  string
-		ParentID string
-		Type     string
-		Name     string
-		Status   string
-		Error    string
-		Duration time.Duration
-	}
-	type TraceView struct {
-		TraceID string
-		Spans   []SpanView
-	}
-
-	traces := make([]TraceView, 0, len(traceIDs))
-	for _, tid := range traceIDs {
-		spans, err := h.app.Backend.TraceStore.GetTrace(ctx, tid)
-		if err != nil {
-			continue
-		}
-		var spanViews []SpanView
-		for _, s := range spans {
-			spanViews = append(spanViews, SpanView{
-				ID: s.ID, TraceID: s.TraceID, ParentID: s.ParentID,
-				Type: s.Type, Name: s.Name, Status: s.Status,
-				Error: s.Error, Duration: s.Duration,
-			})
-		}
-		traces = append(traces, TraceView{TraceID: tid, Spans: spanViews})
-	}
-
-	h.render(w, "traces", map[string]interface{}{
-		"Traces":       traces,
-		"FilterType":   filterType,
-		"FilterStatus": filterStatus,
-	})
+	http.Redirect(w, r, "/api/ddd/ddd_traces", http.StatusFound)
 }
 
 type TestStep struct {
@@ -430,7 +435,8 @@ type TestResult struct {
 }
 
 func (h *Handler) TestQuery(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	traceID := trace.NewTraceID()
+	ctx := trace.WithTrace(r.Context(), traceID, "")
 	start := time.Now()
 	var steps []TestStep
 
@@ -482,7 +488,8 @@ func (h *Handler) TestQuery(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) TestCommand(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	traceID := trace.NewTraceID()
+	ctx := trace.WithTrace(r.Context(), traceID, "")
 	start := time.Now()
 	var steps []TestStep
 
@@ -584,7 +591,8 @@ func (h *Handler) TestCommand(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) TestEvent(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	traceID := trace.NewTraceID()
+	ctx := trace.WithTrace(r.Context(), traceID, "")
 	start := time.Now()
 	var steps []TestStep
 
@@ -684,7 +692,9 @@ func (h *Handler) TestEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) TestQCE(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	traceID := trace.NewTraceID()
+	ctx := trace.WithTrace(r.Context(), traceID, "")
+
 	start := time.Now()
 	var steps []TestStep
 
@@ -712,7 +722,7 @@ func (h *Handler) TestQCE(w http.ResponseWriter, r *http.Request) {
 			return "", err
 		}
 		orderID = result.OrderID
-		return fmt.Sprintf("orderID=%s total=%.2f", result.OrderID, result.TotalAmount), nil
+		return fmt.Sprintf("orderID=%s total=%.2f (traceID=%s)", result.OrderID, result.TotalAmount, traceID), nil
 	})
 
 	time.Sleep(200 * time.Millisecond)
@@ -798,6 +808,129 @@ func (h *Handler) TestQCE(w http.ResponseWriter, r *http.Request) {
 	h.renderTestResult(w, "Test QCE Full Lifecycle", steps, time.Since(start))
 }
 
+func (h *Handler) TestJob(w http.ResponseWriter, r *http.Request) {
+	traceID := trace.NewTraceID()
+	ctx := trace.WithTrace(r.Context(), traceID, "")
+	start := time.Now()
+	var steps []TestStep
+
+	step := func(name string, fn func() (string, error)) {
+		s := time.Now()
+		detail, err := fn()
+		steps = append(steps, TestStep{
+			Type:     "job",
+			Name:     name,
+			Duration: time.Since(s).String(),
+			Success:  err == nil,
+			Error:    errStr(err),
+			Detail:   detail,
+		})
+	}
+
+	var orderID orderdomain.OrderID
+
+	step("PlaceOrder (setup)", func() (string, error) {
+		result, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, h.app.CmdBus, &ordercommand.PlaceOrderCommand{
+			UserID: orderdomain.NewUserID("test-job-user"),
+			Items:  []ordercommand.ItemInput{{ProductID: orderdomain.ProductID("laptop"), ProductName: "Laptop", Price: 999, Quantity: 1}},
+		})
+		if err != nil {
+			return "", err
+		}
+		orderID = result.OrderID
+		return fmt.Sprintf("orderID=%s total=%.2f", result.OrderID, result.TotalAmount), nil
+	})
+
+	time.Sleep(100 * time.Millisecond)
+
+	step("SubmitJob → Complete", func() (string, error) {
+		job, err := h.app.JobManager.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		_, err = h.app.JobManager.Wait(ctx, job.ID, 10*time.Second)
+		if err != nil {
+			return "", err
+		}
+		job, err = h.app.JobManager.GetStatus(ctx, job.ID)
+		if err != nil {
+			return "", err
+		}
+		if job.GetStatus() != jobcore.JobStatusCompleted {
+			return "", fmt.Errorf("expected completed, got %s", job.GetStatus())
+		}
+		return fmt.Sprintf("jobID=%s status=%s", job.ID, job.GetStatus()), nil
+	})
+
+	step("SubmitJob → Timeout", func() (string, error) {
+		job, err := h.app.JobManager.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderID}, jobcore.WithTimeout(1*time.Millisecond))
+		if err != nil {
+			return "", err
+		}
+		_, _ = h.app.JobManager.Wait(ctx, job.ID, 10*time.Second)
+		job, err = h.app.JobManager.GetStatus(ctx, job.ID)
+		if err != nil {
+			return "", err
+		}
+		if job.GetStatus() != jobcore.JobStatusFailed {
+			return "", fmt.Errorf("expected failed (timeout), got %s", job.GetStatus())
+		}
+		return fmt.Sprintf("jobID=%s status=%s (timeout triggered)", job.ID, job.GetStatus()), nil
+	})
+
+	step("SubmitJob → Cancel", func() (string, error) {
+		job, err := h.app.JobManager.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderID})
+		if err != nil {
+			return "", err
+		}
+		if err := h.app.JobManager.Cancel(ctx, job.ID); err != nil {
+			return "", err
+		}
+		job, err = h.app.JobManager.GetStatus(ctx, job.ID)
+		if err != nil {
+			return "", err
+		}
+		if job.GetStatus() != jobcore.JobStatusCancelled {
+			return "", fmt.Errorf("expected cancelled, got %s", job.GetStatus())
+		}
+		return fmt.Sprintf("jobID=%s status=%s", job.ID, job.GetStatus()), nil
+	})
+
+	step("SubmitJob → Fail → Retry (success)", func() (string, error) {
+		job, err := h.app.JobManager.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderID}, jobcore.WithTimeout(1*time.Millisecond))
+		if err != nil {
+			return "", err
+		}
+		_, _ = h.app.JobManager.Wait(ctx, job.ID, 10*time.Second)
+		job, err = h.app.JobManager.GetStatus(ctx, job.ID)
+		if err != nil {
+			return "", err
+		}
+		if job.GetStatus() != jobcore.JobStatusFailed {
+			return "", fmt.Errorf("expected failed (before retry), got %s", job.GetStatus())
+		}
+		return fmt.Sprintf("beforeRetry: status=%s error=%s", job.GetStatus(), job.GetError()), nil
+	})
+
+	step("ListJobsByStatus", func() (string, error) {
+		completed, err := h.app.JobManager.ListByStatus(ctx, jobcore.JobStatusCompleted)
+		if err != nil {
+			return "", err
+		}
+		failed, err := h.app.JobManager.ListByStatus(ctx, jobcore.JobStatusFailed)
+		if err != nil {
+			return "", err
+		}
+		cancelled, err := h.app.JobManager.ListByStatus(ctx, jobcore.JobStatusCancelled)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("completed=%d failed=%d cancelled=%d", len(completed), len(failed), len(cancelled)), nil
+	})
+
+	h.renderTestResult(w, "Test Job Lifecycle", steps, time.Since(start))
+}
+
 func (h *Handler) renderTestResult(w http.ResponseWriter, title string, steps []TestStep, totalDuration time.Duration) {
 	passed, failed := 0, 0
 	for _, s := range steps {
@@ -808,7 +941,7 @@ func (h *Handler) renderTestResult(w http.ResponseWriter, title string, steps []
 		}
 	}
 	h.render(w, "test_result", map[string]interface{}{
-		"Title":    title,
+		"TestName": title,
 		"Steps":    steps,
 		"Total":    len(steps),
 		"Passed":   passed,
@@ -850,4 +983,81 @@ func (h *Handler) render(w http.ResponseWriter, name string, data map[string]int
 	} else {
 		buf.WriteTo(w)
 	}
+}
+
+func (h *Handler) AdminReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.app.Config.TestMode {
+		http.Error(w, "test mode not enabled", http.StatusForbidden)
+		return
+	}
+
+	ctx := r.Context()
+	db := h.app.Store().DB
+	if db == nil {
+		http.Error(w, "database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := pgmigrate.TruncateAll(db); err != nil {
+		http.Error(w, fmt.Sprintf("truncate failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	products := inventorydomain.DefaultProducts()
+	store := inventorydomain.NewPgProductStore(db)
+	if err := inventorydomain.SeedProducts(ctx, store, products); err != nil {
+		http.Error(w, fmt.Sprintf("seed products failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"ok"}`))
+}
+
+func (h *Handler) TestSeedJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.app.Config.TestMode {
+		http.Error(w, "test mode not enabled", http.StatusForbidden)
+		return
+	}
+
+	status := r.URL.Query().Get("status")
+	if status != "running" && status != "failed" {
+		http.Error(w, "status must be 'running' or 'failed'", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	db := h.app.Store().DB
+	if db == nil {
+		http.Error(w, "database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	jobID := uuid.New().String()
+	now := time.Now()
+	var completedAt interface{}
+	if status == "failed" {
+		completedAt = now
+	}
+
+	_, err := db.ExecContext(ctx,
+		`INSERT INTO ddd_jobs (id, command, command_type, status, created_at, started_at, completed_at, error)
+		 VALUES ($1, $2, $3, $4, $5, $5, $6, $7)`,
+		jobID, `{"type":"e2e-test"}`, "e2e-test", status, now, completedAt, "",
+	)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("insert job failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"jobId":"%s"}`, jobID)
 }

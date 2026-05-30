@@ -3,6 +3,14 @@
 <h1 style="margin-bottom:1.5rem;">Async Jobs</h1>
 
 <div class="card">
+    <h2>Job Testing</h2>
+    <p style="color:#666;margin-bottom:1rem;">One-click test for Job lifecycle (submit, timeout, cancel, retry)</p>
+    <div class="actions">
+        <form method="POST" action="/test/job"><button type="submit" class="btn btn-primary" style="background:#546e7a;">Test Job Full Lifecycle</button></form>
+    </div>
+</div>
+
+<div class="card">
     <h2>Submit Report Job</h2>
     <form method="POST" action="/jobs">
         <div class="form-group">
@@ -17,6 +25,11 @@
             <label>Max Retries</label>
             <input type="number" name="retries" value="0" style="width:100px;">
         </div>
+        <div class="form-group">
+            <label>Duration (ms, for long-running test)</label>
+            <input type="number" name="duration" value="0" style="width:100px;" placeholder="0=skip">
+            <span style="color:#666;font-size:0.9em;margin-left:8px;">>0 uses ProcessBatchCommand</span>
+        </div>
         <button type="submit" class="btn btn-success">Submit Job</button>
     </form>
 </div>
@@ -29,13 +42,13 @@
         {{range .Jobs}}
         <tr>
             <td>{{printf "%.8s" .ID}}...</td>
-            <td>{{printf "%T" .Command}}</td>
-            <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
-            <td>{{if .Error}}<span style="color:#c62828;">{{.Error}}</span>{{end}}</td>
+            <td>{{.CommandType}}</td>
+            <td><span class="badge badge-{{.GetStatus}}">{{.GetStatus}}</span></td>
+            <td>{{if .GetError}}<span style="color:#c62828;">{{.GetError}}</span>{{end}}</td>
             <td>{{.CreatedAt.Format "15:04:05"}}</td>
             <td class="actions">
-                {{if eq .Status "running"}}<form method="POST" action="/jobs/{{.ID}}/cancel"><button class="btn btn-sm btn-danger">Cancel</button></form>{{end}}
-                {{if eq .Status "failed"}}<form method="POST" action="/jobs/{{.ID}}/retry"><button class="btn btn-sm btn-warning">Retry</button></form>{{end}}
+                {{if eq .GetStatus "running"}}<form method="POST" action="/jobs/{{.ID}}/cancel"><button class="btn btn-sm btn-danger">Cancel</button></form>{{end}}
+                {{if eq .GetStatus "failed"}}<form method="POST" action="/jobs/{{.ID}}/retry"><button class="btn btn-sm btn-warning">Retry</button></form>{{end}}
             </td>
         </tr>
         {{end}}
