@@ -26,6 +26,7 @@ import (
 	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 	"github.com/ddd-qce/exampleapp/infrastructure"
+	"github.com/stretchr/testify/require"
 )
 
 func wireTestApp(t *testing.T, storeType string) *infrastructure.AppContext {
@@ -687,5 +688,77 @@ func TestLongRunningJob_GracefulShutdown(t *testing.T) {
 	result, _ := jobMgr.GetStatus(ctx, job.ID)
 	if result.GetStatus() != jobcore.JobStatusCompleted && result.GetStatus() != jobcore.JobStatusCancelled {
 		t.Logf("job status after shutdown: %s (may be expected to stay running)", result.GetStatus())
+	}
+}
+
+func TestJobManager_Recovery_PendingReExecuted(t *testing.T) {
+	store := jobmemory.NewJobStore()
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(aspect.NewAspectChain()))
+	cmdBus.RegisterHandler(ordercommand.NewProcessBatchHandler())
+	manager := jobmemory.NewJobManager(store, cmdBus, jobmemory.WithRecovery())
+	ctx := context.Background()
+
+	pendingJob := jobcore.NewJob("recover-pending-test", &ordercommand.ProcessBatchCommand{
+		OrderID:  orderdomain.NewOrderID("RP-001"),
+		Duration: 100 * time.Millisecond,
+	})
+	pendingJob.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+	if err := store.Create(ctx, pendingJob); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	require.Eventually(t, func() bool {
+		s, err := manager.GetStatus(ctx, "recover-pending-test")
+		if err != nil {
+			return false
+		}
+		return s.GetStatus() == jobcore.JobStatusCompleted
+	}, 3*time.Second, 10*time.Millisecond)
+
+	status, err := manager.GetStatus(ctx, "recover-pending-test")
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.GetStatus() != jobcore.JobStatusCompleted {
+		t.Errorf("expected completed after recovery, got %s", status.GetStatus())
+	}
+}
+
+func TestJobManager_Recovery_RunningMarkedFailed(t *testing.T) {
+	store := jobmemory.NewJobStore()
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(aspect.NewAspectChain()))
+	cmdBus.RegisterHandler(ordercommand.NewProcessBatchHandler())
+	manager := jobmemory.NewJobManager(store, cmdBus, jobmemory.WithRecovery())
+	ctx := context.Background()
+
+	runningJob := jobcore.NewJob("recover-running-test", &ordercommand.ProcessBatchCommand{
+		OrderID:  orderdomain.NewOrderID("RR-001"),
+		Duration: 10 * time.Second,
+	})
+	runningJob.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
+	if err := store.Create(ctx, runningJob); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	require.Eventually(t, func() bool {
+		s, err := manager.GetStatus(ctx, "recover-running-test")
+		if err != nil {
+			return false
+		}
+		return s.GetStatus() == jobcore.JobStatusFailed
+	}, 3*time.Second, 10*time.Millisecond)
+
+	status, err := manager.GetStatus(ctx, "recover-running-test")
+	if err != nil {
+		t.Fatalf("GetStatus failed: %v", err)
+	}
+	if status.GetStatus() != jobcore.JobStatusFailed {
+		t.Errorf("expected failed after recovery, got %s", status.GetStatus())
+	}
+	if status.GetError() == "" {
+		t.Error("expected error message for recovered running job")
+	}
+	if !strings.Contains(status.GetError(), "process restarted") {
+		t.Errorf("expected 'process restarted' in error, got: %s", status.GetError())
 	}
 }
