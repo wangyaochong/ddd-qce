@@ -9,7 +9,8 @@ import (
 	"github.com/ddd-qce/core/cqrs/impl"
 )
 
-var _ event.EventSourceStore[*testStoreEvent] = (*EventSourceStore[*testStoreEvent])(nil)
+var _ event.AggregateEventStore[*testStoreEvent] = (*EventSourceStore[*testStoreEvent])(nil)
+var _ event.GlobalEventStore[*testStoreEvent] = (*EventSourceStore[*testStoreEvent])(nil)
 
 type testStoreEvent struct {
 	event.BaseEvent
@@ -318,7 +319,7 @@ func TestEventStore_WithFactory(t *testing.T) {
 }
 
 func TestEventStore_Contract(t *testing.T) {
-	impl.TestEventStoreContract(t, func() event.EventSourceStore[*impl.TestEvent] {
+	impl.TestAggregateEventStoreContract(t, func() event.AggregateEventStore[*impl.TestEvent] {
 		store, err := NewEventSourceStore[*impl.TestEvent]()
 		if err != nil {
 			t.Fatalf("create event store: %v", err)
@@ -328,7 +329,7 @@ func TestEventStore_Contract(t *testing.T) {
 }
 
 func TestEventStore_LoadAllContract(t *testing.T) {
-	impl.TestEventStoreLoadAllContract(t, func() event.EventSourceStore[*impl.TestEvent] {
+	impl.TestGlobalEventStoreContract(t, func() event.AggregateEventStore[*impl.TestEvent] {
 		store, err := NewEventSourceStore[*impl.TestEvent]()
 		if err != nil {
 			t.Fatalf("create event store: %v", err)

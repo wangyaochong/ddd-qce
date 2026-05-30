@@ -133,7 +133,7 @@ func (s *EventSourceStore[T]) appendEvents(ctx context.Context, q corepg.DBTX, a
 		_, err = q.ExecContext(ctx,
 			`INSERT INTO ddd_domain_events (aggregate_id, event_type, event_data, occurred_at, version, correlation_id, causation_id)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			evt.AggregateID(), event.EventTypeOf(evt), data, evt.OccurredAt(), version,
+			evt.AggregateID(), event.EventNameOf(evt), data, evt.OccurredAt(), version,
 			evt.CorrelationID(), evt.CausationID(),
 		)
 		if err != nil {

@@ -2,27 +2,15 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
-	"sync"
-	"sync/atomic"
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/cqrs/command"
 )
 
-type commandInvoker func(cmd any, ctx context.Context) (any, error)
-
-var ErrBusClosed = errors.New("bus is closed")
-
 type CommandBus struct {
-	handlers map[reflect.Type]any
-	invokers map[reflect.Type]commandInvoker
-	chain    *aspect.AspectChain
-	mu       sync.RWMutex
-	closed   atomic.Bool
-	inFlight sync.WaitGroup
+	core messageBus
 }
 
 var _ command.CommandBus = (*CommandBus)(nil)
@@ -30,14 +18,12 @@ var _ command.CommandBus = (*CommandBus)(nil)
 type CommandBusOption func(*CommandBus)
 
 func WithCommandBusAspectChain(chain *aspect.AspectChain) CommandBusOption {
-	return func(b *CommandBus) { b.chain = chain }
+	return func(b *CommandBus) { b.core.chain = chain }
 }
 
 func NewCommandBus(opts ...CommandBusOption) *CommandBus {
 	b := &CommandBus{
-		handlers: make(map[reflect.Type]any),
-		invokers: make(map[reflect.Type]commandInvoker),
-		chain:    aspect.NewAspectChain(),
+		core: newMessageBus(aspect.NewAspectChain()),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -50,81 +36,21 @@ func RegisterCommand[T command.Command, R any](bus *CommandBus, handler command.
 }
 
 func (b *CommandBus) RegisterHandler(handler any) error {
-	handlerType := reflect.TypeOf(handler)
-	evtType, ok := extractHandlerPayloadType(handlerType)
-	if !ok {
-		return fmt.Errorf("RegisterHandler: handler must implement command.CommandHandler[T], got %T", handler)
-	}
-
-	invoker, err := makeCommandInvoker(handler, handlerType)
+	invoker, err := makeInvoker(handler, reflect.TypeOf(handler))
 	if err != nil {
 		return fmt.Errorf("RegisterHandler: %w", err)
 	}
-
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if _, exists := b.handlers[evtType]; exists {
-		return fmt.Errorf("handler already registered for command type %v", evtType)
-	}
-	b.handlers[evtType] = handler
-	b.invokers[evtType] = invoker
-	return nil
+	return b.core.registerHandler(handler, invoker)
 }
 
 func (b *CommandBus) Execute(ctx context.Context, cmd any) (any, error) {
-	if b.closed.Load() {
-		return nil, ErrBusClosed
-	}
-	b.inFlight.Add(1)
-	defer b.inFlight.Done()
-
-	cmdType := reflect.TypeOf(cmd)
-
-	b.mu.RLock()
-	inv, exists := b.invokers[cmdType]
-	b.mu.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("no handler registered for command type: %s", cmdType)
-	}
-
-	return b.chain.ExecuteWithCommandAspects(ctx, cmd, func(ctx context.Context) (any, error) {
-		return inv(cmd, ctx)
-	})
-}
-
-func makeCommandInvoker(handler any, handlerType reflect.Type) (commandInvoker, error) {
-	handleMethod, ok := handlerType.MethodByName("Handle")
-	if !ok {
-		return nil, fmt.Errorf("handler %T does not have a Handle method", handler)
-	}
-	return func(cmd any, ctx context.Context) (any, error) {
-		args := []reflect.Value{
-			reflect.ValueOf(handler),
-			reflect.ValueOf(ctx),
-			reflect.ValueOf(cmd),
-		}
-		results := handleMethod.Func.Call(args)
-		var err error
-		if len(results) >= 2 {
-			if e, ok := results[1].Interface().(error); ok {
-				err = e
-			}
-		}
-		if len(results) >= 1 {
-			return results[0].Interface(), err
-		}
-		return nil, err
-	}, nil
+	return b.core.execute(ctx, cmd, "command")
 }
 
 func (b *CommandBus) RegisteredTypes() []string {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return typeNamesFromMap(b.handlers)
+	return b.core.registeredTypes()
 }
 
 func (b *CommandBus) Shutdown(ctx context.Context) error {
-	return shutdownBus(&b.closed, &b.inFlight, ctx)
+	return b.core.shutdown(ctx)
 }

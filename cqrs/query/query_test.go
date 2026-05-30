@@ -56,6 +56,10 @@ func (b *testQueryBus) RegisteredTypes() []string {
 	return names
 }
 
+func (b *testQueryBus) Shutdown(ctx context.Context) error {
+	return nil
+}
+
 func TestQueryNameOf(t *testing.T) {
 	tests := []struct {
 		name     string

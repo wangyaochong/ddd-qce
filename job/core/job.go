@@ -2,14 +2,13 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"sync"
 	"time"
 )
-
-var ErrJobNotFound = errors.New("job not found")
 
 type JobStatus string
 
@@ -23,28 +22,28 @@ const (
 
 type Job struct {
 	mu          sync.Mutex
-	ID          string
-	Command     any
-	CommandType string
+	id          string
+	command     any
+	commandType string
 	status      JobStatus
 	result      any
 	resultType  string
 	err         string
-	CreatedAt   time.Time
+	createdAt   time.Time
 	startedAt   time.Time
 	completedAt time.Time
-	Timeout     time.Duration
-	RetryCount  int
-	MaxRetries  int
+	timeout     time.Duration
+	retryCount  int
+	maxRetries  int
 	done        chan struct{}
 }
 
 func NewJob(id string, cmd any, opts ...JobOption) *Job {
 	job := &Job{
-		ID:        id,
-		Command:   cmd,
+		id:        id,
+		command:   cmd,
 		status:    JobStatusPending,
-		CreatedAt: time.Now(),
+		createdAt: time.Now(),
 	}
 	for _, opt := range opts {
 		opt(job)
@@ -52,23 +51,59 @@ func NewJob(id string, cmd any, opts ...JobOption) *Job {
 	return job
 }
 
-func (j *Job) GetStatus() JobStatus      { return j.status }
-func (j *Job) GetResult() any            { return j.result }
-func (j *Job) GetResultType() string     { return j.resultType }
-func (j *Job) GetError() string          { return j.err }
+func (j *Job) ID() string            { return j.id }
+func (j *Job) Command() any          { return j.command }
+func (j *Job) CommandType() string   { return j.commandType }
+func (j *Job) CreatedAt() time.Time  { return j.createdAt }
+func (j *Job) Timeout() time.Duration { return j.timeout }
+func (j *Job) RetryCount() int       { return j.retryCount }
+func (j *Job) MaxRetries() int       { return j.maxRetries }
+func (j *Job) GetStatus() JobStatus  { return j.status }
+func (j *Job) GetResult() any        { return j.result }
+func (j *Job) GetResultType() string { return j.resultType }
+func (j *Job) GetError() string      { return j.err }
 func (j *Job) GetStartedAt() time.Time   { return j.startedAt }
 func (j *Job) GetCompletedAt() time.Time { return j.completedAt }
 
+var (
+	ErrJobNotFound            = errors.New("job not found")
+	ErrInvalidStateTransition = errors.New("invalid state transition")
+)
+
+func isValidTransition(from, to JobStatus) bool {
+	validTransitions := map[JobStatus]map[JobStatus]bool{
+		JobStatusPending: {
+			JobStatusRunning: true,
+		},
+		JobStatusRunning: {
+			JobStatusCompleted: true,
+			JobStatusFailed:    true,
+			JobStatusCancelled: true,
+		},
+		JobStatusFailed: {
+			JobStatusPending: true,
+		},
+		JobStatusCompleted: {},
+		JobStatusCancelled: {},
+	}
+	allowed, exists := validTransitions[from][to]
+	return exists && allowed
+}
+
 // RestoreJobState restores job fields from persistence. Only for infrastructure use.
-func (j *Job) RestoreJobState(status JobStatus, result any, resultType string, err string, startedAt, completedAt time.Time) {
+func (j *Job) RestoreJobState(status JobStatus, result any, resultType string, err string, startedAt, completedAt time.Time) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if !isValidTransition(j.status, status) {
+		return fmt.Errorf("job %s: %w: %s -> %s", j.id, ErrInvalidStateTransition, j.status, status)
+	}
 	j.status = status
 	j.result = result
 	j.resultType = resultType
 	j.err = err
 	j.startedAt = startedAt
 	j.completedAt = completedAt
+	return nil
 }
 
 // MarkRunning atomically sets the job status to running and records the start time.
@@ -105,8 +140,8 @@ func (j *Job) TryFail(errStr string) (cancelled bool, shouldRetry bool) {
 	j.completedAt = time.Now()
 	j.status = JobStatusFailed
 	j.err = errStr
-	if j.RetryCount < j.MaxRetries {
-		j.RetryCount++
+	if j.retryCount < j.maxRetries {
+		j.retryCount++
 		return false, true
 	}
 	return false, false
@@ -118,7 +153,7 @@ func (j *Job) TryCancel() error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.status == JobStatusCompleted || j.status == JobStatusCancelled {
-		return fmt.Errorf("job %s cannot be cancelled (status: %s)", j.ID, j.status)
+		return fmt.Errorf("job %s cannot be cancelled (status: %s)", j.id, j.status)
 	}
 	j.status = JobStatusCancelled
 	j.completedAt = time.Now()
@@ -131,7 +166,7 @@ func (j *Job) ResetForRetry() error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if j.status != JobStatusFailed {
-		return fmt.Errorf("job %s is not in failed state", j.ID)
+		return fmt.Errorf("job %s is not in failed state", j.id)
 	}
 	j.status = JobStatusPending
 	j.err = ""
@@ -176,20 +211,31 @@ func (j *Job) Snapshot() *Job {
 	if j.status == JobStatusCompleted || j.status == JobStatusFailed || j.status == JobStatusCancelled {
 		close(done)
 	}
+	var cmdCopy any
+	if cmdData, err := json.Marshal(j.command); err == nil {
+		var v any
+		if json.Unmarshal(cmdData, &v) == nil {
+			cmdCopy = v
+		} else {
+			cmdCopy = j.command
+		}
+	} else {
+		cmdCopy = j.command
+	}
 	return &Job{
-		ID:          j.ID,
-		Command:     j.Command,
-		CommandType: j.CommandType,
+		id:          j.id,
+		command:     cmdCopy,
+		commandType: j.commandType,
 		status:      j.status,
 		result:      j.result,
 		resultType:  j.resultType,
 		err:         j.err,
-		CreatedAt:   j.CreatedAt,
+		createdAt:   j.createdAt,
 		startedAt:   j.startedAt,
 		completedAt: j.completedAt,
-		Timeout:     j.Timeout,
-		RetryCount:  j.RetryCount,
-		MaxRetries:  j.MaxRetries,
+		timeout:     j.timeout,
+		retryCount:  j.retryCount,
+		maxRetries:  j.maxRetries,
 		done:        done,
 	}
 }
@@ -206,13 +252,13 @@ type JobOption func(*Job)
 
 func WithTimeout(timeout time.Duration) JobOption {
 	return func(j *Job) {
-		j.Timeout = timeout
+		j.timeout = timeout
 	}
 }
 
 func WithMaxRetries(maxRetries int) JobOption {
 	return func(j *Job) {
-		j.MaxRetries = maxRetries
+		j.maxRetries = maxRetries
 	}
 }
 

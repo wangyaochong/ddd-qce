@@ -39,9 +39,6 @@ type QueryBus interface {
 	Execute(ctx context.Context, query any) (any, error)
 	RegisterHandler(handler any) error
 	RegisteredTypes() []string
-}
-
-type Shutdownable interface {
 	Shutdown(ctx context.Context) error
 }
 

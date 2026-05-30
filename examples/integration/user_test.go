@@ -8,12 +8,11 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/cqrs/command"
-	eventbus "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type User struct {
@@ -126,7 +125,7 @@ func (h *testCreateUserHandler) Handle(ctx context.Context, cmd *testCreateUserC
 	if err := h.repo.Save(user); err != nil {
 		return nil, err
 	}
-	eventbus.Dispatch(ctx, h.eventBus, &testUserCreatedEvent{
+	h.eventBus.Publish(ctx, &testUserCreatedEvent{
 		BaseEvent: event.NewBaseEvent(user.ID, time.Now()),
 		Name:            user.Name,
 	})
@@ -218,7 +217,7 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 	chain := aspect.NewAspectChain()
 
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
-	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithEventBusAspectChain(chain))
 	qBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
 	repo := NewUserRepository()
 
@@ -230,7 +229,7 @@ func TestUserEntity_CreateAndUpdateFlow(t *testing.T) {
 
 	commandmemory.RegisterCommand(cmdBus, createHandler)
 	commandmemory.RegisterCommand(cmdBus, updateHandler)
-	eventmemory.RegisterEvent[*testUserCreatedEvent](eventBus, eventHandler)
+	eventmemory.RegisterHandler[*testUserCreatedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, getHandler)
 
 	result, err := command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, cmdBus, &testCreateUserCommand{

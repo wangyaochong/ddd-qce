@@ -23,10 +23,10 @@ func NewJobStore() *InMemoryJobStore {
 func (s *InMemoryJobStore) Create(ctx context.Context, job *jobcore.Job) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, exists := s.jobs[job.ID]; exists {
-		return fmt.Errorf("job %s: %w", job.ID, ddderror.ErrAlreadyExists)
+	if _, exists := s.jobs[job.ID()]; exists {
+		return fmt.Errorf("job %s: %w", job.ID(), ddderror.ErrAlreadyExists)
 	}
-	s.jobs[job.ID] = job.Snapshot()
+	s.jobs[job.ID()] = job.Snapshot()
 	return nil
 }
 
@@ -43,10 +43,10 @@ func (s *InMemoryJobStore) Get(ctx context.Context, id string) (*jobcore.Job, er
 func (s *InMemoryJobStore) Update(ctx context.Context, job *jobcore.Job) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, exists := s.jobs[job.ID]; !exists {
-		return fmt.Errorf("job %s: %w", job.ID, ddderror.ErrNotFound)
+	if _, exists := s.jobs[job.ID()]; !exists {
+		return fmt.Errorf("job %s: %w", job.ID(), ddderror.ErrNotFound)
 	}
-	s.jobs[job.ID] = job.Snapshot()
+	s.jobs[job.ID()] = job.Snapshot()
 	return nil
 }
 

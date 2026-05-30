@@ -56,6 +56,10 @@ func (b *testCommandBus) RegisteredTypes() []string {
 	return names
 }
 
+func (b *testCommandBus) Shutdown(ctx context.Context) error {
+	return nil
+}
+
 func TestCommandNameOf(t *testing.T) {
 	tests := []struct {
 		name     string

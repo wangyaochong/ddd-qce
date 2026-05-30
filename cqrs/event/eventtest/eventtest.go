@@ -22,7 +22,7 @@ func NewTestEvent(aggID, data string) *TestEvent {
 	}
 }
 
-func TestEventStoreContract(t *testing.T, newStore func() event.EventSourceStore[*TestEvent]) {
+func TestAggregateEventStoreContract(t *testing.T, newStore func() event.AggregateEventStore[*TestEvent]) {
 	t.Helper()
 
 	t.Run("AppendAndLoad", func(t *testing.T) {

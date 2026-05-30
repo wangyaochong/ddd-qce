@@ -95,7 +95,7 @@ func NewDDDViewer(opts ...DDDViewerOption) *DDDViewer {
 	}
 
 	if v.msgStore == nil && v.msgReader == nil {
-		store := NewInMemoryMessageStore()
+		store := NewObservableMessageStore()
 		v.msgStore = store
 		v.msgReader = store
 	}
@@ -378,10 +378,10 @@ func (v *DDDViewer) handleTraces(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	filter := trace.TraceFilter{
-		Status: r.URL.Query().Get("status"),
+		Status: trace.SpanStatus(r.URL.Query().Get("status")),
 	}
 	if typ := r.URL.Query().Get("type"); typ != "" {
-		filter.Type = typ
+		filter.Type = trace.SpanType(typ)
 	}
 
 	traceIDs, err := v.traceStore.ListTraces(ctx, filter)
@@ -415,7 +415,7 @@ func (v *DDDViewer) handleTraces(w http.ResponseWriter, r *http.Request) {
 		for _, s := range spans {
 			sv = append(sv, SpanView{
 				ID: s.ID, TraceID: s.TraceID, ParentID: s.ParentID,
-				Type: s.Type, Name: s.Name, Status: s.Status,
+				Type: string(s.Type), Name: s.Name, Status: string(s.Status),
 				Error: s.Error, Duration: s.Duration,
 			})
 		}

@@ -35,13 +35,13 @@ func WithTypeRegistry(registry *jobcore.TypeRegistry) JobStoreOption {
 
 func (s *PgJobStore) Create(ctx context.Context, job *jobcore.Job) error {
 	q := corepg.GetQuerier(ctx, s.db)
-	cmdData, err := json.Marshal(job.Command)
+	cmdData, err := json.Marshal(job.Command())
 	if err != nil {
 		return fmt.Errorf("marshal command: %w", err)
 	}
-	commandType := job.CommandType
+	commandType := job.CommandType()
 	if commandType == "" {
-		commandType = jobcore.TypeName(job.Command)
+		commandType = jobcore.TypeName(job.Command())
 	}
 	resultData, err := corepg.JSONOrNull(job.GetResult())
 	if err != nil {
@@ -50,38 +50,31 @@ func (s *PgJobStore) Create(ctx context.Context, job *jobcore.Job) error {
 	_, err = q.ExecContext(ctx,
 		`INSERT INTO ddd_jobs (id, command, command_type, status, result, result_type, error, created_at, started_at, completed_at, timeout_ns, retry_count, max_retries)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		job.ID, cmdData, commandType, string(job.GetStatus()),
+		job.ID(), cmdData, commandType, string(job.GetStatus()),
 		resultData, corepg.NullString(job.GetResultType()),
 		corepg.NullString(job.GetError()),
-		job.CreatedAt, corepg.NullTime(job.GetStartedAt()), corepg.NullTime(job.GetCompletedAt()),
-		job.Timeout.Nanoseconds(), job.RetryCount, job.MaxRetries,
+		job.CreatedAt(), corepg.NullTime(job.GetStartedAt()), corepg.NullTime(job.GetCompletedAt()),
+		job.Timeout().Nanoseconds(), job.RetryCount(), job.MaxRetries(),
 	)
 	return err
 }
 
-func (s *PgJobStore) Get(ctx context.Context, id string) (*jobcore.Job, error) {
-	q := corepg.GetQuerier(ctx, s.db)
-	row := q.QueryRowContext(ctx,
-		`SELECT id, command, command_type, status, result, result_type, error, created_at, started_at, completed_at, timeout_ns, retry_count, max_retries
-		 FROM ddd_jobs WHERE id = $1`, id,
-	)
-	var job jobcore.Job
+func scanJob(row interface{ Scan(...any) error }, s *PgJobStore) (*jobcore.Job, error) {
+	var jobID string
 	var cmdData []byte
 	var resultData []byte
 	var commandType string
 	var status string
 	var resultType sql.NullString
 	var errStr sql.NullString
+	var createdAt time.Time
 	var startedAt, completedAt sql.NullTime
 	var timeoutNs int64
-	if err := row.Scan(&job.ID, &cmdData, &commandType, &status, &resultData, &resultType, &errStr, &job.CreatedAt, &startedAt, &completedAt, &timeoutNs, &job.RetryCount, &job.MaxRetries); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("job %s: %w", id, ddderror.ErrNotFound)
-		}
+	var retryCount, maxRetries int
+	if err := row.Scan(&jobID, &cmdData, &commandType, &status, &resultData, &resultType, &errStr, &createdAt, &startedAt, &completedAt, &timeoutNs, &retryCount, &maxRetries); err != nil {
 		return nil, err
 	}
-	job.CommandType = commandType
-	job.Timeout = time.Duration(timeoutNs)
+	timeout := time.Duration(timeoutNs)
 	var startedAtVal, completedAtVal time.Time
 	if startedAt.Valid {
 		startedAtVal = startedAt.Time
@@ -89,7 +82,6 @@ func (s *PgJobStore) Get(ctx context.Context, id string) (*jobcore.Job, error) {
 	if completedAt.Valid {
 		completedAtVal = completedAt.Time
 	}
-	var result any
 	var resultTypeStr string
 	if resultType.Valid {
 		resultTypeStr = resultType.String
@@ -98,6 +90,7 @@ func (s *PgJobStore) Get(ctx context.Context, id string) (*jobcore.Job, error) {
 	if errStr.Valid {
 		errStrVal = errStr.String
 	}
+	var result any
 	if len(resultData) > 0 {
 		resultTypeName := ""
 		if resultType.Valid {
@@ -109,15 +102,33 @@ func (s *PgJobStore) Get(ctx context.Context, id string) (*jobcore.Job, error) {
 			return nil, fmt.Errorf("unmarshal result: %w", err2)
 		}
 	}
-	job.RestoreJobState(jobcore.JobStatus(status), result, resultTypeStr, errStrVal, startedAtVal, completedAtVal)
+	var cmd any
 	if len(cmdData) > 0 {
-		cmd, err := s.unmarshalTyped(cmdData, commandType)
+		var err error
+		cmd, err = s.unmarshalTyped(cmdData, commandType)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshal command: %w", err)
 		}
-		job.Command = cmd
 	}
-	return &job, nil
+	job := jobcore.NewJob(jobID, cmd, jobcore.WithTimeout(timeout), jobcore.WithMaxRetries(maxRetries))
+	job.RestoreJobState(jobcore.JobStatus(status), result, resultTypeStr, errStrVal, startedAtVal, completedAtVal)
+	return job, nil
+}
+
+func (s *PgJobStore) Get(ctx context.Context, id string) (*jobcore.Job, error) {
+	q := corepg.GetQuerier(ctx, s.db)
+	row := q.QueryRowContext(ctx,
+		`SELECT id, command, command_type, status, result, result_type, error, created_at, started_at, completed_at, timeout_ns, retry_count, max_retries
+		 FROM ddd_jobs WHERE id = $1`, id,
+	)
+	job, err := scanJob(row, s)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("job %s: %w", id, ddderror.ErrNotFound)
+		}
+		return nil, err
+	}
+	return job, nil
 }
 
 func (s *PgJobStore) Update(ctx context.Context, job *jobcore.Job) error {
@@ -133,9 +144,9 @@ func (s *PgJobStore) Update(ctx context.Context, job *jobcore.Job) error {
 	res, err := q.ExecContext(ctx,
 		`UPDATE ddd_jobs SET status=$2, result=$3, result_type=$4, error=$5, started_at=$6, completed_at=$7, timeout_ns=$8, retry_count=$9, max_retries=$10
 		 WHERE id=$1`,
-		job.ID, string(job.GetStatus()), resultData, corepg.NullString(resultType), corepg.NullString(job.GetError()),
+		job.ID(), string(job.GetStatus()), resultData, corepg.NullString(resultType), corepg.NullString(job.GetError()),
 		corepg.NullTime(job.GetStartedAt()), corepg.NullTime(job.GetCompletedAt()),
-		job.Timeout.Nanoseconds(), job.RetryCount, job.MaxRetries,
+		job.Timeout().Nanoseconds(), job.RetryCount(), job.MaxRetries(),
 	)
 	if err != nil {
 		return err
@@ -145,7 +156,7 @@ func (s *PgJobStore) Update(ctx context.Context, job *jobcore.Job) error {
 		return fmt.Errorf("check rows affected: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("job %s: %w", job.ID, ddderror.ErrNotFound)
+		return fmt.Errorf("job %s: %w", job.ID(), ddderror.ErrNotFound)
 	}
 	return nil
 }
@@ -162,56 +173,11 @@ func (s *PgJobStore) List(ctx context.Context, status jobcore.JobStatus) ([]*job
 	defer rows.Close()
 	var result []*jobcore.Job
 	for rows.Next() {
-		var job jobcore.Job
-		var cmdData []byte
-		var resultData []byte
-		var commandType string
-		var statusStr string
-		var resultType sql.NullString
-		var errStr sql.NullString
-		var startedAt, completedAt sql.NullTime
-		var timeoutNs int64
-		if err := rows.Scan(&job.ID, &cmdData, &commandType, &statusStr, &resultData, &resultType, &errStr, &job.CreatedAt, &startedAt, &completedAt, &timeoutNs, &job.RetryCount, &job.MaxRetries); err != nil {
+		job, err := scanJob(rows, s)
+		if err != nil {
 			return nil, err
 		}
-		job.CommandType = commandType
-		job.Timeout = time.Duration(timeoutNs)
-		var startedAtVal, completedAtVal time.Time
-		if startedAt.Valid {
-			startedAtVal = startedAt.Time
-		}
-		if completedAt.Valid {
-			completedAtVal = completedAt.Time
-		}
-		var resultTypeStr string
-		if resultType.Valid {
-			resultTypeStr = resultType.String
-		}
-		var errStrVal string
-		if errStr.Valid {
-			errStrVal = errStr.String
-		}
-		var resultVal any
-		if len(resultData) > 0 {
-			resultTypeName := ""
-			if resultType.Valid {
-				resultTypeName = resultType.String
-			}
-			var err2 error
-			resultVal, err2 = s.unmarshalTyped(resultData, resultTypeName)
-			if err2 != nil {
-				return nil, fmt.Errorf("unmarshal result for job %s: %w", job.ID, err2)
-			}
-		}
-		job.RestoreJobState(jobcore.JobStatus(statusStr), resultVal, resultTypeStr, errStrVal, startedAtVal, completedAtVal)
-		if len(cmdData) > 0 {
-			cmd, err := s.unmarshalTyped(cmdData, commandType)
-			if err != nil {
-				return nil, fmt.Errorf("unmarshal command for job %s: %w", job.ID, err)
-			}
-			job.Command = cmd
-		}
-		result = append(result, &job)
+		result = append(result, job)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate jobs: %w", err)

@@ -12,7 +12,6 @@ import (
 	"github.com/ddd-qce/core/cqrs/command"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	event "github.com/ddd-qce/core/cqrs/event"
 )
 
 type level1Command struct {
@@ -26,7 +25,7 @@ type level1Result struct {
 type level1Handler struct{}
 
 func (h *level1Handler) Handle(ctx context.Context, c *level1Command) (*level1Result, error) {
-	event.Dispatch[*level2Event](ctx, testEventBus, &level2Event{})
+	testEventBus.Publish(ctx, &level2Event{})
 	return &level1Result{Message: "level1 done"}, nil
 }
 
@@ -59,7 +58,7 @@ type level3Result struct {
 type level3Handler struct{}
 
 func (h *level3Handler) Handle(ctx context.Context, c *level3Command) (*level3Result, error) {
-	event.Dispatch[*level4Event](ctx, testEventBus, &level4Event{})
+	testEventBus.Publish(ctx, &level4Event{})
 	return &level3Result{Message: "level3 done"}, nil
 }
 
@@ -98,8 +97,8 @@ func init() {
 	commandmemory.RegisterCommand(testCmdBus, &level1Handler{})
 	commandmemory.RegisterCommand(testCmdBus, &level3Handler{})
 	commandmemory.RegisterCommand(testCmdBus, &level5Handler{})
-	eventmemory.RegisterEvent(testEventBus, &level2Handler{})
-	eventmemory.RegisterEvent(testEventBus, &level4Handler{})
+	eventmemory.RegisterHandler(testEventBus, &level2Handler{})
+	eventmemory.RegisterHandler(testEventBus, &level4Handler{})
 }
 
 func TestCommandBus_WithEventBus(t *testing.T) {
@@ -125,9 +124,9 @@ func TestCommandBus_DispatchDeep(t *testing.T) {
 	commandmemory.RegisterCommand(cmdBus, &level3Handler{})
 	commandmemory.RegisterCommand(cmdBus, &level5Handler{})
 
-	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
-	eventmemory.RegisterEvent(eventBus, &level2Handler{})
-	eventmemory.RegisterEvent(eventBus, &level4Handler{})
+	eventBus := eventmemory.NewEventBus(eventmemory.WithEventBusAspectChain(chain))
+	eventmemory.RegisterHandler(eventBus, &level2Handler{})
+	eventmemory.RegisterHandler(eventBus, &level4Handler{})
 
 	result, err := 	command.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
 	if err != nil {

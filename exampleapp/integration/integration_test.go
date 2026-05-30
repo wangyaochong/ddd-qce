@@ -12,11 +12,10 @@ import (
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
 	"github.com/ddd-qce/core/cqrs/command"
-	cqrsevent "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	domainevent "github.com/ddd-qce/core/cqrs/event"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
 	"github.com/ddd-qce/core/trace"
@@ -317,7 +316,7 @@ func TestJobManagerFullCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit failed: %v", err)
 	}
-	result, err := jobMgr.Wait(ctx, job.ID, 5*time.Second)
+	result, err := jobMgr.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -340,8 +339,8 @@ func TestJobManager_Cancel(t *testing.T) {
 	ctx := context.Background()
 
 	job, _ := jobMgr.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderdomain.NewOrderID("O2")}, jobcore.WithTimeout(5*time.Second))
-	_, _ = jobMgr.WaitForRunning(ctx, job.ID, 2*time.Second)
-	if err := jobMgr.Cancel(ctx, job.ID); err != nil {
+	_, _ = jobMgr.WaitForRunning(ctx, job.ID(), 2*time.Second)
+	if err := jobMgr.Cancel(ctx, job.ID()); err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
 }
@@ -355,11 +354,11 @@ func TestJobManager_Retry(t *testing.T) {
 	ctx := context.Background()
 
 	job, _ := jobMgr.Submit(ctx, &ordercommand.GenerateReportCommand{OrderID: orderdomain.NewOrderID("O3")}, jobcore.WithTimeout(1*time.Millisecond))
-	_, _ = jobMgr.Wait(ctx, job.ID, 2*time.Second)
+	_, _ = jobMgr.Wait(ctx, job.ID(), 2*time.Second)
 
-	status, _ := jobMgr.GetStatus(ctx, job.ID)
+	status, _ := jobMgr.GetStatus(ctx, job.ID())
 	if status.GetStatus() == jobcore.JobStatusFailed {
-		if err := jobMgr.Retry(ctx, job.ID); err != nil {
+		if err := jobMgr.Retry(ctx, job.ID()); err != nil {
 			t.Logf("retry result: %v (may be expected)", err)
 		}
 	}
@@ -367,12 +366,12 @@ func TestJobManager_Retry(t *testing.T) {
 
 func TestConcurrentEventHandlers_MultiError(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithEventBusAspectChain(chain))
 	eventBus.SubscribeHandler(&successEventHandler{})
 	eventBus.SubscribeHandler(&failEventHandler{})
 	ctx := context.Background()
-	err := cqrsevent.Dispatch[*orderevent.OrderPlacedEvent](ctx, eventBus, &orderevent.OrderPlacedEvent{
-		BaseEvent: domainevent.NewBaseEvent("O1", time.Now()), UserID: "u1", TotalAmount: 100,
+	err := eventBus.Publish(ctx, &orderevent.OrderPlacedEvent{
+		BaseEvent: event.NewBaseEvent("O1", time.Now()), UserID: "u1", TotalAmount: 100,
 	})
 	if err == nil {
 		t.Log("MultiError not triggered (one handler succeeded), which is acceptable for concurrent publish")
@@ -421,7 +420,7 @@ func TestRepositoryDelete(t *testing.T) {
 		if err != nil {
 			t.Fatalf("find failed: %v", err)
 		}
-		if found.ID() != "ORD-DEL" {
+		if found.ID()() != "ORD-DEL" {
 			t.Error("order not found")
 		}
 		app.OrderRepo.Delete(ctx, "ORD-DEL")
@@ -439,7 +438,7 @@ func TestCustomAspect(t *testing.T) {
 	chain.RegisterCommandAspect(&testCustomAspect{})
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	repo := orderrepo.NewOrderRepository()
-	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithEventBusAspectChain(chain))
 	cmdBus.RegisterHandler(ordercommand.NewPlaceOrderHandler(repo, eventBus))
 	ctx := context.Background()
 	_, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, cmdBus, &ordercommand.PlaceOrderCommand{
@@ -489,8 +488,8 @@ func TestJobStore_CRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get failed: %v", err)
 	}
-	if found.ID != "J1" {
-		t.Errorf("expected J1, got %s", found.ID)
+	if found.ID() != "J1" {
+		t.Errorf("expected J1, got %s", found.ID())
 	}
 	found.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 	if err := store.Update(ctx, found); err != nil {
@@ -540,7 +539,7 @@ func TestLongRunningJob_CompletesSuccessfully(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	result, err := jobMgr.Wait(ctx, job.ID, 2*time.Second)
+	result, err := jobMgr.Wait(ctx, job.ID(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -549,7 +548,7 @@ func TestLongRunningJob_CompletesSuccessfully(t *testing.T) {
 		t.Errorf("expected completed, got %s", result.GetStatus())
 	}
 
-	jobFromStore, _ := jobMgr.GetStatus(ctx, job.ID)
+	jobFromStore, _ := jobMgr.GetStatus(ctx, job.ID())
 	if jobFromStore.GetCompletedAt().IsZero() {
 		t.Error("expected completedAt to be set")
 	}
@@ -571,7 +570,7 @@ func TestLongRunningJob_TimeoutFails(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	result, err := jobMgr.Wait(ctx, job.ID, 5*time.Second)
+	result, err := jobMgr.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -601,15 +600,15 @@ func TestLongRunningJob_CancelMidExecution(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	_, _ = jobMgr.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = jobMgr.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
 	time.Sleep(100 * time.Millisecond)
 
-	if err := jobMgr.Cancel(ctx, job.ID); err != nil {
+	if err := jobMgr.Cancel(ctx, job.ID()); err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
 
-	result, _ := jobMgr.GetStatus(ctx, job.ID)
+	result, _ := jobMgr.GetStatus(ctx, job.ID())
 	if result.GetStatus() != jobcore.JobStatusCancelled {
 		t.Errorf("expected cancelled, got %s", result.GetStatus())
 	}
@@ -633,7 +632,7 @@ func TestLongRunningJob_MetricsRecordDuration(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	_, _ = jobMgr.Wait(ctx, job.ID, 2*time.Second)
+	_, _ = jobMgr.Wait(ctx, job.ID(), 2*time.Second)
 
 	if len(metrics.Durations) == 0 {
 		t.Fatal("expected at least one duration metric")
@@ -673,7 +672,7 @@ func TestLongRunningJob_GracefulShutdown(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	_, _ = jobMgr.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = jobMgr.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
 	go func() {
 		time.Sleep(200 * time.Millisecond)
@@ -685,7 +684,7 @@ func TestLongRunningJob_GracefulShutdown(t *testing.T) {
 	case <-time.After(3 * time.Second):
 	}
 
-	result, _ := jobMgr.GetStatus(ctx, job.ID)
+	result, _ := jobMgr.GetStatus(ctx, job.ID())
 	if result.GetStatus() != jobcore.JobStatusCompleted && result.GetStatus() != jobcore.JobStatusCancelled {
 		t.Logf("job status after shutdown: %s (may be expected to stay running)", result.GetStatus())
 	}

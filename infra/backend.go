@@ -24,7 +24,7 @@ type Backend struct {
 	TraceStore         trace.TraceStore
 	MessageStore       builtin.MessageStore
 	Migrator           Migrator
-	BusFactory         *BusFactory
+	BusFactory         BusFactory
 	closer             func() error
 }
 
@@ -37,8 +37,10 @@ func (b *Backend) Close() error {
 
 func (b *Backend) Shutdown(ctx context.Context) error {
 	var errs []error
-	if ts, ok := b.TraceStore.(interface{ Close() }); ok {
-		ts.Close()
+	if b.TraceStore != nil {
+		if err := b.TraceStore.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if b.closer != nil {
 		if err := b.closer(); err != nil {
@@ -77,7 +79,7 @@ func WithMigrator(m Migrator) BackendOption {
 	return func(b *Backend) { b.Migrator = m }
 }
 
-func WithBusFactory(f *BusFactory) BackendOption {
+func WithBusFactory(f BusFactory) BackendOption {
 	return func(b *Backend) { b.BusFactory = f }
 }
 

@@ -10,6 +10,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+const defaultSQLDriver = "pgx"
+
 func NewBackendFromConfig(cfg config.StoreConfig, opts ...BackendOption) (*Backend, error) {
 	switch cfg.Type {
 	case "memory", "":
@@ -18,7 +20,7 @@ func NewBackendFromConfig(cfg config.StoreConfig, opts ...BackendOption) (*Backe
 		if cfg.DSN == "" {
 			return nil, errors.New("postgres DSN is required when DDD_STORE_TYPE=postgres")
 		}
-		db, err := sql.Open("pgx", cfg.DSN)
+		db, err := sql.Open(defaultSQLDriver, cfg.DSN)
 		if err != nil {
 			return nil, fmt.Errorf("open postgres connection: %w", err)
 		}

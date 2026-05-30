@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	eventbus "github.com/ddd-qce/core/cqrs/event"
-	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/event"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 )
 
 type UserCreatedEvent struct {
@@ -47,14 +46,14 @@ func (h *OrderCancelledEventHandler) Handle(ctx context.Context, event *OrderCan
 }
 
 func RegisterHandlers(bus *eventmemory.EventBus) {
-	eventmemory.RegisterEvent[*UserCreatedEvent](bus, &UserCreatedEventHandler{})
-	eventmemory.RegisterEvent[*UserUpdatedEvent](bus, &UserUpdatedEventHandler{})
-	eventmemory.RegisterEvent[*OrderCancelledEvent](bus, &OrderCancelledEventHandler{})
+	eventmemory.RegisterHandler[*UserCreatedEvent](bus, &UserCreatedEventHandler{})
+	eventmemory.RegisterHandler[*UserUpdatedEvent](bus, &UserUpdatedEventHandler{})
+	eventmemory.RegisterHandler[*OrderCancelledEvent](bus, &OrderCancelledEventHandler{})
 }
 
 func RunExample(ctx context.Context, bus *eventmemory.EventBus) {
 	fmt.Println("=== Event: UserCreated ===")
-	err := eventbus.Dispatch(ctx, bus, &UserCreatedEvent{
+	err := bus.Publish(ctx, &UserCreatedEvent{
 		BaseEvent: event.NewBaseEvent("user-001", time.Now()),
 		Name:            "李四",
 	})
@@ -63,7 +62,7 @@ func RunExample(ctx context.Context, bus *eventmemory.EventBus) {
 	}
 
 	fmt.Println("\n=== Event: UserUpdated ===")
-	err = eventbus.Dispatch(ctx, bus, &UserUpdatedEvent{
+	err = bus.Publish(ctx, &UserUpdatedEvent{
 		BaseEvent: event.NewBaseEvent("1", time.Now()),
 		Name:            "张三更新",
 	})
@@ -72,7 +71,7 @@ func RunExample(ctx context.Context, bus *eventmemory.EventBus) {
 	}
 
 	fmt.Println("\n=== Event: OrderCancelled ===")
-	err = eventbus.Dispatch(ctx, bus, &OrderCancelledEvent{
+	err = bus.Publish(ctx, &OrderCancelledEvent{
 		BaseEvent: event.NewBaseEvent("ORD-001", time.Now()),
 		Reason:          "用户取消",
 	})

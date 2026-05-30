@@ -41,13 +41,13 @@ func NewRepository[T aggregate.AggregateRef](opts ...RepoOption[T]) *InMemoryRep
 	return r
 }
 
-func (r *InMemoryRepository[T]) deepCopy(agg T) (T, error) {
-	data, err := r.serializer.Serialize(agg)
+func deepCopy[T aggregate.AggregateRef](serializer repository.SnapshotSerializer[T], agg T) (T, error) {
+	data, err := serializer.Serialize(agg)
 	if err != nil {
 		var zero T
 		return zero, fmt.Errorf("serialize aggregate: %w", err)
 	}
-	copied, err := r.serializer.Deserialize(data)
+	copied, err := serializer.Deserialize(data)
 	if err != nil {
 		var zero T
 		return zero, fmt.Errorf("deserialize aggregate: %w", err)
@@ -75,7 +75,7 @@ func (r *InMemoryRepository[T]) Save(_ context.Context, agg T) error {
 		}
 	}
 
-	copied, err := r.deepCopy(agg)
+	copied, err := deepCopy(r.serializer, agg)
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (r *InMemoryRepository[T]) FindByID(_ context.Context, id string) (T, error
 		return zero, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 
-	return r.deepCopy(rec.agg)
+	return deepCopy(r.serializer, rec.agg)
 }
 
 func (r *InMemoryRepository[T]) Delete(_ context.Context, id string) error {
@@ -136,20 +136,6 @@ func NewEventSourcedRepository[T aggregate.AggregateRef](opts ...EventSourcedRep
 	return r
 }
 
-func (r *InMemoryEventSourcedRepository[T]) deepCopy(agg T) (T, error) {
-	data, err := r.serializer.Serialize(agg)
-	if err != nil {
-		var zero T
-		return zero, fmt.Errorf("serialize aggregate: %w", err)
-	}
-	copied, err := r.serializer.Deserialize(data)
-	if err != nil {
-		var zero T
-		return zero, fmt.Errorf("deserialize aggregate: %w", err)
-	}
-	return copied, nil
-}
-
 func (r *InMemoryEventSourcedRepository[T]) Save(_ context.Context, agg T) error {
 	root := agg.GetAggregateRoot()
 	events := root.UncommittedEvents()
@@ -174,7 +160,7 @@ func (r *InMemoryEventSourcedRepository[T]) Save(_ context.Context, agg T) error
 		}
 	}
 
-	copied, err := r.deepCopy(agg)
+	copied, err := deepCopy(r.serializer, agg)
 	if err != nil {
 		return err
 	}
@@ -197,5 +183,5 @@ func (r *InMemoryEventSourcedRepository[T]) Load(_ context.Context, id string) (
 		return zero, fmt.Errorf("aggregate %s: %w", id, ddderror.ErrNotFound)
 	}
 
-	return r.deepCopy(rec.agg)
+	return deepCopy(r.serializer, rec.agg)
 }

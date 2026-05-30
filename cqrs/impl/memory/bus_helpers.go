@@ -2,10 +2,13 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sync"
 	"sync/atomic"
 )
+
+var ErrBusClosed = errors.New("bus is closed")
 
 func extractHandlerPayloadType(handlerType reflect.Type) (reflect.Type, bool) {
 	if handlerType.Kind() != reflect.Ptr {

@@ -22,8 +22,8 @@ func TestJobStoreContract(t *testing.T, newStore func() jobcore.JobStore) {
 		if err != nil {
 			t.Fatalf("Get failed: %v", err)
 		}
-		if got.ID != "contract-create-get" {
-			t.Errorf("expected ID 'contract-create-get', got %q", got.ID)
+		if got.ID() != "contract-create-get" {
+			t.Errorf("expected ID 'contract-create-get', got %q", got.ID())
 		}
 		if got.GetStatus() != jobcore.JobStatusPending {
 			t.Errorf("expected status pending, got %s", got.GetStatus())
@@ -70,7 +70,7 @@ func TestJobStoreContract(t *testing.T, newStore func() jobcore.JobStore) {
 
 	t.Run("UpdateNotFound", func(t *testing.T) {
 		store := newStore()
-		job := &jobcore.Job{ID: "contract-update-noexist"}
+		job := jobcore.NewJob("contract-update-noexist", nil)
 		job.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 		if err := store.Update(ctx, job); err == nil {
 			t.Fatal("expected error for updating nonexistent job")

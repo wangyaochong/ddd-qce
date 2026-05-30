@@ -4,6 +4,18 @@ import (
 	"database/sql"
 )
 
+var tables = []string{
+	"ddd_event_handler_log",
+	"ddd_event_log",
+	"ddd_query_log",
+	"ddd_command_log",
+	"ddd_aggregate_snapshots",
+	"ddd_spans",
+	"ddd_job_execution_log",
+	"ddd_jobs",
+	"ddd_domain_events",
+}
+
 func Migrate(db *sql.DB) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS ddd_domain_events (
@@ -141,17 +153,6 @@ func Migrate(db *sql.DB) error {
 }
 
 func DropAll(db *sql.DB) error {
-	tables := []string{
-		"ddd_event_handler_log",
-		"ddd_event_log",
-		"ddd_query_log",
-		"ddd_command_log",
-		"ddd_aggregate_snapshots",
-		"ddd_spans",
-		"ddd_job_execution_log",
-		"ddd_jobs",
-		"ddd_domain_events",
-	}
 	for _, t := range tables {
 		if _, err := db.Exec("DROP TABLE IF EXISTS " + t + " CASCADE"); err != nil {
 			return err
@@ -161,17 +162,6 @@ func DropAll(db *sql.DB) error {
 }
 
 func TruncateAll(db *sql.DB) error {
-	tables := []string{
-		"ddd_event_handler_log",
-		"ddd_event_log",
-		"ddd_query_log",
-		"ddd_command_log",
-		"ddd_aggregate_snapshots",
-		"ddd_spans",
-		"ddd_job_execution_log",
-		"ddd_jobs",
-		"ddd_domain_events",
-	}
 	for _, t := range tables {
 		if _, err := db.Exec("TRUNCATE TABLE " + t + " CASCADE"); err != nil {
 			return err

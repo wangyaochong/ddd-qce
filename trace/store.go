@@ -19,6 +19,7 @@ type TraceStore interface {
 	RecordSpan(ctx context.Context, span *Span) error
 	GetTrace(ctx context.Context, traceID string) ([]*Span, error)
 	ListTraces(ctx context.Context, filter TraceFilter) ([]string, error)
+	Close() error
 }
 
 type InMemoryTraceStore struct {
@@ -73,12 +74,13 @@ func NewInMemoryTraceStore(opts ...InMemoryTraceStoreOption) *InMemoryTraceStore
 	return s
 }
 
-func (s *InMemoryTraceStore) Close() {
+func (s *InMemoryTraceStore) Close() error {
 	select {
 	case <-s.stopCh:
 	default:
 		close(s.stopCh)
 	}
+	return nil
 }
 
 func (s *InMemoryTraceStore) RecordSpan(ctx context.Context, span *Span) error {

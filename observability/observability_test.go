@@ -266,8 +266,8 @@ func TestDashboard_JobsWithoutManager(t *testing.T) {
 	}
 }
 
-func TestInMemoryMessageStore_Commands(t *testing.T) {
-	store := NewInMemoryMessageStore(WithMaxSize(5))
+func TestObservableMessageStore_Commands(t *testing.T) {
+	store := NewObservableMessageStore(WithMaxSize(5))
 
 	now := time.Now()
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{
@@ -299,8 +299,8 @@ func TestInMemoryMessageStore_Commands(t *testing.T) {
 	}
 }
 
-func TestInMemoryMessageStore_MaxSize(t *testing.T) {
-	store := NewInMemoryMessageStore(WithMaxSize(3))
+func TestObservableMessageStore_MaxSize(t *testing.T) {
+	store := NewObservableMessageStore(WithMaxSize(3))
 
 	for i := 0; i < 5; i++ {
 		store.RecordQuery(context.Background(), &builtin.QueryEntry{
@@ -317,8 +317,8 @@ func TestInMemoryMessageStore_MaxSize(t *testing.T) {
 	}
 }
 
-func TestInMemoryMessageStore_Events(t *testing.T) {
-	store := NewInMemoryMessageStore()
+func TestObservableMessageStore_Events(t *testing.T) {
+	store := NewObservableMessageStore()
 
 	store.RecordEvent(context.Background(), &builtin.EventEntry{
 		EventType: "OrderPlaced", AggregateID: "A1", CreatedAt: time.Now(),
@@ -336,12 +336,12 @@ func TestInMemoryMessageStore_Events(t *testing.T) {
 	}
 }
 
-func TestInMemoryMessageStore_ImplementsMessageStore(t *testing.T) {
-	var _ builtin.MessageStore = NewInMemoryMessageStore()
+func TestObservableMessageStore_ImplementsMessageStore(t *testing.T) {
+	var _ builtin.MessageStore = NewObservableMessageStore()
 }
 
-func TestInMemoryMessageStore_ImplementsReader(t *testing.T) {
-	var _ MessageStoreReader = NewInMemoryMessageStore()
+func TestObservableMessageStore_ImplementsReader(t *testing.T) {
+	var _ MessageStoreReader = NewObservableMessageStore()
 }
 
 func TestComposeMetrics(t *testing.T) {
@@ -365,7 +365,7 @@ func TestComposeMetrics(t *testing.T) {
 
 func TestDashboard_CommandsWithReader(t *testing.T) {
 	s := NewStatsCollector()
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{
 		CommandType: "PlaceOrder", TraceID: "t1", CreatedAt: time.Now(), Duration: 100 * time.Millisecond,
 	})
@@ -564,9 +564,10 @@ func (e *errTraceStore) GetTrace(_ context.Context, _ string) ([]*trace.Span, er
 func (e *errTraceStore) ListTraces(_ context.Context, _ trace.TraceFilter) ([]string, error) {
 	return nil, fmt.Errorf("trace store unavailable")
 }
+func (e *errTraceStore) Close() error { return nil }
 
-func TestInMemoryMessageStore_RecordEventHandler(t *testing.T) {
-	store := NewInMemoryMessageStore()
+func TestObservableMessageStore_RecordEventHandler(t *testing.T) {
+	store := NewObservableMessageStore()
 	err := store.RecordEventHandler(context.Background(), &builtin.EventHandlerEntry{
 		EventType:   "OrderPlaced",
 		HandlerType: "OrderProjection",
@@ -578,8 +579,8 @@ func TestInMemoryMessageStore_RecordEventHandler(t *testing.T) {
 	}
 }
 
-func TestInMemoryMessageStore_QueryCommands_TraceID(t *testing.T) {
-	store := NewInMemoryMessageStore()
+func TestObservableMessageStore_QueryCommands_TraceID(t *testing.T) {
+	store := NewObservableMessageStore()
 	now := time.Now()
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{
 		CommandType: "PlaceOrder", TraceID: "t1", CreatedAt: now,
@@ -600,8 +601,8 @@ func TestInMemoryMessageStore_QueryCommands_TraceID(t *testing.T) {
 	}
 }
 
-func TestInMemoryMessageStore_QueryCommands_Since(t *testing.T) {
-	store := NewInMemoryMessageStore()
+func TestObservableMessageStore_QueryCommands_Since(t *testing.T) {
+	store := NewObservableMessageStore()
 	old := time.Now().Add(-2 * time.Hour)
 	recent := time.Now()
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{
@@ -620,8 +621,8 @@ func TestInMemoryMessageStore_QueryCommands_Since(t *testing.T) {
 	}
 }
 
-func TestInMemoryMessageStore_QueryQueries_VariousFilters(t *testing.T) {
-	store := NewInMemoryMessageStore()
+func TestObservableMessageStore_QueryQueries_VariousFilters(t *testing.T) {
+	store := NewObservableMessageStore()
 	now := time.Now()
 	store.RecordQuery(context.Background(), &builtin.QueryEntry{
 		QueryType: "GetOrder", TraceID: "t1", CreatedAt: now,
@@ -660,8 +661,8 @@ func TestInMemoryMessageStore_QueryQueries_VariousFilters(t *testing.T) {
 	}
 }
 
-func TestInMemoryMessageStore_QueryEvents_TraceID(t *testing.T) {
-	store := NewInMemoryMessageStore()
+func TestObservableMessageStore_QueryEvents_TraceID(t *testing.T) {
+	store := NewObservableMessageStore()
 	now := time.Now()
 	store.RecordEvent(context.Background(), &builtin.EventEntry{
 		EventType: "OrderPlaced", TraceID: "t1", AggregateID: "A1", CreatedAt: now,
@@ -696,7 +697,7 @@ func TestDashboard_HandleCommands_NoReader(t *testing.T) {
 
 func TestDashboard_HandleCommands_WithReader(t *testing.T) {
 	s := NewStatsCollector()
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{
 		CommandType: "PlaceOrder", CreatedAt: time.Now(),
 	})
@@ -716,7 +717,7 @@ func TestDashboard_HandleCommands_WithReader(t *testing.T) {
 
 func TestDashboard_HandleCommands_MethodNotAllowed(t *testing.T) {
 	s := NewStatsCollector()
-	d := NewDashboard(s, WithMessageReader(NewInMemoryMessageStore()))
+	d := NewDashboard(s, WithMessageReader(NewObservableMessageStore()))
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux)
 
@@ -746,7 +747,7 @@ func TestDashboard_HandleQueries_NoReader(t *testing.T) {
 
 func TestDashboard_HandleQueries_WithReader(t *testing.T) {
 	s := NewStatsCollector()
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	store.RecordQuery(context.Background(), &builtin.QueryEntry{
 		QueryType: "GetOrder", CreatedAt: time.Now(),
 	})
@@ -766,7 +767,7 @@ func TestDashboard_HandleQueries_WithReader(t *testing.T) {
 
 func TestDashboard_HandleQueries_MethodNotAllowed(t *testing.T) {
 	s := NewStatsCollector()
-	d := NewDashboard(s, WithMessageReader(NewInMemoryMessageStore()))
+	d := NewDashboard(s, WithMessageReader(NewObservableMessageStore()))
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux)
 
@@ -796,7 +797,7 @@ func TestDashboard_HandleEvents_NoReader(t *testing.T) {
 
 func TestDashboard_HandleEvents_WithReader(t *testing.T) {
 	s := NewStatsCollector()
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	store.RecordEvent(context.Background(), &builtin.EventEntry{
 		EventType: "OrderPlaced", AggregateID: "A1", CreatedAt: time.Now(),
 	})
@@ -816,7 +817,7 @@ func TestDashboard_HandleEvents_WithReader(t *testing.T) {
 
 func TestDashboard_HandleEvents_MethodNotAllowed(t *testing.T) {
 	s := NewStatsCollector()
-	d := NewDashboard(s, WithMessageReader(NewInMemoryMessageStore()))
+	d := NewDashboard(s, WithMessageReader(NewObservableMessageStore()))
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux)
 
@@ -1012,7 +1013,7 @@ func TestDashboard_HandleStats_MethodNotAllowed(t *testing.T) {
 
 func TestDashboard_ParseMessageFilter_EdgeCases(t *testing.T) {
 	s := NewStatsCollector()
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	now := time.Now()
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{
 		CommandType: "PlaceOrder", TraceID: "t1", CreatedAt: now, Duration: 100 * time.Millisecond,
@@ -1040,7 +1041,7 @@ func TestDashboard_ParseMessageFilter_EdgeCases(t *testing.T) {
 }
 
 func TestMatchStringFilter_StatusSuccess(t *testing.T) {
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	now := time.Now()
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{
 		CommandType: "PlaceOrder", CreatedAt: now, Duration: 50 * time.Millisecond,
@@ -1245,7 +1246,7 @@ func TestDashboard_TracesListTracesError(t *testing.T) {
 
 func TestDashboard_ParseMessageFilter_InvalidLimit(t *testing.T) {
 	s := NewStatsCollector()
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{
 		CommandType: "PlaceOrder", CreatedAt: time.Now(),
 	})
@@ -1271,7 +1272,7 @@ func TestDashboard_ParseMessageFilter_InvalidLimit(t *testing.T) {
 
 func TestDashboard_ParseMessageFilter_InvalidSince(t *testing.T) {
 	s := NewStatsCollector()
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{
 		CommandType: "PlaceOrder", CreatedAt: time.Now(),
 	})
@@ -1297,7 +1298,7 @@ func TestDashboard_ParseMessageFilter_InvalidSince(t *testing.T) {
 
 func TestDashboard_CommandsMethodNotAllowed(t *testing.T) {
 	s := NewStatsCollector()
-	d := NewDashboard(s, WithMessageReader(NewInMemoryMessageStore()))
+	d := NewDashboard(s, WithMessageReader(NewObservableMessageStore()))
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux)
 
@@ -1312,7 +1313,7 @@ func TestDashboard_CommandsMethodNotAllowed(t *testing.T) {
 
 func TestDashboard_QueriesMethodNotAllowed(t *testing.T) {
 	s := NewStatsCollector()
-	d := NewDashboard(s, WithMessageReader(NewInMemoryMessageStore()))
+	d := NewDashboard(s, WithMessageReader(NewObservableMessageStore()))
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux)
 
@@ -1327,7 +1328,7 @@ func TestDashboard_QueriesMethodNotAllowed(t *testing.T) {
 
 func TestDashboard_EventsMethodNotAllowed(t *testing.T) {
 	s := NewStatsCollector()
-	d := NewDashboard(s, WithMessageReader(NewInMemoryMessageStore()))
+	d := NewDashboard(s, WithMessageReader(NewObservableMessageStore()))
 	mux := http.NewServeMux()
 	d.RegisterRoutes(mux)
 

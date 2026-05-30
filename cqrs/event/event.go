@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"time"
+	"unsafe"
 
 	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/trace"
@@ -49,40 +50,46 @@ func (e BaseEvent) OccurredAt() time.Time   { return e.occurredAt }
 func (e BaseEvent) CorrelationID() string   { return e.correlationID }
 func (e BaseEvent) CausationID() string     { return e.causationID }
 
-func (e *BaseEvent) SetCorrelation(correlationID, causationID string) {
-	e.correlationID = correlationID
-	e.causationID = causationID
-}
-
-func (e *BaseEvent) Restore(aggregateID string, occurredAt time.Time, correlationID, causationID string) {
-	e.aggregateID = aggregateID
-	e.occurredAt = occurredAt
-	e.correlationID = correlationID
-	e.causationID = causationID
-}
-
 func ApplyCorrelation(evt domainevent.Event, correlationID, causationID string) {
-	if setter, ok := evt.(domainevent.CorrelationSetter); ok {
-		setter.SetCorrelation(correlationID, causationID)
-	}
+	setBaseEventField(evt, "correlationID", correlationID)
+	setBaseEventField(evt, "causationID", causationID)
 }
 
 func RestoreBaseEvent(evt domainevent.Event, aggregateID string, occurredAt time.Time, correlationID, causationID string) {
-	if restorer, ok := evt.(domainevent.Restorer); ok {
-		restorer.Restore(aggregateID, occurredAt, correlationID, causationID)
-	}
+	setBaseEventField(evt, "aggregateID", aggregateID)
+	setBaseEventField(evt, "occurredAt", occurredAt)
+	setBaseEventField(evt, "correlationID", correlationID)
+	setBaseEventField(evt, "causationID", causationID)
 }
 
-// EventTypeOf returns the short type name of the given event.
-// Panics if event is nil — nil is a programming error that should be
-// caught early rather than silently producing an empty string.
-// This is consistent with CommandNameOf and QueryNameOf: all three
-// treat nil as misuse, not a valid input.
-// Note: a typed nil pointer like (*MyEvent)(nil) is NOT nil (the
-// interface has a type), so EventTypeOf((*MyEvent)(nil)) == "MyEvent".
-func EventTypeOf(event any) string {
+func setBaseEventField(evt any, fieldName string, value any) {
+	v := reflect.ValueOf(evt)
+	if v.Kind() != reflect.Ptr || v.IsNil() {
+		return
+	}
+	v = v.Elem()
+	f := v.FieldByName("BaseEvent")
+	if !f.IsValid() {
+		return
+	}
+	if f.Kind() == reflect.Ptr {
+		if f.IsNil() {
+			return
+		}
+		f = f.Elem()
+	}
+	field := f.FieldByName(fieldName)
+	if !field.IsValid() {
+		return
+	}
+	fieldPtr := unsafe.Pointer(field.UnsafeAddr())
+	writableField := reflect.NewAt(field.Type(), fieldPtr).Elem()
+	writableField.Set(reflect.ValueOf(value))
+}
+
+func EventNameOf(event any) string {
 	if event == nil {
-		panic("event: EventTypeOf called with nil event")
+		panic("event: EventNameOf called with nil event")
 	}
 	t := reflect.TypeOf(event)
 	if t.Kind() == reflect.Ptr {
@@ -100,8 +107,11 @@ type GlobalEvent[T domainevent.Event] struct {
 	Event    T
 }
 
-type EventSourceStore[T domainevent.Event] interface {
+type AggregateEventStore[T domainevent.Event] interface {
 	Append(ctx context.Context, aggregateID string, expectedVersion int, events []T) error
 	Load(ctx context.Context, aggregateID string, afterVersion int) ([]T, error)
+}
+
+type GlobalEventStore[T domainevent.Event] interface {
 	LoadAll(ctx context.Context, afterPosition int64, limit int) ([]GlobalEvent[T], error)
 }

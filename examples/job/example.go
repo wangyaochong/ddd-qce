@@ -58,10 +58,10 @@ func RunExample(ctx context.Context, manager jobcore.JobManager) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Job submitted: %s\n", job.ID)
+	fmt.Printf("Job submitted: %s\n", job.ID())
 
 	fmt.Println("Waiting for job to complete...")
-	completedJob, err := manager.Wait(ctx, job.ID, 10*time.Second)
+	completedJob, err := manager.Wait(ctx, job.ID(), 10*time.Second)
 	if err != nil {
 		panic(err)
 	}

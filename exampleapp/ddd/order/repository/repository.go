@@ -67,13 +67,13 @@ func (r *OrderRepository) FindAll() []*orderdomain.Order {
 var _ repository.Repository[*orderdomain.Order] = (*OrderRepository)(nil)
 
 type OrderEventSourcedRepository struct {
-	eventStore event.EventSourceStore[domainevent.Event]
+	eventStore event.AggregateEventStore[domainevent.Event]
 	eventBus   event.EventBus
 	orderRepo  OrderRepositoryAdapter
 }
 
 func NewOrderEventSourcedRepository(
-	eventStore event.EventSourceStore[domainevent.Event],
+	eventStore event.AggregateEventStore[domainevent.Event],
 	eventBus event.EventBus,
 	orderRepo OrderRepositoryAdapter,
 ) *OrderEventSourcedRepository {

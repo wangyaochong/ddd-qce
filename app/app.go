@@ -140,7 +140,7 @@ func WithDefaultAspects() AppOption {
 	}
 }
 
-func (a *App) busFactory() *infra.BusFactory {
+func (a *App) busFactory() infra.BusFactory {
 	if a.Backend != nil && a.Backend.BusFactory != nil {
 		return a.Backend.BusFactory
 	}
@@ -151,7 +151,7 @@ func WithCommandHandlers(handlers ...any) AppOption {
 	return func(a *App) error {
 		if a.CmdBus == nil {
 			a.Chain = ensureChain(a.Chain)
-			a.CmdBus = a.busFactory().NewCommandBus(a.Chain)
+			a.CmdBus = a.busFactory().CreateCommandBus(a.Chain)
 		}
 		for _, h := range handlers {
 			if err := a.CmdBus.RegisterHandler(h); err != nil {
@@ -166,7 +166,7 @@ func WithQueryHandlers(handlers ...any) AppOption {
 	return func(a *App) error {
 		if a.QueryBus == nil {
 			a.Chain = ensureChain(a.Chain)
-			a.QueryBus = a.busFactory().NewQueryBus(a.Chain)
+			a.QueryBus = a.busFactory().CreateQueryBus(a.Chain)
 		}
 		for _, h := range handlers {
 			if err := a.QueryBus.RegisterHandler(h); err != nil {
@@ -181,7 +181,7 @@ func WithEventSubscriptions(subs ...any) AppOption {
 	return func(a *App) error {
 		if a.EventBus == nil {
 			a.Chain = ensureChain(a.Chain)
-			a.EventBus = a.busFactory().NewEventBus(a.Chain)
+			a.EventBus = a.busFactory().CreateEventBus(a.Chain)
 		}
 		for _, s := range subs {
 			if err := a.EventBus.SubscribeHandler(s); err != nil {

@@ -204,6 +204,6 @@ func extractEventMeta(evt any) (aggregateID, eventType string) {
 	if de, ok := evt.(interface{ AggregateID() string }); ok {
 		aggregateID = de.AggregateID()
 	}
-	eventType = event.EventTypeOf(evt)
+	eventType = event.EventNameOf(evt)
 	return
 }

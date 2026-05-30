@@ -70,11 +70,7 @@ func TestMemoryBackend_JobStore(t *testing.T) {
 	b := NewMemoryBackend()
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID: "j1", Command: "test",
-		CreatedAt: trace.Span{}.StartedAt, Timeout: 0, MaxRetries: 0,
-	}
-	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+	job := jobcore.NewJob("j1", "test")
 	if err := b.JobStore.Create(ctx, job); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -83,8 +79,8 @@ func TestMemoryBackend_JobStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-	if got.ID != "j1" {
-		t.Errorf("expected ID 'j1', got %s", got.ID)
+	if got.ID() != "j1" {
+		t.Errorf("expected ID 'j1', got %s", got.ID())
 	}
 }
 
@@ -229,7 +225,7 @@ type closeableTraceStore struct {
 	closed bool
 }
 
-func (c *closeableTraceStore) Close() { c.closed = true }
+func (c *closeableTraceStore) Close() error { c.closed = true; return nil }
 
 func TestBackend_Shutdown_TraceStoreWithClose(t *testing.T) {
 	ts := &closeableTraceStore{}
@@ -302,14 +298,15 @@ func TestNewMemoryBusFactory(t *testing.T) {
 	if f == nil {
 		t.Fatal("expected non-nil BusFactory")
 	}
-	if f.NewCommandBus == nil {
-		t.Error("expected NewCommandBus to be set")
+	chain := aspect.NewAspectChain()
+	if f.CreateCommandBus(chain) == nil {
+		t.Error("expected CreateCommandBus to return non-nil CommandBus")
 	}
-	if f.NewQueryBus == nil {
-		t.Error("expected NewQueryBus to be set")
+	if f.CreateQueryBus(chain) == nil {
+		t.Error("expected CreateQueryBus to return non-nil QueryBus")
 	}
-	if f.NewEventBus == nil {
-		t.Error("expected NewEventBus to be set")
+	if f.CreateEventBus(chain) == nil {
+		t.Error("expected CreateEventBus to return non-nil EventBus")
 	}
 }
 
@@ -343,7 +340,7 @@ func (testEventHandler) Handle(_ context.Context, _ testEvent) error { return ni
 func TestNewMemoryBusFactory_CommandBus(t *testing.T) {
 	f := NewMemoryBusFactory()
 	chain := aspect.NewAspectChain()
-	bus := f.NewCommandBus(chain)
+	bus := f.CreateCommandBus(chain)
 	if bus == nil {
 		t.Fatal("expected non-nil CommandBus")
 	}
@@ -362,7 +359,7 @@ func TestNewMemoryBusFactory_CommandBus(t *testing.T) {
 func TestNewMemoryBusFactory_QueryBus(t *testing.T) {
 	f := NewMemoryBusFactory()
 	chain := aspect.NewAspectChain()
-	bus := f.NewQueryBus(chain)
+	bus := f.CreateQueryBus(chain)
 	if bus == nil {
 		t.Fatal("expected non-nil QueryBus")
 	}
@@ -381,7 +378,7 @@ func TestNewMemoryBusFactory_QueryBus(t *testing.T) {
 func TestNewMemoryBusFactory_EventBus(t *testing.T) {
 	f := NewMemoryBusFactory()
 	chain := aspect.NewAspectChain()
-	bus := f.NewEventBus(chain)
+	bus := f.CreateEventBus(chain)
 	if bus == nil {
 		t.Fatal("expected non-nil EventBus")
 	}

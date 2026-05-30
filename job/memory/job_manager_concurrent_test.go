@@ -73,7 +73,7 @@ func TestJobManager_ConcurrentSubmitAndCancel(t *testing.T) {
 	}
 
 	for _, job := range jobs {
-		manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+		manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 	}
 
 	cancelWg := sync.WaitGroup{}
@@ -81,19 +81,19 @@ func TestJobManager_ConcurrentSubmitAndCancel(t *testing.T) {
 		cancelWg.Add(1)
 		go func(j *jobcore.Job) {
 			defer cancelWg.Done()
-			manager.Cancel(ctx, j.ID)
+			manager.Cancel(ctx, j.ID())
 		}(job)
 	}
 
 	cancelWg.Wait()
 
 	for _, job := range jobs {
-		result, err := manager.Wait(ctx, job.ID, 10*time.Second)
+		result, err := manager.Wait(ctx, job.ID(), 10*time.Second)
 		if err != nil {
 			continue
 		}
 		if result.GetStatus() != jobcore.JobStatusCompleted && result.GetStatus() != jobcore.JobStatusCancelled && result.GetStatus() != jobcore.JobStatusFailed {
-			t.Errorf("job %s has unexpected status: %s", job.ID, result.GetStatus())
+			t.Errorf("job %s has unexpected status: %s", job.ID(), result.GetStatus())
 		}
 	}
 }
@@ -109,14 +109,14 @@ func TestJobManager_CancelDuringExecution(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
 	var cancelErr error
 	var cancelWg sync.WaitGroup
 	cancelWg.Add(1)
 	go func() {
 		defer cancelWg.Done()
-		cancelErr = manager.Cancel(ctx, job.ID)
+		cancelErr = manager.Cancel(ctx, job.ID())
 	}()
 
 	cancelWg.Wait()
@@ -125,7 +125,7 @@ func TestJobManager_CancelDuringExecution(t *testing.T) {
 		t.Fatalf("cancel failed: %v", cancelErr)
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestJobManager_ConcurrentCancelSameJob(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
 	var wg sync.WaitGroup
 	errors := make(chan error, 10)
@@ -154,7 +154,7 @@ func TestJobManager_ConcurrentCancelSameJob(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := manager.Cancel(ctx, job.ID)
+			err := manager.Cancel(ctx, job.ID())
 			if err != nil {
 				errors <- err
 			}
@@ -174,7 +174,7 @@ func TestJobManager_ConcurrentCancelSameJob(t *testing.T) {
 		}
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -201,9 +201,9 @@ func TestJobManager_ConcurrentSubmitWaitCancel(t *testing.T) {
 				return
 			}
 
-			go manager.Cancel(ctx, job.ID)
+			go manager.Cancel(ctx, job.ID())
 
-			_, _ = manager.Wait(ctx, job.ID, 3*time.Second)
+			_, _ = manager.Wait(ctx, job.ID(), 3*time.Second)
 		}(i)
 	}
 
@@ -224,7 +224,7 @@ func TestJobManager_RetryDuringCancel(t *testing.T) {
 		t.Fatalf("submit failed: %v", err)
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -234,11 +234,11 @@ func TestJobManager_RetryDuringCancel(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			manager.Retry(ctx, job.ID)
+			manager.Retry(ctx, job.ID())
 		}()
 		go func() {
 			defer wg.Done()
-			manager.Cancel(ctx, job.ID)
+			manager.Cancel(ctx, job.ID())
 		}()
 		wg.Wait()
 	}

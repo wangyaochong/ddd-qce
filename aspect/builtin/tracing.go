@@ -61,7 +61,7 @@ func (a *TracingAspect) AfterCommand(ctx context.Context, cmd any, result any, e
 		span.Duration = duration
 		if err != nil {
 			if ddderror.IsDomainError(err) {
-				span.Status = "business_error"
+				span.Status = trace.SpanStatusBusinessError
 			} else {
 				span.Status = trace.SpanStatusError
 			}
@@ -111,7 +111,7 @@ func (a *TracingAspect) AfterQuery(ctx context.Context, query any, result any, e
 		span.Duration = duration
 		if err != nil {
 			if ddderror.IsDomainError(err) {
-				span.Status = "business_error"
+				span.Status = trace.SpanStatusBusinessError
 			} else {
 				span.Status = trace.SpanStatusError
 			}
@@ -161,7 +161,7 @@ func (a *TracingAspect) AfterPublish(ctx context.Context, event any, err error, 
 		span.Duration = duration
 		if err != nil {
 			if ddderror.IsDomainError(err) {
-				span.Status = "business_error"
+				span.Status = trace.SpanStatusBusinessError
 			} else {
 				span.Status = trace.SpanStatusError
 			}

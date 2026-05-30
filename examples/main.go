@@ -61,7 +61,7 @@ func main() {
 	cBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	command.RegisterHandlers(cBus)
 
-	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithEventBusAspectChain(chain))
 	event.RegisterHandlers(eventBus)
 
 	jobStore := jobmemory.NewJobStore()

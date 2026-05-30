@@ -59,7 +59,7 @@ func WithConcurrencyLimit(n int) EventBusOption {
 	return func(b *EventBus) { b.sem = make(chan struct{}, n) }
 }
 
-var WithBusAspectChain = WithEventBusAspectChain
+
 
 func NewEventBus(opts ...EventBusOption) *EventBus {
 	b := &EventBus{
@@ -212,7 +212,7 @@ func (b *EventBus) Shutdown(ctx context.Context) error {
 	return shutdownBus(&b.closed, &b.inFlight, ctx)
 }
 
-func RegisterEvent[T domainevent.Event](bus *EventBus, handler event.EventHandler[T]) error {
+func RegisterHandler[T domainevent.Event](bus *EventBus, handler event.EventHandler[T]) error {
 	return bus.SubscribeHandler(handler)
 }
 

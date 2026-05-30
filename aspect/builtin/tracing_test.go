@@ -470,6 +470,8 @@ func (m *mockFailingTraceStore) ListTraces(_ context.Context, _ trace.TraceFilte
 	return nil, nil
 }
 
+func (m *mockFailingTraceStore) Close() error { return nil }
+
 func TestTracingAspect_NewTracingAspect(t *testing.T) {
 	store := trace.NewInMemoryTraceStore()
 	aspect := NewTracingAspect(store)
@@ -519,7 +521,7 @@ func TestTracingAspect_AfterCommand_BusinessError(t *testing.T) {
 	traceIDs, _ := store.ListTraces(context.Background(), trace.TraceFilter{})
 	spans, _ := store.GetTrace(context.Background(), traceIDs[0])
 
-	if spans[0].Status != "business_error" {
+	if spans[0].Status != trace.SpanStatusBusinessError {
 		t.Errorf("expected status 'business_error', got '%s'", spans[0].Status)
 	}
 	if spans[0].Error != domainErr.Error() {
@@ -544,7 +546,7 @@ func TestTracingAspect_AfterQuery_BusinessError(t *testing.T) {
 	traceIDs, _ := store.ListTraces(context.Background(), trace.TraceFilter{})
 	spans, _ := store.GetTrace(context.Background(), traceIDs[0])
 
-	if spans[0].Status != "business_error" {
+	if spans[0].Status != trace.SpanStatusBusinessError {
 		t.Errorf("expected status 'business_error', got '%s'", spans[0].Status)
 	}
 }
@@ -566,7 +568,7 @@ func TestTracingAspect_AfterPublish_BusinessError(t *testing.T) {
 	traceIDs, _ := store.ListTraces(context.Background(), trace.TraceFilter{})
 	spans, _ := store.GetTrace(context.Background(), traceIDs[0])
 
-	if spans[0].Status != "business_error" {
+	if spans[0].Status != trace.SpanStatusBusinessError {
 		t.Errorf("expected status 'business_error', got '%s'", spans[0].Status)
 	}
 }

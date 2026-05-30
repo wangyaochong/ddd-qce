@@ -22,7 +22,7 @@ func NewTestEvent(aggID, data string) *TestEvent {
 	}
 }
 
-func TestEventStoreContract(t *testing.T, newStore func() event.EventSourceStore[*TestEvent]) {
+func TestAggregateEventStoreContract(t *testing.T, newStore func() event.AggregateEventStore[*TestEvent]) {
 	t.Helper()
 
 	t.Run("AppendAndLoad", func(t *testing.T) {
@@ -218,18 +218,22 @@ func TestEventStoreContract(t *testing.T, newStore func() event.EventSourceStore
 	})
 }
 
-func TestEventStoreLoadAllContract(t *testing.T, newStore func() event.EventSourceStore[*TestEvent]) {
+func TestGlobalEventStoreContract(t *testing.T, newStore func() event.AggregateEventStore[*TestEvent]) {
 	t.Helper()
 
 	t.Run("LoadAllReturnsAllEventsInOrder", func(t *testing.T) {
-		store := newStore()
+		aggStore := newStore()
 		ctx := context.Background()
 
-		store.Append(ctx, "la-1", 0, []*TestEvent{NewTestEvent("la-1", "a1-e1")})
-		store.Append(ctx, "la-2", 0, []*TestEvent{NewTestEvent("la-2", "a2-e1")})
-		store.Append(ctx, "la-1", 1, []*TestEvent{NewTestEvent("la-1", "a1-e2")})
+		aggStore.Append(ctx, "la-1", 0, []*TestEvent{NewTestEvent("la-1", "a1-e1")})
+		aggStore.Append(ctx, "la-2", 0, []*TestEvent{NewTestEvent("la-2", "a2-e1")})
+		aggStore.Append(ctx, "la-1", 1, []*TestEvent{NewTestEvent("la-1", "a1-e2")})
 
-		all, err := store.LoadAll(ctx, 0, 0)
+		gStore, ok := aggStore.(event.GlobalEventStore[*TestEvent])
+		if !ok {
+			t.Skip("AggregateEventStore does not implement GlobalEventStore")
+		}
+		all, err := gStore.LoadAll(ctx, 0, 0)
 		if err != nil {
 			t.Fatalf("LoadAll failed: %v", err)
 		}
@@ -255,7 +259,11 @@ func TestEventStoreLoadAllContract(t *testing.T, newStore func() event.EventSour
 		store.Append(ctx, "la-3", 1, []*TestEvent{NewTestEvent("la-3", "e2")})
 		store.Append(ctx, "la-3", 2, []*TestEvent{NewTestEvent("la-3", "e3")})
 
-		all, err := store.LoadAll(ctx, 1, 0)
+		gStore, ok := store.(event.GlobalEventStore[*TestEvent])
+		if !ok {
+			t.Skip("AggregateEventStore does not implement GlobalEventStore")
+		}
+		all, err := gStore.LoadAll(ctx, 1, 0)
 		if err != nil {
 			t.Fatalf("LoadAll failed: %v", err)
 		}
@@ -275,7 +283,11 @@ func TestEventStoreLoadAllContract(t *testing.T, newStore func() event.EventSour
 		store.Append(ctx, "la-4", 1, []*TestEvent{NewTestEvent("la-4", "e2")})
 		store.Append(ctx, "la-4", 2, []*TestEvent{NewTestEvent("la-4", "e3")})
 
-		all, err := store.LoadAll(ctx, 0, 2)
+		gStore, ok := store.(event.GlobalEventStore[*TestEvent])
+		if !ok {
+			t.Skip("AggregateEventStore does not implement GlobalEventStore")
+		}
+		all, err := gStore.LoadAll(ctx, 0, 2)
 		if err != nil {
 			t.Fatalf("LoadAll failed: %v", err)
 		}
@@ -288,7 +300,11 @@ func TestEventStoreLoadAllContract(t *testing.T, newStore func() event.EventSour
 		store := newStore()
 		ctx := context.Background()
 
-		all, err := store.LoadAll(ctx, 0, 0)
+		gStore, ok := store.(event.GlobalEventStore[*TestEvent])
+		if !ok {
+			t.Skip("AggregateEventStore does not implement GlobalEventStore")
+		}
+		all, err := gStore.LoadAll(ctx, 0, 0)
 		if err != nil {
 			t.Fatalf("LoadAll failed: %v", err)
 		}

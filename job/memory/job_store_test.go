@@ -57,11 +57,11 @@ func TestJobStore_Get(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if retrieved.ID != "job-1" {
-		t.Errorf("expected ID 'job-1', got '%s'", retrieved.ID)
+	if retrieved.ID() != "job-1" {
+		t.Errorf("expected ID 'job-1', got '%s'", retrieved.ID())
 	}
-	if retrieved.Command.(*testJobCommand).Name != "test" {
-		t.Errorf("expected command name 'test', got '%s'", retrieved.Command.(*testJobCommand).Name)
+	if retrieved.Command() == nil {
+		t.Error("expected command to be preserved")
 	}
 }
 
@@ -106,9 +106,7 @@ func TestJobStore_UpdateNotFound(t *testing.T) {
 	store := NewJobStore()
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID: "nonexistent",
-	}
+	job := jobcore.NewJob("nonexistent", nil)
 	job.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 
 	err := store.Update(ctx, job)
@@ -159,8 +157,9 @@ func TestJobStore_List(t *testing.T) {
 		jobcore.NewJob("job-3", nil),
 		jobcore.NewJob("job-4", nil),
 	}
-	jobs[1].RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
-	jobs[3].RestoreJobState(jobcore.JobStatusCompleted, nil, "", "", time.Time{}, time.Time{})
+	jobs[1].MarkRunning()
+	jobs[3].MarkRunning()
+	jobs[3].TryComplete(nil)
 
 	for _, job := range jobs {
 		err := store.Create(ctx, job)

@@ -78,7 +78,7 @@ func (m *JobManager) Submit(ctx context.Context, cmd any, opts ...jobcore.JobOpt
 	}
 
 	m.mu.Lock()
-	m.jobs[job.ID] = job
+	m.jobs[job.ID()] = job
 	m.mu.Unlock()
 
 	m.wg.Add(1)
@@ -106,27 +106,27 @@ func (m *JobManager) executeJob(job *jobcore.Job, parentTraceID, parentSpanID st
 		job.MarkRunning()
 
 		if err := m.store.Update(bgCtx, job); err != nil {
-			m.handleStoreError(bgCtx, job.ID, "update_running", err)
+			m.handleStoreError(bgCtx, job.ID(), "update_running", err)
 		}
 
 		var execCtx context.Context
 		var cancel context.CancelFunc
 
-		if job.Timeout > 0 {
-			execCtx, cancel = context.WithTimeout(bgCtx, job.Timeout)
+		if job.Timeout() > 0 {
+			execCtx, cancel = context.WithTimeout(bgCtx, job.Timeout())
 		} else {
 			execCtx, cancel = context.WithCancel(bgCtx)
 		}
 
 		m.mu.Lock()
-		m.cancelers[job.ID] = cancel
+		m.cancelers[job.ID()] = cancel
 		m.mu.Unlock()
 
-		result, err := m.executor.Execute(execCtx, job.Command)
+		result, err := m.executor.Execute(execCtx, job.Command())
 		cancel()
 
 		m.mu.Lock()
-		delete(m.cancelers, job.ID)
+		delete(m.cancelers, job.ID())
 		m.mu.Unlock()
 
 		if err != nil {
@@ -137,7 +137,7 @@ func (m *JobManager) executeJob(job *jobcore.Job, parentTraceID, parentSpanID st
 			}
 			if shouldRetry {
 				if err := m.store.Update(bgCtx, job); err != nil {
-					m.handleStoreError(bgCtx, job.ID, "update_retry", err)
+					m.handleStoreError(bgCtx, job.ID(), "update_retry", err)
 				}
 				continue
 			}
@@ -149,7 +149,7 @@ func (m *JobManager) executeJob(job *jobcore.Job, parentTraceID, parentSpanID st
 		}
 
 		if err := m.store.Update(bgCtx, job); err != nil {
-			m.handleStoreError(bgCtx, job.ID, "update_final", err)
+			m.handleStoreError(bgCtx, job.ID(), "update_final", err)
 		}
 		job.MarkDone()
 		break
@@ -241,7 +241,7 @@ func (m *JobManager) Retry(ctx context.Context, jobID string) error {
 	}
 
 	m.mu.Lock()
-	m.jobs[job.ID] = job
+	m.jobs[job.ID()] = job
 	m.mu.Unlock()
 
 	m.wg.Add(1)
@@ -330,7 +330,7 @@ func (m *JobManager) recoverJobs() {
 		for _, job := range running {
 		job.RestoreJobState(jobcore.JobStatusFailed, nil, "", "process restarted during execution", time.Time{}, time.Now())
 			if updateErr := m.store.Update(ctx, job); updateErr != nil {
-				m.handleStoreError(ctx, job.ID, "recovery_running", updateErr)
+				m.handleStoreError(ctx, job.ID(), "recovery_running", updateErr)
 			}
 		}
 	}
@@ -339,7 +339,7 @@ func (m *JobManager) recoverJobs() {
 	if err == nil {
 		for _, job := range pending {
 			m.mu.Lock()
-			m.jobs[job.ID] = job
+			m.jobs[job.ID()] = job
 			m.mu.Unlock()
 
 			m.wg.Add(1)

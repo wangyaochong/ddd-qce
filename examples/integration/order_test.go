@@ -8,12 +8,11 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/cqrs/command"
-	eventbus "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	"github.com/ddd-qce/core/cqrs/event"
 )
 
 type OrderStatus string
@@ -140,7 +139,7 @@ func (h *testConfirmOrderHandler) Handle(ctx context.Context, cmd *testConfirmOr
 	if err := order.Confirm(); err != nil {
 		return nil, err
 	}
-	eventbus.Dispatch(ctx, h.eventBus, &testOrderConfirmedEvent{
+	h.eventBus.Publish(ctx, &testOrderConfirmedEvent{
 		BaseEvent: event.NewBaseEvent(order.ID, time.Now()),
 	})
 	return &testConfirmOrderResult{Success: true}, nil
@@ -191,7 +190,7 @@ func TestOrderAggregate_ConfirmFlow(t *testing.T) {
 	chain := aspect.NewAspectChain()
 
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
-	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithEventBusAspectChain(chain))
 	qBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
 	repo := NewOrderRepository()
 
@@ -202,7 +201,7 @@ func TestOrderAggregate_ConfirmFlow(t *testing.T) {
 
 	commandmemory.RegisterCommand(cmdBus, placeHandler)
 	commandmemory.RegisterCommand(cmdBus, confirmHandler)
-	eventmemory.RegisterEvent[*testOrderConfirmedEvent](eventBus, eventHandler)
+	eventmemory.RegisterHandler[*testOrderConfirmedEvent](eventBus, eventHandler)
 	querymemory.RegisterQuery(qBus, statusHandler)
 
 	_, err := command.Dispatch[*testPlaceOrderCommand, *testPlaceOrderResult](ctx, cmdBus, &testPlaceOrderCommand{

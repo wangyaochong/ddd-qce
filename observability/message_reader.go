@@ -23,19 +23,19 @@ type MessageStoreReader interface {
 	QueryEvents(ctx context.Context, filter MessageFilter) ([]builtin.EventEntry, error)
 }
 
-type InMemoryMessageStore struct {
+type ObservableMessageStore struct {
 	inner   *builtin.InMemoryMessageStore
 	maxSize int
 }
 
-type InMemoryMessageStoreOption func(*InMemoryMessageStore)
+type ObservableMessageStoreOption func(*ObservableMessageStore)
 
-func WithMaxSize(n int) InMemoryMessageStoreOption {
-	return func(s *InMemoryMessageStore) { s.maxSize = n }
+func WithMaxSize(n int) ObservableMessageStoreOption {
+	return func(s *ObservableMessageStore) { s.maxSize = n }
 }
 
-func NewInMemoryMessageStore(opts ...InMemoryMessageStoreOption) *InMemoryMessageStore {
-	s := &InMemoryMessageStore{
+func NewObservableMessageStore(opts ...ObservableMessageStoreOption) *ObservableMessageStore {
+	s := &ObservableMessageStore{
 		inner:   builtin.NewInMemoryMessageStore(),
 		maxSize: 1000,
 	}
@@ -48,23 +48,23 @@ func NewInMemoryMessageStore(opts ...InMemoryMessageStoreOption) *InMemoryMessag
 	return s
 }
 
-func (s *InMemoryMessageStore) RecordCommand(ctx context.Context, entry *builtin.CommandEntry) error {
+func (s *ObservableMessageStore) RecordCommand(ctx context.Context, entry *builtin.CommandEntry) error {
 	return s.inner.RecordCommand(ctx, entry)
 }
 
-func (s *InMemoryMessageStore) RecordQuery(ctx context.Context, entry *builtin.QueryEntry) error {
+func (s *ObservableMessageStore) RecordQuery(ctx context.Context, entry *builtin.QueryEntry) error {
 	return s.inner.RecordQuery(ctx, entry)
 }
 
-func (s *InMemoryMessageStore) RecordEvent(ctx context.Context, entry *builtin.EventEntry) error {
+func (s *ObservableMessageStore) RecordEvent(ctx context.Context, entry *builtin.EventEntry) error {
 	return s.inner.RecordEvent(ctx, entry)
 }
 
-func (s *InMemoryMessageStore) RecordEventHandler(_ context.Context, _ *builtin.EventHandlerEntry) error {
+func (s *ObservableMessageStore) RecordEventHandler(_ context.Context, _ *builtin.EventHandlerEntry) error {
 	return nil
 }
 
-func (s *InMemoryMessageStore) QueryCommands(_ context.Context, filter MessageFilter) ([]builtin.CommandEntry, error) {
+func (s *ObservableMessageStore) QueryCommands(_ context.Context, filter MessageFilter) ([]builtin.CommandEntry, error) {
 	commands := s.inner.GetCommands()
 
 	var result []builtin.CommandEntry
@@ -81,7 +81,7 @@ func (s *InMemoryMessageStore) QueryCommands(_ context.Context, filter MessageFi
 	return result, nil
 }
 
-func (s *InMemoryMessageStore) QueryQueries(_ context.Context, filter MessageFilter) ([]builtin.QueryEntry, error) {
+func (s *ObservableMessageStore) QueryQueries(_ context.Context, filter MessageFilter) ([]builtin.QueryEntry, error) {
 	queries := s.inner.GetQueries()
 
 	var result []builtin.QueryEntry
@@ -98,7 +98,7 @@ func (s *InMemoryMessageStore) QueryQueries(_ context.Context, filter MessageFil
 	return result, nil
 }
 
-func (s *InMemoryMessageStore) QueryEvents(_ context.Context, filter MessageFilter) ([]builtin.EventEntry, error) {
+func (s *ObservableMessageStore) QueryEvents(_ context.Context, filter MessageFilter) ([]builtin.EventEntry, error) {
 	events := s.inner.GetEvents()
 
 	var result []builtin.EventEntry
@@ -149,5 +149,5 @@ func matchEventFilter(e builtin.EventEntry, f MessageFilter) bool {
 	return matchStringFilter(e.EventType, e.TraceID, e.Error, e.CreatedAt, f)
 }
 
-var _ builtin.MessageStore = (*InMemoryMessageStore)(nil)
-var _ MessageStoreReader = (*InMemoryMessageStore)(nil)
+var _ builtin.MessageStore = (*ObservableMessageStore)(nil)
+var _ MessageStoreReader = (*ObservableMessageStore)(nil)

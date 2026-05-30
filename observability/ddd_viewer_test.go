@@ -269,7 +269,7 @@ func TestDDDViewer_WithDDDViewerJobManager(t *testing.T) {
 }
 
 func TestDDDViewer_WithDDDViewerMessageStore(t *testing.T) {
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	v := NewDDDViewer(WithDDDViewerMessageStore(store))
 	if v.msgStore == nil {
 		t.Error("expected msgStore to be set")
@@ -277,7 +277,7 @@ func TestDDDViewer_WithDDDViewerMessageStore(t *testing.T) {
 }
 
 func TestDDDViewer_WithDDDViewerMessageReader(t *testing.T) {
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	v := NewDDDViewer(WithDDDViewerMessageReader(store))
 	if v.msgReader == nil {
 		t.Error("expected msgReader to be set")
@@ -311,7 +311,7 @@ func TestDDDViewer_StatsCollectorGetter(t *testing.T) {
 }
 
 func TestDDDViewer_MessageStoreGetter(t *testing.T) {
-	store := NewInMemoryMessageStore()
+	store := NewObservableMessageStore()
 	v := NewDDDViewer(WithDDDViewerMessageStore(store))
 	if v.MessageStore() != store {
 		t.Error("expected MessageStore to return same instance")

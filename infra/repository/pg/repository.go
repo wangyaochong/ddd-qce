@@ -148,7 +148,7 @@ type AggregateReconstructor[T aggregate.AggregateRef] func(id string) T
 
 type PgEventSourcedRepository[T aggregate.AggregateRef] struct {
 	db            *sql.DB
-	eventStore    event.EventSourceStore[domainevent.Event]
+	eventStore    event.AggregateEventStore[domainevent.Event]
 	reconstructor AggregateReconstructor[T]
 	serializer    repository.SnapshotSerializer[T]
 	typeName      string
@@ -157,7 +157,7 @@ type PgEventSourcedRepository[T aggregate.AggregateRef] struct {
 
 func NewEventSourcedRepository[T aggregate.AggregateRef](
 	db *sql.DB,
-	eventStore event.EventSourceStore[domainevent.Event],
+	eventStore event.AggregateEventStore[domainevent.Event],
 	reconstructor AggregateReconstructor[T],
 	opts ...EventSourcedRepoOption[T],
 ) *PgEventSourcedRepository[T] {

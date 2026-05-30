@@ -12,7 +12,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-var _ event.EventSourceStore[*testDomainEvent] = (*pgevent.EventSourceStore[*testDomainEvent])(nil)
+var _ event.AggregateEventStore[*testDomainEvent] = (*pgevent.EventSourceStore[*testDomainEvent])(nil)
+var _ event.GlobalEventStore[*testDomainEvent] = (*pgevent.EventSourceStore[*testDomainEvent])(nil)
 
 type testDomainEvent struct {
 	event.BaseEvent
@@ -46,11 +47,11 @@ func TestPgEventStore_AppendAndLoad(t *testing.T) {
 	if len(loaded) != 2 {
 		t.Fatalf("expected 2 events, got %d", len(loaded))
 	}
-	if event.EventTypeOf(loaded[0]) != "testDomainEvent" {
-		t.Errorf("expected first event type 'testDomainEvent', got %s", event.EventTypeOf(loaded[0]))
+	if event.EventNameOf(loaded[0]) != "testDomainEvent" {
+		t.Errorf("expected first event type 'testDomainEvent', got %s", event.EventNameOf(loaded[0]))
 	}
-	if event.EventTypeOf(loaded[1]) != "testDomainEvent" {
-		t.Errorf("expected second event type 'testDomainEvent', got %s", event.EventTypeOf(loaded[1]))
+	if event.EventNameOf(loaded[1]) != "testDomainEvent" {
+		t.Errorf("expected second event type 'testDomainEvent', got %s", event.EventNameOf(loaded[1]))
 	}
 }
 
@@ -127,7 +128,7 @@ var _ event.Event = (*testDomainEvent)(nil)
 
 func TestPgEventStore_Contract(t *testing.T) {
 	db := testutil.OpenTestDB(t)
-	eventtest.TestEventStoreContract(t, func() event.EventSourceStore[*eventtest.TestEvent] {
+	eventtest.TestAggregateEventStoreContract(t, func() event.AggregateEventStore[*eventtest.TestEvent] {
 		testutil.CleanDB(t, db)
 		store, err := pgevent.NewEventSourceStore[*eventtest.TestEvent](db)
 		if err != nil {

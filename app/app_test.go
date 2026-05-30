@@ -38,15 +38,15 @@ func (h *testEventHandler) Handle(ctx context.Context, evt testEvent) error {
 	return nil
 }
 
-func testBusFactory() *infra.BusFactory {
+func testBusFactory() infra.BusFactory {
 	return infra.NewMemoryBusFactory()
 }
 
 func TestWithBuses(t *testing.T) {
 	factory := testBusFactory()
-	cmdBus := factory.NewCommandBus(aspect.NewAspectChain())
-	queryBus := factory.NewQueryBus(aspect.NewAspectChain())
-	eventBus := factory.NewEventBus(aspect.NewAspectChain())
+	cmdBus := factory.CreateCommandBus(aspect.NewAspectChain())
+	queryBus := factory.CreateQueryBus(aspect.NewAspectChain())
+	eventBus := factory.CreateEventBus(aspect.NewAspectChain())
 
 	app, err := NewApp(
 		WithBuses(cmdBus, queryBus, eventBus),
@@ -67,7 +67,7 @@ func TestWithBuses(t *testing.T) {
 }
 
 func TestWithCommandBus(t *testing.T) {
-	cmdBus := testBusFactory().NewCommandBus(nil)
+	cmdBus := testBusFactory().CreateCommandBus(nil)
 
 	app, err := NewApp(
 		WithCommandBus(cmdBus),
@@ -82,7 +82,7 @@ func TestWithCommandBus(t *testing.T) {
 }
 
 func TestWithQueryBus(t *testing.T) {
-	queryBus := testBusFactory().NewQueryBus(nil)
+	queryBus := testBusFactory().CreateQueryBus(nil)
 
 	app, err := NewApp(
 		WithQueryBus(queryBus),
@@ -97,7 +97,7 @@ func TestWithQueryBus(t *testing.T) {
 }
 
 func TestWithEventBus(t *testing.T) {
-	eventBus := testBusFactory().NewEventBus(nil)
+	eventBus := testBusFactory().CreateEventBus(nil)
 
 	app, err := NewApp(
 		WithEventBus(eventBus),
@@ -113,9 +113,9 @@ func TestWithEventBus(t *testing.T) {
 
 func TestWithBuses_AllowsHandlerRegistration(t *testing.T) {
 	factory := testBusFactory()
-	cmdBus := factory.NewCommandBus(aspect.NewAspectChain())
-	queryBus := factory.NewQueryBus(aspect.NewAspectChain())
-	eventBus := factory.NewEventBus(aspect.NewAspectChain())
+	cmdBus := factory.CreateCommandBus(aspect.NewAspectChain())
+	queryBus := factory.CreateQueryBus(aspect.NewAspectChain())
+	eventBus := factory.CreateEventBus(aspect.NewAspectChain())
 
 	if err := cmdBus.RegisterHandler(&testCommandHandler{}); err != nil {
 		t.Fatalf("register command handler: %v", err)
@@ -152,7 +152,7 @@ func TestWithBuses_AllowsHandlerRegistration(t *testing.T) {
 	}
 
 	evt := testEvent{event.NewDomainEvent("test-aggregate")}
-	if err := event.Dispatch(context.Background(), app.EventBus, evt); err != nil {
+	if err := app.EventBus.Publish(context.Background(), evt); err != nil {
 		t.Fatalf("dispatch event: %v", err)
 	}
 	if !handler.called {
@@ -372,7 +372,7 @@ func TestWithCommandHandlers(t *testing.T) {
 
 func TestWithCommandHandlers_ExistingBus(t *testing.T) {
 	factory := testBusFactory()
-	cmdBus := factory.NewCommandBus(aspect.NewAspectChain())
+	cmdBus := factory.CreateCommandBus(aspect.NewAspectChain())
 	app, err := NewApp(
 		WithCommandBus(cmdBus),
 		WithCommandHandlers(&testCommandHandler{}),
@@ -411,7 +411,7 @@ func TestWithQueryHandlers(t *testing.T) {
 
 func TestWithQueryHandlers_ExistingBus(t *testing.T) {
 	factory := testBusFactory()
-	queryBus := factory.NewQueryBus(aspect.NewAspectChain())
+	queryBus := factory.CreateQueryBus(aspect.NewAspectChain())
 	app, err := NewApp(
 		WithQueryBus(queryBus),
 		WithQueryHandlers(&testQueryHandler{}),
@@ -434,7 +434,7 @@ func TestWithEventSubscriptions(t *testing.T) {
 		t.Fatal("EventBus should be created by WithEventSubscriptions")
 	}
 	evt := testEvent{event.NewDomainEvent("test-aggregate")}
-	if err := event.Dispatch(context.Background(), app.EventBus, evt); err != nil {
+	if err := app.EventBus.Publish(context.Background(), evt); err != nil {
 		t.Fatalf("dispatch event: %v", err)
 	}
 	if !handler.called {
@@ -444,7 +444,7 @@ func TestWithEventSubscriptions(t *testing.T) {
 
 func TestWithEventSubscriptions_ExistingBus(t *testing.T) {
 	factory := testBusFactory()
-	eventBus := factory.NewEventBus(aspect.NewAspectChain())
+	eventBus := factory.CreateEventBus(aspect.NewAspectChain())
 	app, err := NewApp(
 		WithEventBus(eventBus),
 		WithEventSubscriptions(&testEventHandler{}),

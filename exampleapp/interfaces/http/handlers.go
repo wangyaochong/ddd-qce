@@ -253,7 +253,7 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 	views := make([]EventView, len(events))
 	for i, e := range events {
 		view := EventView{
-			EventType:  event.EventTypeOf(e),
+			EventType:  event.EventNameOf(e),
 			OccurredAt: e.OccurredAt().Format(time.RFC3339),
 		}
 		switch evt := e.(type) {
@@ -613,7 +613,7 @@ func (h *Handler) TestEvent(w http.ResponseWriter, r *http.Request) {
 	testAggID := hex.EncodeToString(uid[:])
 
 	step("OrderPlacedEvent (→ NotificationHandler + InventoryHandler)", func() (string, error) {
-		err := event.Dispatch(ctx, h.app.EventBus, &orderevent.OrderPlacedEvent{
+		err := h.app.EventBus.Publish(ctx, &orderevent.OrderPlacedEvent{
 			BaseEvent:   event.WithCorrelation(ctx, testAggID),
 			UserID:      "test-event-user",
 			TotalAmount: 999.99,
@@ -627,7 +627,7 @@ func (h *Handler) TestEvent(w http.ResponseWriter, r *http.Request) {
 	})
 
 	step("PaymentConfirmedEvent", func() (string, error) {
-		err := event.Dispatch(ctx, h.app.EventBus, &orderevent.PaymentConfirmedEvent{
+		err := h.app.EventBus.Publish(ctx, &orderevent.PaymentConfirmedEvent{
 			BaseEvent: event.WithCorrelation(ctx, testAggID),
 		})
 		if err != nil {
@@ -638,7 +638,7 @@ func (h *Handler) TestEvent(w http.ResponseWriter, r *http.Request) {
 	})
 
 	step("OrderShippedEvent", func() (string, error) {
-		err := event.Dispatch(ctx, h.app.EventBus, &orderevent.OrderShippedEvent{
+		err := h.app.EventBus.Publish(ctx, &orderevent.OrderShippedEvent{
 			BaseEvent: event.WithCorrelation(ctx, testAggID),
 		})
 		if err != nil {
@@ -649,7 +649,7 @@ func (h *Handler) TestEvent(w http.ResponseWriter, r *http.Request) {
 	})
 
 	step("OrderCancelledEvent (→ InventoryHandler)", func() (string, error) {
-		err := event.Dispatch(ctx, h.app.EventBus, &orderevent.OrderCancelledEvent{
+		err := h.app.EventBus.Publish(ctx, &orderevent.OrderCancelledEvent{
 			BaseEvent: event.WithCorrelation(ctx, testAggID),
 			Reason:    "test cancel",
 		})
@@ -662,7 +662,7 @@ func (h *Handler) TestEvent(w http.ResponseWriter, r *http.Request) {
 
 	step("InventoryReservedEvent", func() (string, error) {
 		uid2 := uuid.New()
-		err := event.Dispatch(ctx, h.app.EventBus, &inventoryevent.InventoryReservedEvent{
+		err := h.app.EventBus.Publish(ctx, &inventoryevent.InventoryReservedEvent{
 			BaseEvent: event.WithCorrelation(ctx, hex.EncodeToString(uid2[:])),
 			ProductID: "mouse",
 			Quantity:  2,
@@ -676,7 +676,7 @@ func (h *Handler) TestEvent(w http.ResponseWriter, r *http.Request) {
 
 	step("InventoryReleasedEvent", func() (string, error) {
 		uid2 := uuid.New()
-		err := event.Dispatch(ctx, h.app.EventBus, &inventoryevent.InventoryReleasedEvent{
+		err := h.app.EventBus.Publish(ctx, &inventoryevent.InventoryReleasedEvent{
 			BaseEvent: event.WithCorrelation(ctx, hex.EncodeToString(uid2[:])),
 			ProductID: "mouse",
 			Quantity:  2,
@@ -848,18 +848,18 @@ func (h *Handler) TestJob(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return "", err
 		}
-		_, err = h.app.JobManager.Wait(ctx, job.ID, 10*time.Second)
+		_, err = h.app.JobManager.Wait(ctx, job.ID(), 10*time.Second)
 		if err != nil {
 			return "", err
 		}
-		job, err = h.app.JobManager.GetStatus(ctx, job.ID)
+		job, err = h.app.JobManager.GetStatus(ctx, job.ID())
 		if err != nil {
 			return "", err
 		}
 		if job.GetStatus() != jobcore.JobStatusCompleted {
 			return "", fmt.Errorf("expected completed, got %s", job.GetStatus())
 		}
-		return fmt.Sprintf("jobID=%s status=%s", job.ID, job.GetStatus()), nil
+		return fmt.Sprintf("jobID=%s status=%s", job.ID(), job.GetStatus()), nil
 	})
 
 	step("SubmitJob → Timeout", func() (string, error) {
@@ -867,15 +867,15 @@ func (h *Handler) TestJob(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return "", err
 		}
-		_, _ = h.app.JobManager.Wait(ctx, job.ID, 10*time.Second)
-		job, err = h.app.JobManager.GetStatus(ctx, job.ID)
+		_, _ = h.app.JobManager.Wait(ctx, job.ID(), 10*time.Second)
+		job, err = h.app.JobManager.GetStatus(ctx, job.ID())
 		if err != nil {
 			return "", err
 		}
 		if job.GetStatus() != jobcore.JobStatusFailed {
 			return "", fmt.Errorf("expected failed (timeout), got %s", job.GetStatus())
 		}
-		return fmt.Sprintf("jobID=%s status=%s (timeout triggered)", job.ID, job.GetStatus()), nil
+		return fmt.Sprintf("jobID=%s status=%s (timeout triggered)", job.ID(), job.GetStatus()), nil
 	})
 
 	step("SubmitJob → Cancel", func() (string, error) {
@@ -883,17 +883,17 @@ func (h *Handler) TestJob(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return "", err
 		}
-		if err := h.app.JobManager.Cancel(ctx, job.ID); err != nil {
+		if err := h.app.JobManager.Cancel(ctx, job.ID()); err != nil {
 			return "", err
 		}
-		job, err = h.app.JobManager.GetStatus(ctx, job.ID)
+		job, err = h.app.JobManager.GetStatus(ctx, job.ID())
 		if err != nil {
 			return "", err
 		}
 		if job.GetStatus() != jobcore.JobStatusCancelled {
 			return "", fmt.Errorf("expected cancelled, got %s", job.GetStatus())
 		}
-		return fmt.Sprintf("jobID=%s status=%s", job.ID, job.GetStatus()), nil
+		return fmt.Sprintf("jobID=%s status=%s", job.ID(), job.GetStatus()), nil
 	})
 
 	step("SubmitJob → Fail → Retry (success)", func() (string, error) {
@@ -901,8 +901,8 @@ func (h *Handler) TestJob(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return "", err
 		}
-		_, _ = h.app.JobManager.Wait(ctx, job.ID, 10*time.Second)
-		job, err = h.app.JobManager.GetStatus(ctx, job.ID)
+		_, _ = h.app.JobManager.Wait(ctx, job.ID(), 10*time.Second)
+		job, err = h.app.JobManager.GetStatus(ctx, job.ID())
 		if err != nil {
 			return "", err
 		}

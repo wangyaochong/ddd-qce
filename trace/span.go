@@ -2,22 +2,29 @@ package trace
 
 import "time"
 
-const (
-	SpanTypeCommand = "command"
-	SpanTypeQuery   = "query"
-	SpanTypeEvent   = "event"
+type SpanType string
 
-	SpanStatusSuccess = "success"
-	SpanStatusError   = "error"
+const (
+	SpanTypeCommand SpanType = "command"
+	SpanTypeQuery   SpanType = "query"
+	SpanTypeEvent   SpanType = "event"
+)
+
+type SpanStatus string
+
+const (
+	SpanStatusSuccess       SpanStatus = "success"
+	SpanStatusError        SpanStatus = "error"
+	SpanStatusBusinessError SpanStatus = "business_error"
 )
 
 type Span struct {
 	ID        string        `json:"id"`
 	TraceID   string        `json:"trace_id"`
 	ParentID  string        `json:"parent_id"`
-	Type      string        `json:"type"`
+	Type      SpanType      `json:"type"`
 	Name      string        `json:"name"`
-	Status    string        `json:"status"`
+	Status    SpanStatus    `json:"status"`
 	Error     string        `json:"error,omitempty"`
 	StartedAt time.Time     `json:"started_at"`
 	Duration  time.Duration `json:"duration"`
@@ -25,8 +32,8 @@ type Span struct {
 
 type TraceFilter struct {
 	TraceID      string
-	Type         string
-	Status       string
+	Type         SpanType
+	Status       SpanStatus
 	StartTime    time.Time
 	EndTime      time.Time
 	NameContains string

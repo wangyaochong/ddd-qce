@@ -29,7 +29,7 @@ func TestEventBus_InterfaceSatisfied(t *testing.T) {
 
 func TestEventBus_SubscribeAndPublish(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := memory.NewEventBus(memory.WithBusAspectChain(chain))
+	bus := memory.NewEventBus(memory.WithEventBusAspectChain(chain))
 
 	var _ event.EventBus = bus
 
@@ -37,7 +37,7 @@ func TestEventBus_SubscribeAndPublish(t *testing.T) {
 	bus.SubscribeHandler(handler)
 
 	ctx := context.Background()
-	err := event.Dispatch[*testEvent](ctx, bus, &testEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())})
+	err := bus.Publish(ctx, &testEvent{BaseEvent: event.NewBaseEvent("agg-1", time.Now())})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

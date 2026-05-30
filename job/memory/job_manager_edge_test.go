@@ -120,7 +120,7 @@ func newSameRefJobStore() *sameRefJobStore {
 func (s *sameRefJobStore) Create(ctx context.Context, job *jobcore.Job) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.jobs[job.ID] = job
+	s.jobs[job.ID()] = job
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (s *sameRefJobStore) Get(ctx context.Context, id string) (*jobcore.Job, err
 func (s *sameRefJobStore) Update(ctx context.Context, job *jobcore.Job) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.jobs[job.ID] = job
+	s.jobs[job.ID()] = job
 	return nil
 }
 
@@ -177,16 +177,16 @@ func TestJobManager_CancelledJob_ErrorDuringExecution(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
 
 	close(continueExecuteJob)
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -212,16 +212,16 @@ func TestJobManager_CancelledJob_SuccessDuringExecution(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
 
 	close(continueExecuteJob)
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -261,14 +261,14 @@ func TestJobManager_Cancel_SecondGetFails(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
 		t.Logf("cancel error (store.Get on update path may fail): %v", err)
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 2*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestJobManager_Cancel_AlreadyCompletedOnSecondGet(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestJobManager_Cancel_AlreadyCompletedOnSecondGet(t *testing.T) {
 		t.Fatalf("expected completed, got %s", result.GetStatus())
 	}
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err == nil {
 		t.Fatal("expected error when cancelling completed job")
 	}
@@ -356,11 +356,11 @@ func TestJobManager_Cancel_JobCompletedBetweenGets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to submit job: %v", err)
 	}
-	jobID = job.ID
+	jobID = job.ID()
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("cancel should succeed when job already completed: %v", err)
 	}
@@ -393,11 +393,11 @@ func TestJobManager_Cancel_JobCancelledBetweenGets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to submit job: %v", err)
 	}
-	jobID = job.ID
+	jobID = job.ID()
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("cancel should succeed when job already cancelled: %v", err)
 	}

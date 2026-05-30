@@ -1,0 +1,160 @@
+{{define "ddd_domains"}}{{template "ddd_header" .}}
+
+<h1>Domains</h1>
+
+{{if not .Domains}}
+<div class="card"><div class="empty">No domains registered</div></div>
+{{else}}
+
+<div class="domain-tabs">
+{{range .Domains}}
+<a href="{{$.Prefix}}/ddd_domains?domain={{.}}" class="domain-tab {{if eq . $.SelectedDomain}}active{{end}}">{{.}}</a>
+{{end}}
+</div>
+
+<div class="domain-content">
+    <div class="domain-section">
+        <div class="domain-section-title">Statistics</div>
+        <div class="domain-stats-grid">
+            <div class="domain-stat-card">
+                <h4>Commands</h4>
+                <div><span class="stat-num ok">{{.Stats.CommandCount}}</span> {{if gt .Stats.CommandErrors 0}}(<span class="stat-num err">{{.Stats.CommandErrors}}</span> errors){{end}}</div>
+            </div>
+            <div class="domain-stat-card">
+                <h4>Queries</h4>
+                <div><span class="stat-num ok">{{.Stats.QueryCount}}</span> {{if gt .Stats.QueryErrors 0}}(<span class="stat-num err">{{.Stats.QueryErrors}}</span> errors){{end}}</div>
+            </div>
+            <div class="domain-stat-card">
+                <h4>Events</h4>
+                <div><span class="stat-num ok">{{.Stats.EventCount}}</span> {{if gt .Stats.EventErrors 0}}(<span class="stat-num err">{{.Stats.EventErrors}}</span> errors){{end}}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="domain-section">
+        <div class="domain-section-title">Types</div>
+        {{if .DomainInfo}}
+        <div class="type-grid">
+            {{range .DomainInfo.Commands}}
+            <div class="type-card">
+                <div class="type-card-header">{{.Name}}</div>
+                <div class="type-sub-card">
+                    <div class="type-sub-title command-title">Command</div>
+                    {{if .Fields}}
+                    <table class="fields-table">
+                        <thead><tr><th>Name</th><th>Type</th></tr></thead>
+                        <tbody>
+                        {{range .Fields}}
+                        <tr><td><code>{{.Name}}</code></td><td><code>{{.Type}}</code></td></tr>
+                        {{end}}
+                        </tbody>
+                    </table>
+                    {{else}}<div class="no-fields">No field metadata</div>{{end}}
+                </div>
+                {{if .ResultType}}
+                <div class="type-sub-card">
+                    <div class="type-sub-title result-title">CommandResult {{.ResultType}}</div>
+                    {{if .Result}}
+                    <table class="fields-table">
+                        <thead><tr><th>Name</th><th>Type</th></tr></thead>
+                        <tbody>
+                        {{range .Result}}
+                        <tr><td><code>{{.Name}}</code></td><td><code>{{.Type}}</code></td></tr>
+                        {{end}}
+                        </tbody>
+                    </table>
+                    {{else}}<div class="no-fields">No result metadata</div>{{end}}
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+            {{range .DomainInfo.Queries}}
+            <div class="type-card">
+                <div class="type-card-header">{{.Name}}</div>
+                <div class="type-sub-card">
+                    <div class="type-sub-title query-title">Query</div>
+                    {{if .Fields}}
+                    <table class="fields-table">
+                        <thead><tr><th>Name</th><th>Type</th></tr></thead>
+                        <tbody>
+                        {{range .Fields}}
+                        <tr><td><code>{{.Name}}</code></td><td><code>{{.Type}}</code></td></tr>
+                        {{end}}
+                        </tbody>
+                    </table>
+                    {{else}}<div class="no-fields">No field metadata</div>{{end}}
+                </div>
+                {{if .ResultType}}
+                <div class="type-sub-card">
+                    <div class="type-sub-title result-title">QueryResult {{.ResultType}}</div>
+                    {{if .Result}}
+                    <table class="fields-table">
+                        <thead><tr><th>Name</th><th>Type</th></tr></thead>
+                        <tbody>
+                        {{range .Result}}
+                        <tr><td><code>{{.Name}}</code></td><td><code>{{.Type}}</code></td></tr>
+                        {{end}}
+                        </tbody>
+                    </table>
+                    {{else}}<div class="no-fields">No result metadata</div>{{end}}
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+            {{range .DomainInfo.Events}}
+            <div class="type-card">
+                <div class="type-card-header">{{.Name}}</div>
+                <div class="type-sub-card">
+                    <div class="type-sub-title event-title">Event</div>
+                    {{if .Fields}}
+                    <table class="fields-table">
+                        <thead><tr><th>Name</th><th>Type</th></tr></thead>
+                        <tbody>
+                        {{range .Fields}}
+                        <tr><td><code>{{.Name}}</code></td><td><code>{{.Type}}</code></td></tr>
+                        {{end}}
+                        </tbody>
+                    </table>
+                    {{else}}<div class="no-fields">No field metadata</div>{{end}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}<div class="card"><div class="empty">No types for this domain</div></div>{{end}}
+    </div>
+
+    <div class="domain-section">
+        <div class="domain-section-title">Recent Executions ({{len .Entries}})</div>
+        {{if .Entries}}
+        <div class="card">
+            <table class="execution-table">
+                <thead><tr><th>Type</th><th>Category</th><th>Status</th><th>Duration</th><th>Time</th></tr></thead>
+                <tbody>
+                {{range .Entries}}
+                <tr>
+                    <td><strong>{{.Type}}</strong></td>
+                    <td><span class="badge badge-{{.Category}}">{{.Category}}</span></td>
+                    <td>{{if .Error}}<span class="badge badge-error">error</span>{{else}}<span class="badge badge-success">ok</span>{{end}}</td>
+                    <td>{{.Duration}}</td>
+                    <td>{{.CreatedAt}}</td>
+                </tr>
+                {{if .Data}}
+                <tr class="detail-row"><td colspan="5">
+                    <div class="detail-content">
+                        {{if .Error}}<div style="color:#c62828;"><strong>Error:</strong> {{.Error}}</div>{{end}}
+                        {{if .Data}}<details><summary>Input</summary><div class="json-preview">{{.Data}}</div></details>{{end}}
+                        {{if .Result}}<details><summary>Result</summary><div class="json-preview">{{.Result}}</div></details>{{end}}
+                    </div>
+                </td></tr>
+                {{end}}
+                {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}<div class="card"><div class="empty">No executions for this domain</div></div>{{end}}
+    </div>
+</div>
+
+{{end}}
+
+{{template "ddd_footer" .}}{{end}}

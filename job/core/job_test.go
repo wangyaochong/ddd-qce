@@ -12,8 +12,8 @@ func TestWithTimeout(t *testing.T) {
 	opt := WithTimeout(5 * time.Second)
 	opt(job)
 
-	if job.Timeout != 5*time.Second {
-		t.Errorf("expected timeout 5s, got %v", job.Timeout)
+	if job.timeout != 5*time.Second {
+		t.Errorf("expected timeout 5s, got %v", job.timeout)
 	}
 }
 
@@ -22,8 +22,8 @@ func TestWithMaxRetries(t *testing.T) {
 	opt := WithMaxRetries(3)
 	opt(job)
 
-	if job.MaxRetries != 3 {
-		t.Errorf("expected max retries 3, got %d", job.MaxRetries)
+	if job.maxRetries != 3 {
+		t.Errorf("expected max retries 3, got %d", job.maxRetries)
 	}
 }
 
@@ -32,11 +32,11 @@ func TestJobOptions_Combined(t *testing.T) {
 	WithTimeout(10 * time.Second)(job)
 	WithMaxRetries(5)(job)
 
-	if job.Timeout != 10*time.Second {
-		t.Errorf("expected timeout 10s, got %v", job.Timeout)
+	if job.timeout != 10*time.Second {
+		t.Errorf("expected timeout 10s, got %v", job.timeout)
 	}
-	if job.MaxRetries != 5 {
-		t.Errorf("expected max retries 5, got %d", job.MaxRetries)
+	if job.maxRetries != 5 {
+		t.Errorf("expected max retries 5, got %d", job.maxRetries)
 	}
 }
 
@@ -142,8 +142,8 @@ func TestJob_TryFail_WithRetry(t *testing.T) {
 	if !shouldRetry {
 		t.Error("expected retry")
 	}
-	if job.RetryCount != 1 {
-		t.Errorf("expected retry count 1, got %d", job.RetryCount)
+	if job.RetryCount() != 1 {
+		t.Errorf("expected retry count 1, got %d", job.RetryCount())
 	}
 }
 
@@ -305,14 +305,16 @@ func TestTypeName(t *testing.T) {
 
 func TestJob_Snapshot_IncludesCommandType(t *testing.T) {
 	job := &Job{
-		ID:          "j1",
-		Command:     &testSampleCmd{Name: "test"},
-		CommandType: "core.testSampleCmd",
+		id:          "j1",
+		command:     &testSampleCmd{Name: "test"},
+		commandType: "core.testSampleCmd",
 	}
-	job.RestoreJobState("", &testSampleResult{File: "out.pdf"}, "core.testSampleResult", "", time.Time{}, time.Time{})
+	job.status = JobStatusCompleted
+	job.result = &testSampleResult{File: "out.pdf"}
+	job.resultType = "core.testSampleResult"
 	snap := job.Snapshot()
-	if snap.CommandType != "core.testSampleCmd" {
-		t.Errorf("expected CommandType preserved, got %q", snap.CommandType)
+	if snap.CommandType() != "core.testSampleCmd" {
+		t.Errorf("expected CommandType preserved, got %q", snap.CommandType())
 	}
 	if snap.GetResultType() != "core.testSampleResult" {
 		t.Errorf("expected ResultType preserved, got %q", snap.GetResultType())
@@ -347,19 +349,19 @@ func TestJob_Snapshot_DoneChannelClosedForCompletedJob(t *testing.T) {
 
 func TestNewJob(t *testing.T) {
 	job := NewJob("j1", &testSampleCmd{Name: "test"}, WithTimeout(5*time.Second), WithMaxRetries(3))
-	if job.ID != "j1" {
-		t.Errorf("expected ID 'j1', got %s", job.ID)
+	if job.ID() != "j1" {
+		t.Errorf("expected ID 'j1', got %s", job.ID())
 	}
 	if job.GetStatus() != JobStatusPending {
 		t.Errorf("expected pending, got %s", job.GetStatus())
 	}
-	if job.Timeout != 5*time.Second {
-		t.Errorf("expected timeout 5s, got %v", job.Timeout)
+	if job.Timeout() != 5*time.Second {
+		t.Errorf("expected timeout 5s, got %v", job.Timeout())
 	}
-	if job.MaxRetries != 3 {
-		t.Errorf("expected max retries 3, got %d", job.MaxRetries)
+	if job.MaxRetries() != 3 {
+		t.Errorf("expected max retries 3, got %d", job.MaxRetries())
 	}
-	if job.CreatedAt.IsZero() {
+	if job.CreatedAt().IsZero() {
 		t.Error("expected createdAt to be set")
 	}
 }

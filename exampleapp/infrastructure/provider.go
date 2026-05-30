@@ -19,10 +19,12 @@ import (
 
 type StoreComponents struct {
 	Backend      *infra.Backend
-	EventStore   cqrsevent.EventSourceStore[domainevent.Event]
+	EventStore   cqrsevent.AggregateEventStore[domainevent.Event]
 	OrderRepo    repository.OrderRepositoryAdapter
 	DB           *sql.DB
 }
+
+const defaultSQLDriver = "pgx"
 
 func NewProvider(cfg *Config) (*StoreComponents, error) {
 	switch cfg.StoreType {
@@ -61,12 +63,12 @@ func newMemoryProvider() (*StoreComponents, error) {
 	}, nil
 }
 
-func newMemoryEventStore() (cqrsevent.EventSourceStore[domainevent.Event], error) {
+func newMemoryEventStore() (cqrsevent.AggregateEventStore[domainevent.Event], error) {
 	return eventmemory.NewEventSourceStore[domainevent.Event]()
 }
 
 func newPgProvider(dsn string) (*StoreComponents, error) {
-	db, err := sql.Open("pgx", dsn)
+	db, err := sql.Open(defaultSQLDriver, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}

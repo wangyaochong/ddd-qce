@@ -1,0 +1,61 @@
+{{define "ddd_query_types"}}{{template "ddd_header" .}}
+
+<h1>Query Types</h1>
+
+<div class="stats">
+    <div class="stat"><div class="number">{{.Count}}</div><div class="label">Queries</div></div>
+</div>
+
+{{if .Queries}}
+<div class="type-grid">
+{{range .Queries}}
+<div class="type-card">
+    <div class="type-card-header">{{.Name}}</div>
+    
+    <div class="type-sub-card">
+        <div class="type-sub-title query-title">Query</div>
+        {{if .Fields}}
+        <table class="fields-table">
+            <thead><tr><th>Name</th><th>Type</th></tr></thead>
+            <tbody>
+            {{range .Fields}}
+            <tr>
+                <td><code>{{.Name}}</code></td>
+                <td><code>{{.Type}}</code></td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="no-fields">No field metadata</div>
+        {{end}}
+    </div>
+    
+    {{if .ResultType}}
+    <div class="type-sub-card">
+        <div class="type-sub-title result-title">QueryResult {{.ResultType}}</div>
+        {{if .Result}}
+        <table class="fields-table">
+            <thead><tr><th>Name</th><th>Type</th></tr></thead>
+            <tbody>
+            {{range .Result}}
+            <tr>
+                <td><code>{{.Name}}</code></td>
+                <td><code>{{.Type}}</code></td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="no-fields">No result metadata</div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+</div>
+{{else}}
+<div class="card"><div class="empty">No query types registered</div></div>
+{{end}}
+
+{{template "ddd_footer" .}}{{end}}

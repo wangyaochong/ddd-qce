@@ -240,11 +240,11 @@ func (d *Dashboard) handleTraces(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := trace.TraceFilter{
-		Status: r.URL.Query().Get("status"),
+		Status: trace.SpanStatus(r.URL.Query().Get("status")),
 	}
 
 	if typ := r.URL.Query().Get("type"); typ != "" {
-		filter.Type = typ
+		filter.Type = trace.SpanType(typ)
 	}
 	if name := r.URL.Query().Get("name"); name != "" {
 		filter.NameContains = name

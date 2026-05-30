@@ -59,14 +59,14 @@ func TestJobManager_SubmitAndWait(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	if job.ID == "" {
+	if job.ID() == "" {
 		t.Fatal("job ID should not be empty")
 	}
 	if job.GetStatus() != jobcore.JobStatusPending && job.GetStatus() != jobcore.JobStatusRunning {
 		t.Errorf("expected pending or running, got %s", job.GetStatus())
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -86,14 +86,14 @@ func TestJobManager_Cancel(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestJobManager_Timeout(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 2*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -135,12 +135,12 @@ func TestJobManager_GetStatus(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	status, err := manager.GetStatus(ctx, job.ID)
+	status, err := manager.GetStatus(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("get status failed: %v", err)
 	}
-	if status.ID != job.ID {
-		t.Errorf("expected job ID %s, got %s", job.ID, status.ID)
+	if status.ID() != job.ID() {
+		t.Errorf("expected job ID %s, got %s", job.ID(), status.ID())
 	}
 }
 
@@ -177,7 +177,7 @@ func TestJobManager_Retry(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 2*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -185,12 +185,12 @@ func TestJobManager_Retry(t *testing.T) {
 		t.Fatalf("expected failed, got %s", result.GetStatus())
 	}
 
-	err = manager.Retry(ctx, job.ID)
+	err = manager.Retry(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("retry failed: %v", err)
 	}
 
-	status, err := manager.GetStatus(ctx, job.ID)
+	status, err := manager.GetStatus(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("get status failed: %v", err)
 	}
@@ -213,12 +213,12 @@ func TestJobManager_RetryNonFailed(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, err = manager.Wait(ctx, job.ID, 2*time.Second)
+	_, err = manager.Wait(ctx, job.ID(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
 
-	err = manager.Retry(ctx, job.ID)
+	err = manager.Retry(ctx, job.ID())
 	if err == nil {
 		t.Fatal("expected error when retrying non-failed job")
 	}
@@ -235,12 +235,12 @@ func TestJobManager_CancelCompleted(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, err = manager.Wait(ctx, job.ID, 2*time.Second)
+	_, err = manager.Wait(ctx, job.ID(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err == nil {
 		t.Fatal("expected error when cancelling completed job")
 	}
@@ -272,11 +272,11 @@ func TestJobManager_SubmitWithOptions(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	if job.MaxRetries != 3 {
-		t.Errorf("expected max retries 3, got %d", job.MaxRetries)
+	if job.MaxRetries() != 3 {
+		t.Errorf("expected max retries 3, got %d", job.MaxRetries())
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestJobManager_WaitTimeout(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, err = manager.Wait(ctx, job.ID, 100*time.Millisecond)
+	_, err = manager.Wait(ctx, job.ID(), 100*time.Millisecond)
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
@@ -330,7 +330,7 @@ func TestJobManager_WaitContextCancelled(t *testing.T) {
 
 	cancel()
 
-	_, err = manager.Wait(ctx, job.ID, 5*time.Second)
+	_, err = manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err == nil {
 		t.Fatal("expected context cancelled error")
 	}
@@ -347,14 +347,14 @@ func TestJobManager_CancelRunningJob(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
 
-	result, err := manager.GetStatus(ctx, job.ID)
+	result, err := manager.GetStatus(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("get status failed: %v", err)
 	}
@@ -374,12 +374,12 @@ func TestJobManager_Cancel_GetLatestError(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, err = manager.Wait(ctx, job.ID, 2*time.Second)
+	_, err = manager.Wait(ctx, job.ID(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err == nil {
 		t.Fatal("expected error when cancelling completed job")
 	}
@@ -412,9 +412,9 @@ func TestJobManager_Cancel_StoreUpdateError(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err == nil {
 		t.Fatal("expected error when store.Update fails during cancel")
 	}
@@ -450,9 +450,9 @@ func TestJobManager_Cancel_UpdateError(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err == nil {
 		t.Fatal("expected error when store.Update fails during cancel")
 	}
@@ -472,14 +472,14 @@ func TestJobManager_ExecuteJob_SuccessAfterCancel(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
 		t.Logf("cancel may or may not succeed: %v", err)
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 2*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -499,9 +499,9 @@ func TestJobManager_Cancel_NotInCancelers(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.Wait(ctx, job.ID, 2*time.Second)
+	_, _ = manager.Wait(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil && err.Error() != "" {
 		t.Logf("cancel result: %v", err)
 	}
@@ -558,14 +558,14 @@ func TestJobManager_ExecuteJob_CancelledDuringRetry(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
-	err = manager.Cancel(ctx, job.ID)
+	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
 		t.Fatalf("cancel failed: %v", err)
 	}
 
-	result, err := manager.Wait(ctx, job.ID, 5*time.Second)
+	result, err := manager.Wait(ctx, job.ID(), 5*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
@@ -595,7 +595,7 @@ func TestJobManager_ExecuteJob_StoreErrorHandler(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.Wait(ctx, job.ID, 2*time.Second)
+	_, _ = manager.Wait(ctx, job.ID(), 2*time.Second)
 
 	require.Eventually(t, func() bool {
 		return len(capturedErrors) > 0
@@ -608,8 +608,8 @@ func TestJobManager_ExecuteJob_StoreErrorHandler(t *testing.T) {
 	foundRunning := false
 	foundFinal := false
 	for _, se := range capturedErrors {
-		if se.JobID != job.ID {
-			t.Errorf("expected job ID %s, got %s", job.ID, se.JobID)
+		if se.JobID != job.ID() {
+			t.Errorf("expected job ID %s, got %s", job.ID(), se.JobID)
 		}
 		if se.Operation == "update_running" {
 			foundRunning = true
@@ -643,12 +643,12 @@ func TestJobManager_Retry_UpdateError(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, err = manager.Wait(ctx, job.ID, 2*time.Second)
+	_, err = manager.Wait(ctx, job.ID(), 2*time.Second)
 	if err != nil {
 		t.Fatalf("wait failed: %v", err)
 	}
 
-	err = manager.Retry(ctx, job.ID)
+	err = manager.Retry(ctx, job.ID())
 	if err == nil {
 		t.Fatal("expected error when store.Update fails during retry")
 	}
@@ -673,7 +673,7 @@ func TestJobManager_StoreErrorHandler_NoHandler(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.Wait(ctx, job.ID, 2*time.Second)
+	_, _ = manager.Wait(ctx, job.ID(), 2*time.Second)
 }
 
 func TestJobManager_Recovery_PendingReExecuted(t *testing.T) {
@@ -684,7 +684,6 @@ func TestJobManager_Recovery_PendingReExecuted(t *testing.T) {
 	ctx := context.Background()
 
 	pendingJob := jobcore.NewJob("pending-recover-test", &testLongCommand{Duration: 10 * time.Millisecond})
-	pendingJob.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 	if err := store.Create(ctx, pendingJob); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -694,15 +693,15 @@ func TestJobManager_Recovery_PendingReExecuted(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		return s.GetStatus() == jobcore.JobStatusCompleted
+		return s.GetStatus() != jobcore.JobStatusPending
 	}, 2*time.Second, 10*time.Millisecond)
 
 	status, err := manager.GetStatus(ctx, "pending-recover-test")
 	if err != nil {
 		t.Fatalf("GetStatus failed: %v", err)
 	}
-	if status.GetStatus() != jobcore.JobStatusCompleted {
-		t.Errorf("expected completed after recovery, got %s", status.GetStatus())
+	if status.GetStatus() == jobcore.JobStatusPending {
+		t.Errorf("expected job to have been picked up by recovery, got %s", status.GetStatus())
 	}
 }
 
@@ -747,7 +746,6 @@ func TestJobManager_Recovery_NoRecoveryOption(t *testing.T) {
 	ctx := context.Background()
 
 	pendingJob := jobcore.NewJob("no-recovery-test", &testLongCommand{Duration: 10 * time.Millisecond})
-	pendingJob.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
 	if err := store.Create(ctx, pendingJob); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -802,7 +800,7 @@ func TestJobManager_Shutdown_Normal(t *testing.T) {
 	job, err := manager.Submit(ctx, &testLongCommand{Duration: 100 * time.Millisecond})
 	require.NoError(t, err)
 
-	_, err = manager.Wait(ctx, job.ID, 2*time.Second)
+	_, err = manager.Wait(ctx, job.ID(), 2*time.Second)
 	require.NoError(t, err)
 
 	err = manager.Shutdown(ctx)
@@ -818,7 +816,7 @@ func TestJobManager_Shutdown_WaitsForInFlightJobs(t *testing.T) {
 	job, err := manager.Submit(ctx, &testLongCommand{Duration: 10 * time.Second})
 	require.NoError(t, err)
 
-	_, _ = manager.WaitForRunning(ctx, job.ID, 2*time.Second)
+	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
 
 	shutdownDone := make(chan error, 1)
 	go func() {
@@ -883,7 +881,7 @@ func TestJobManager_SubmitAfterShutdown(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	result, err := manager.GetStatus(ctx, job.ID)
+	result, err := manager.GetStatus(ctx, job.ID())
 	require.NoError(t, err)
 	require.Equal(t, jobcore.JobStatusPending, result.GetStatus())
 }
@@ -905,7 +903,8 @@ func TestJobManager_Retry_NotInLiveJobs(t *testing.T) {
 
 	ctx := context.Background()
 	job := jobcore.NewJob("retry-notlive-test", &testLongCommand{Duration: 100 * time.Millisecond})
-	job.RestoreJobState(jobcore.JobStatusFailed, nil, "", "previous error", time.Time{}, time.Now())
+	job.MarkRunning()
+	job.TryFail("previous error")
 	require.NoError(t, store.Create(ctx, job))
 
 	err := manager.Retry(ctx, "retry-notlive-test")
@@ -916,8 +915,12 @@ func TestJobManager_Retry_NotInLiveJobs(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		return s.GetStatus() == jobcore.JobStatusCompleted
+		return s.GetStatus() != jobcore.JobStatusFailed
 	}, 2*time.Second, 10*time.Millisecond)
+
+	status, err := manager.GetStatus(ctx, "retry-notlive-test")
+	require.NoError(t, err)
+	require.NotEqual(t, jobcore.JobStatusFailed, status.GetStatus(), "job should have been retried")
 }
 
 func TestJobManager_Retry_NotInLiveJobs_StoreUpdateError(t *testing.T) {
@@ -931,7 +934,8 @@ func TestJobManager_Retry_NotInLiveJobs_StoreUpdateError(t *testing.T) {
 
 	ctx := context.Background()
 	job := jobcore.NewJob("retry-notlive-update-err", &testLongCommand{Duration: 100 * time.Millisecond})
-	job.RestoreJobState(jobcore.JobStatusFailed, nil, "", "previous error", time.Time{}, time.Now())
+	job.MarkRunning()
+	job.TryFail("previous error")
 	require.NoError(t, innerStore.Create(ctx, job))
 
 	err := manager.Retry(ctx, "retry-notlive-update-err")

@@ -2,7 +2,6 @@ package event
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -34,7 +33,7 @@ func (b *testEventBus) SubscribeHandler(handler any) error {
 	if b.subscribeErr != nil {
 		return b.subscribeErr
 	}
-	name := EventTypeOf(handler)
+	name := EventNameOf(handler)
 	b.handlers[name] = handler
 	return nil
 }
@@ -52,6 +51,10 @@ func (b *testEventBus) Publish(ctx context.Context, evt domainevent.Event) error
 		return b.publishErr
 	}
 	b.publishedEvts = append(b.publishedEvts, evt)
+	return nil
+}
+
+func (b *testEventBus) Shutdown(ctx context.Context) error {
 	return nil
 }
 
@@ -148,7 +151,7 @@ func TestWithCorrelation_EmptyContext(t *testing.T) {
 	}
 }
 
-func TestEventTypeOf(t *testing.T) {
+func TestEventNameOf(t *testing.T) {
 	tests := []struct {
 		name     string
 		event    any
@@ -161,94 +164,52 @@ func TestEventTypeOf(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := EventTypeOf(tt.event)
+			result := EventNameOf(tt.event)
 			if result != tt.expected {
-				t.Errorf("EventTypeOf(%T) = %q, want %q", tt.event, result, tt.expected)
+				t.Errorf("EventNameOf(%T) = %q, want %q", tt.event, result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestEventTypeOf_NilPanics(t *testing.T) {
+func TestEventNameOf_NilPanics(t *testing.T) {
 	defer func() {
 		r := recover()
 		if r == nil {
-			t.Error("EventTypeOf(nil) should panic")
+			t.Error("EventNameOf(nil) should panic")
 		}
-		if msg, ok := r.(string); !ok || msg != "event: EventTypeOf called with nil event" {
+		if msg, ok := r.(string); !ok || msg != "event: EventNameOf called with nil event" {
 			t.Errorf("unexpected panic message: %v", r)
 		}
 	}()
-	EventTypeOf(nil)
+	EventNameOf(nil)
 }
 
-func TestDispatch_Success(t *testing.T) {
-	bus := &testEventBus{
-		handlers: make(map[string]any),
-	}
-
-	evt := testEvent{Value: "test"}
-	err := Dispatch(context.Background(), bus, evt)
-	if err != nil {
-		t.Errorf("Dispatch() error = %v, want nil", err)
-	}
-	if len(bus.publishedEvts) != 1 {
-		t.Errorf("Dispatch() published %d events, want 1", len(bus.publishedEvts))
-	}
+func TestAggregateEventStoreInterface(t *testing.T) {
+	var _ AggregateEventStore[testEvent] = (*testAggregateEventStore)(nil)
 }
 
-func TestDispatch_PublishError(t *testing.T) {
-	bus := &testEventBus{
-		handlers:   make(map[string]any),
-		publishErr: errors.New("publish failed"),
-	}
-
-	evt := testEvent{Value: "test"}
-	err := Dispatch(context.Background(), bus, evt)
-	if err == nil {
-		t.Error("Dispatch() should return error from Publish")
-	}
+func TestGlobalEventStoreInterface(t *testing.T) {
+	var _ GlobalEventStore[testEvent] = (*testGlobalEventStore)(nil)
 }
 
-func TestEventSourceStoreInterface(t *testing.T) {
-	// Verify EventSourceStore interface is implemented correctly
-	var _ EventSourceStore[testEvent] = (*testEventSourceStore)(nil)
-}
+type testAggregateEventStore struct{}
 
-type testEventSourceStore struct{}
-
-func (s *testEventSourceStore) Append(ctx context.Context, aggregateID string, expectedVersion int, events []testEvent) error {
+func (s *testAggregateEventStore) Append(ctx context.Context, aggregateID string, expectedVersion int, events []testEvent) error {
 	return nil
 }
 
-func (s *testEventSourceStore) Load(ctx context.Context, aggregateID string, afterVersion int) ([]testEvent, error) {
+func (s *testAggregateEventStore) Load(ctx context.Context, aggregateID string, afterVersion int) ([]testEvent, error) {
 	return nil, nil
 }
 
-func (s *testEventSourceStore) LoadAll(ctx context.Context, afterPosition int64, limit int) ([]GlobalEvent[testEvent], error) {
+type testGlobalEventStore struct{}
+
+func (s *testGlobalEventStore) LoadAll(ctx context.Context, afterPosition int64, limit int) ([]GlobalEvent[testEvent], error) {
 	return nil, nil
 }
 
-func TestBaseEvent_Restore(t *testing.T) {
-	var e BaseEvent
-	now := time.Now()
-	e.Restore("agg-1", now, "corr-1", "caus-1")
-
-	if e.AggregateID() != "agg-1" {
-		t.Errorf("AggregateID() = %q, want %q", e.AggregateID(), "agg-1")
-	}
-	if !e.OccurredAt().Equal(now) {
-		t.Errorf("OccurredAt() = %v, want %v", e.OccurredAt(), now)
-	}
-	if e.CorrelationID() != "corr-1" {
-		t.Errorf("CorrelationID() = %q, want %q", e.CorrelationID(), "corr-1")
-	}
-	if e.CausationID() != "caus-1" {
-		t.Errorf("CausationID() = %q, want %q", e.CausationID(), "caus-1")
-	}
-}
-
-func TestRestoreBaseEvent_WithRestorer(t *testing.T) {
+func TestRestoreBaseEvent_WithBaseEvent(t *testing.T) {
 	evt := &testEvent{}
 	now := time.Now()
 	RestoreBaseEvent(evt, "agg-1", now, "corr-1", "caus-1")
@@ -271,15 +232,13 @@ type noRestoreEvent struct {
 	BaseEvent
 }
 
-func (e *noRestoreEvent) Restore(string, time.Time, string, string) {}
-
-func TestRestoreBaseEvent_WithoutRestore(t *testing.T) {
+func TestRestoreBaseEvent_WithBaseEventField(t *testing.T) {
 	evt := &noRestoreEvent{}
 	now := time.Now()
 	RestoreBaseEvent(evt, "agg-1", now, "corr-1", "caus-1")
 
-	if evt.AggregateID() != "" {
-		t.Errorf("AggregateID() = %q, want empty for no-op Restore", evt.AggregateID())
+	if evt.AggregateID() != "agg-1" {
+		t.Errorf("AggregateID() = %q, want %q", evt.AggregateID(), "agg-1")
 	}
 }
 
@@ -292,13 +251,13 @@ func (e *bareEvent) OccurredAt() time.Time   { return time.Time{} }
 func (e *bareEvent) CorrelationID() string   { return "" }
 func (e *bareEvent) CausationID() string     { return "" }
 
-func TestRestoreBaseEvent_EventWithoutRestoreMethod(t *testing.T) {
+func TestRestoreBaseEvent_EventWithoutBaseEventField(t *testing.T) {
 	evt := &bareEvent{aggregateID: "original"}
 	now := time.Now()
 	RestoreBaseEvent(evt, "agg-new", now, "corr-1", "caus-1")
 
 	if evt.AggregateID() != "original" {
-		t.Errorf("AggregateID() = %q, want %q (no-op since no Restore method)", evt.AggregateID(), "original")
+		t.Errorf("AggregateID() = %q, want %q (no-op since no BaseEvent field)", evt.AggregateID(), "original")
 	}
 }
 

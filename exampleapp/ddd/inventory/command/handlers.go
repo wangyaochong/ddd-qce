@@ -3,18 +3,17 @@ package command
 import (
 	"context"
 
-	cqrsevent "github.com/ddd-qce/core/cqrs/event"
-	domainevent "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	inventorydomain "github.com/ddd-qce/exampleapp/ddd/inventory/domain"
 	inventoryevent "github.com/ddd-qce/exampleapp/ddd/inventory/event"
 )
 
 type ReserveInventoryHandler struct {
 	Inventory *inventorydomain.Inventory
-	EventBus  cqrsevent.EventBus
+	EventBus  event.EventBus
 }
 
-func NewReserveInventoryHandler(inventory *inventorydomain.Inventory, eventBus cqrsevent.EventBus) *ReserveInventoryHandler {
+func NewReserveInventoryHandler(inventory *inventorydomain.Inventory, eventBus event.EventBus) *ReserveInventoryHandler {
 	return &ReserveInventoryHandler{Inventory: inventory, EventBus: eventBus}
 }
 
@@ -23,8 +22,8 @@ func (h *ReserveInventoryHandler) Handle(ctx context.Context, cmd *ReserveInvent
 		return nil, err
 	}
 
-	cqrsevent.Dispatch[*inventoryevent.InventoryReservedEvent](ctx, h.EventBus, &inventoryevent.InventoryReservedEvent{
-		BaseEvent: domainevent.WithCorrelation(ctx, cmd.OrderID.String()),
+	h.EventBus.Publish(ctx, &inventoryevent.InventoryReservedEvent{
+		BaseEvent: event.WithCorrelation(ctx, cmd.OrderID.String()),
 		ProductID: cmd.ProductID.String(),
 		Quantity:  cmd.Quantity,
 	})
@@ -34,10 +33,10 @@ func (h *ReserveInventoryHandler) Handle(ctx context.Context, cmd *ReserveInvent
 
 type ReleaseInventoryHandler struct {
 	Inventory *inventorydomain.Inventory
-	EventBus  cqrsevent.EventBus
+	EventBus  event.EventBus
 }
 
-func NewReleaseInventoryHandler(inventory *inventorydomain.Inventory, eventBus cqrsevent.EventBus) *ReleaseInventoryHandler {
+func NewReleaseInventoryHandler(inventory *inventorydomain.Inventory, eventBus event.EventBus) *ReleaseInventoryHandler {
 	return &ReleaseInventoryHandler{Inventory: inventory, EventBus: eventBus}
 }
 
@@ -46,8 +45,8 @@ func (h *ReleaseInventoryHandler) Handle(ctx context.Context, cmd *ReleaseInvent
 		return nil, err
 	}
 
-	cqrsevent.Dispatch[*inventoryevent.InventoryReleasedEvent](ctx, h.EventBus, &inventoryevent.InventoryReleasedEvent{
-		BaseEvent: domainevent.WithCorrelation(ctx, cmd.OrderID.String()),
+	h.EventBus.Publish(ctx, &inventoryevent.InventoryReleasedEvent{
+		BaseEvent: event.WithCorrelation(ctx, cmd.OrderID.String()),
 		ProductID: cmd.ProductID.String(),
 		Quantity:  cmd.Quantity,
 	})

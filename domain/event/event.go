@@ -9,14 +9,6 @@ type Event interface {
 	CausationID() string
 }
 
-type CorrelationSetter interface {
-	SetCorrelation(correlationID, causationID string)
-}
-
-type Restorer interface {
-	Restore(aggregateID string, occurredAt time.Time, correlationID, causationID string)
-}
-
 func FromSlice[E Event](events []E) []Event {
 	result := make([]Event, len(events))
 	for i, e := range events {

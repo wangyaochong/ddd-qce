@@ -6,12 +6,11 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/cqrs/command"
-	eventbus "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/trace"
 )
 
@@ -33,7 +32,7 @@ type PlaceOrderHandler struct {
 func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) (*PlaceOrderResult, error) {
 	orderID := "ORD-" + time.Now().Format("20060102150405")
 
-	eventbus.Dispatch(ctx, h.eventBus, &OrderPlacedEvent{
+	h.eventBus.Publish(ctx, &OrderPlacedEvent{
 		BaseEvent: event.NewBaseEvent(orderID, time.Now()),
 		UserID:          cmd.UserID,
 		Product:         cmd.Product,
@@ -125,7 +124,7 @@ func RegisterHandlers(cmdBus *commandmemory.CommandBus, eventBus *eventmemory.Ev
 	commandmemory.RegisterCommand(cmdBus, &SendNotificationHandler{})
 	commandmemory.RegisterCommand(cmdBus, &UpdateInventoryHandler{})
 
-	eventmemory.RegisterEvent[*OrderPlacedEvent](eventBus, &OrderPlacedEventHandler{cmdBus: cmdBus})
+	eventmemory.RegisterHandler[*OrderPlacedEvent](eventBus, &OrderPlacedEventHandler{cmdBus: cmdBus})
 
 	querymemory.RegisterQuery(qBus, &GetOrderStatusHandler{})
 }

@@ -57,7 +57,7 @@ func NewUserID(s string) UserID  { return UserID(s) }
 
 ### 2.1 构造器
 
-聚合根必须提供两个构造器：
+聚合根只需一个构造器：
 
 ```go
 // 业务构造器 — 创建新聚合时使用
@@ -84,23 +84,13 @@ func NewOrder(ctx context.Context, id OrderID, userID UserID, items []*OrderItem
     }
     return o, nil
 }
-
-// 回溯构造器 — 事件溯源 Load 时使用
-func NewOrderForReplay(id OrderID) *Order {
-    o := &Order{}
-    ar, err := aggregate.NewAggregateRoot(id.String())
-    if err != nil {
-        panic(err)
-    }
-    o.AggregateRoot = *ar
-    return o
-}
 ```
 
 **关键约束**：
 - 使用 `aggregate.NewAggregateRoot(id)` 构造
-- 回溯构造器中不需要 `ctx` 参数，因为不从业务方法调用
-- 业务构造器中必须通过 `Apply(ctx, event)` 发布创建事件
+- 只保留一个构造器，不再需要 `NewXxxForReplay`
+- 事件溯源回溯时：先调用 `NewOrder(ctx, id, ...)` 创建空壳，再调用 `order.LoadFromHistory(events)` 加载历史
+- `AggregateRoot` 初始 version 为 0，`LoadFromHistory` 后自动设置
 
 ### 2.2 AggregateRef 接口实现
 
@@ -163,7 +153,7 @@ func (o *Order) Confirm(ctx context.Context) error {
 
 ### 2.4 JSON 序列化
 
-聚合根字段须加 `json` tag，`MarshalJSON`/`UnmarshalJSON` 委托到框架提供的反射辅助函数：
+聚合根和实体字段须加 `json` tag。`AggregateRoot` 和 `Entity` 已内置反射自动 JSON 序列化，用户无需手写任何 JSON 委托代码：
 
 ```go
 type Order struct {
@@ -174,39 +164,21 @@ type Order struct {
     TotalAmount  float64      `json:"totalAmount"`
     CreatedAt    time.Time    `json:"createdAt"`
 }
+// 无需手写 MarshalJSON/UnmarshalJSON
 
-func (o *Order) MarshalJSON() ([]byte, error) {
-    return aggregate.MarshalAggregate(o)
-}
-
-func (o *Order) UnmarshalJSON(data []byte) error {
-    return aggregate.UnmarshalAggregate(data, o)
-}
-```
-
-嵌套实体同理，委托到 `entity.MarshalEntity` / `entity.UnmarshalEntity`：
-
-```go
 type OrderItem struct {
     entity.Entity
     ProductName string  `json:"productName"`
     Price       float64 `json:"price"`
     Quantity    int     `json:"quantity"`
 }
-
-func (i *OrderItem) MarshalJSON() ([]byte, error) {
-    return entity.MarshalEntity(i)
-}
-
-func (i *OrderItem) UnmarshalJSON(data []byte) error {
-    return entity.UnmarshalEntity(data, i)
-}
+// 无需手写 MarshalJSON/UnmarshalJSON
 ```
 
 **关键约束**：
 - 聚合根和嵌套实体的 exported 字段必须添加 `json` tag
-- `MarshalJSON`/`UnmarshalJSON` 委托到 `aggregate.MarshalAggregate`/`UnmarshalAggregate` 或 `entity.MarshalEntity`/`UnmarshalEntity`
-- 嵌入的 `AggregateRoot`/`Entity` 等基础类型由辅助函数自动处理（通过 `ToJSON`/`FromJSON`），无需手动映射
+- `AggregateRoot` 和 `Entity` 自带 `MarshalJSON`/`UnmarshalJSON` 实现，自动处理嵌入字段
+- 如果用户需要自定义序列化，直接在自己的类型上实现 `json.Marshaler`
 - Typed ID（如 `UserID`）不需要转换为 `string`，Go 标准 json 包可直接序列化基于 `string` 的自定义类型
 
 ---
@@ -434,7 +406,7 @@ type OrderRepositoryAdapter interface {
 
 ```go
 type OrderEventSourcedRepository struct {
-    eventStore cqrsevent.EventSourceStore[domainevent.Event]
+    eventStore cqrsevent.AggregateEventStore[domainevent.Event]
     eventBus   cqrsevent.EventBus
     orderRepo  OrderRepositoryAdapter
 }

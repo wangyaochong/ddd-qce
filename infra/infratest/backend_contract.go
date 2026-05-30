@@ -38,13 +38,7 @@ func TestBackendContract(t *testing.T, b *infra.Backend) {
 
 	t.Run("JobStoreCreateAndGet", func(t *testing.T) {
 		ctx := context.Background()
-		job := &jobcore.Job{
-			ID:          "contract-job-1",
-			Command:     "test-cmd",
-			CommandType: "TestCmd",
-			CreatedAt:   time.Now(),
-		}
-		job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+		job := jobcore.NewJob("contract-job-1", "test-cmd")
 		if err := b.JobStore.Create(ctx, job); err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
@@ -52,8 +46,8 @@ func TestBackendContract(t *testing.T, b *infra.Backend) {
 		if err != nil {
 			t.Fatalf("Get failed: %v", err)
 		}
-		if got.ID != "contract-job-1" {
-			t.Errorf("expected ID 'contract-job-1', got %s", got.ID)
+		if got.ID() != "contract-job-1" {
+			t.Errorf("expected ID 'contract-job-1', got %s", got.ID())
 		}
 	})
 

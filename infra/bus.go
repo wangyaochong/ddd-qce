@@ -8,22 +8,26 @@ import (
 	"github.com/ddd-qce/core/cqrs/impl/memory"
 )
 
-type BusFactory struct {
-	NewCommandBus func(chain *aspect.AspectChain) command.CommandBus
-	NewQueryBus   func(chain *aspect.AspectChain) query.QueryBus
-	NewEventBus   func(chain *aspect.AspectChain) event.EventBus
+type BusFactory interface {
+	CreateCommandBus(chain *aspect.AspectChain) command.CommandBus
+	CreateQueryBus(chain *aspect.AspectChain) query.QueryBus
+	CreateEventBus(chain *aspect.AspectChain) event.EventBus
 }
 
-func NewMemoryBusFactory() *BusFactory {
-	return &BusFactory{
-		NewCommandBus: func(chain *aspect.AspectChain) command.CommandBus {
-			return memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
-		},
-		NewQueryBus: func(chain *aspect.AspectChain) query.QueryBus {
-			return memory.NewQueryBus(memory.WithQueryBusAspectChain(chain))
-		},
-		NewEventBus: func(chain *aspect.AspectChain) event.EventBus {
-			return memory.NewEventBus(memory.WithBusAspectChain(chain))
-		},
-	}
+type memoryBusFactory struct{}
+
+func NewMemoryBusFactory() BusFactory {
+	return &memoryBusFactory{}
+}
+
+func (f *memoryBusFactory) CreateCommandBus(chain *aspect.AspectChain) command.CommandBus {
+	return memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+}
+
+func (f *memoryBusFactory) CreateQueryBus(chain *aspect.AspectChain) query.QueryBus {
+	return memory.NewQueryBus(memory.WithQueryBusAspectChain(chain))
+}
+
+func (f *memoryBusFactory) CreateEventBus(chain *aspect.AspectChain) event.EventBus {
+	return memory.NewEventBus(memory.WithEventBusAspectChain(chain))
 }

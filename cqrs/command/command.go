@@ -39,9 +39,6 @@ type CommandBus interface {
 	Execute(ctx context.Context, cmd any) (any, error)
 	RegisterHandler(handler any) error
 	RegisteredTypes() []string
-}
-
-type Shutdownable interface {
 	Shutdown(ctx context.Context) error
 }
 

@@ -1,0 +1,49 @@
+{{define "inventory_manage"}}{{template "header" .}}
+
+<h1 style="margin-bottom:1.5rem;">Inventory Management</h1>
+
+<div class="card">
+    <h2>Add Stock</h2>
+    <form method="POST" action="/inventory/manage" style="display:flex;gap:1rem;align-items:end;flex-wrap:wrap;">
+        <div class="form-group" style="margin-bottom:0;">
+            <label>Product</label>
+            <select name="product_id" required>
+                <option value="">Select product...</option>
+                {{range .Products}}
+                <option value="{{.ID}}">{{.Name}} ({{.ID}}) - Current: {{.Stock}}</option>
+                {{end}}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label>Quantity to Add</label>
+            <input type="number" name="quantity" min="1" value="10" required style="width:100px;">
+        </div>
+        <button type="submit" class="btn btn-success">Add Stock</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Current Inventory</h2>
+    <table>
+        <tr><th>Product ID</th><th>Name</th><th>Price</th><th>Stock</th><th>Status</th></tr>
+        {{range .Products}}
+        <tr>
+            <td>{{.ID}}</td>
+            <td>{{.Name}}</td>
+            <td>${{printf "%.2f" .Price}}</td>
+            <td>{{if le .Stock 5}}<span style="color:#c62828;font-weight:700;">{{.Stock}}</span>{{else if le .Stock 10}}<span style="color:#f57c00;font-weight:700;">{{.Stock}}</span>{{else}}{{.Stock}}{{end}}</td>
+            <td>{{if le .Stock 0}}<span class="badge badge-cancelled">Out of Stock</span>{{else if le .Stock 5}}<span class="badge badge-failed">Low Stock</span>{{else if le .Stock 10}}<span class="badge badge-pending">Medium</span>{{else}}<span class="badge badge-completed">In Stock</span>{{end}}</td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+
+<div class="card">
+    <h2>Quick Actions</h2>
+    <div class="actions">
+        <a href="/inventory" class="btn btn-primary">View Inventory</a>
+        <a href="/" class="btn btn-primary">Dashboard</a>
+    </div>
+</div>
+
+{{template "footer" .}}{{end}}

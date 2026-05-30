@@ -161,7 +161,7 @@ func TestTransactionAspect_BeginRollback(t *testing.T) {
 
 func TestNewEventBus_Direct(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	bus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	bus := eventmemory.NewEventBus(eventmemory.WithEventBusAspectChain(chain))
 	handler := &testEventHandler{done: make(chan struct{})}
 	bus.SubscribeHandler(handler)
 	ctx := context.Background()
@@ -401,24 +401,24 @@ func TestStoreError_ErrorUnwrap(t *testing.T) {
 func TestJobOption_WithTimeout(t *testing.T) {
 	job := &jobcore.Job{}
 	jobcore.WithTimeout(5 * time.Second)(job)
-	if job.Timeout != 5*time.Second {
-		t.Errorf("expected 5s timeout, got %v", job.Timeout)
+	if job.Timeout() != 5*time.Second {
+		t.Errorf("expected 5s timeout, got %v", job.Timeout())
 	}
 }
 
 func TestJobOption_WithMaxRetries(t *testing.T) {
 	job := &jobcore.Job{}
 	jobcore.WithMaxRetries(3)(job)
-	if job.MaxRetries != 3 {
-		t.Errorf("expected 3 retries, got %d", job.MaxRetries)
+	if job.MaxRetries() != 3 {
+		t.Errorf("expected 3 retries, got %d", job.MaxRetries())
 	}
 }
 
 func TestJob_Snapshot(t *testing.T) {
-	job := &jobcore.Job{ID: "J1"}
+	job := jobcore.NewJob("J1", nil)
 	job.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
 	snap := job.Snapshot()
-	if snap.ID != "J1" {
+	if snap.ID() != "J1" {
 		t.Error("snapshot ID mismatch")
 	}
 	if snap.GetStatus() != jobcore.JobStatusRunning {
@@ -431,7 +431,7 @@ func TestJob_Snapshot(t *testing.T) {
 }
 
 func TestJob_Done_Channel(t *testing.T) {
-	job := &jobcore.Job{ID: "J1"}
+	job := jobcore.NewJob("J1", nil)
 	done := job.Done()
 	if done == nil {
 		t.Error("expected non-nil done channel")
@@ -450,7 +450,7 @@ func TestJob_Done_Channel(t *testing.T) {
 }
 
 func TestJob_ResetDone(t *testing.T) {
-	job := &jobcore.Job{ID: "J1"}
+	job := jobcore.NewJob("J1", nil)
 	job.MarkDone()
 	job.ResetDone()
 	select {

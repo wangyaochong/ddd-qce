@@ -41,7 +41,7 @@ type AppContext struct {
 
 	OrderRepo        orderrepo.OrderRepositoryAdapter
 	EventSourcedRepo *orderrepo.OrderEventSourcedRepository
-	EventStore       cqrsevent.EventSourceStore[domainevent.Event]
+	EventStore       cqrsevent.AggregateEventStore[domainevent.Event]
 	Inventory        *inventorydomain.Inventory
 
 	MetricsRecorder *AppMetricsRecorder
@@ -125,7 +125,7 @@ func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext
 		chain.RegisterAspect(builtin.NewPersistenceAspect(backend.MessageStore))
 		msgStoreForReader = backend.MessageStore
 	} else {
-		memMsgStore := observability.NewInMemoryMessageStore()
+		memMsgStore := observability.NewObservableMessageStore()
 		chain.RegisterAspect(builtin.NewPersistenceAspect(memMsgStore))
 		msgStoreForReader = memMsgStore
 	}
@@ -138,7 +138,7 @@ func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext
 
 	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	queryBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
-	eventBus := eventmemory.NewEventBus(eventmemory.WithBusAspectChain(chain))
+	eventBus := eventmemory.NewEventBus(eventmemory.WithEventBusAspectChain(chain))
 
 	inventory := inventorydomain.NewInventory()
 	orderRepo := store.OrderRepo

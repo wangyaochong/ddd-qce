@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	ddderror "github.com/ddd-qce/core/error"
@@ -17,6 +18,10 @@ type PgTraceStore struct {
 
 func NewTraceStore(db *sql.DB) *PgTraceStore {
 	return &PgTraceStore{db: db}
+}
+
+func (s *PgTraceStore) Close() error {
+	return nil
 }
 
 func (s *PgTraceStore) RecordSpan(ctx context.Context, span *trace.Span) error {
@@ -102,8 +107,8 @@ func (s *PgTraceStore) ListTraces(ctx context.Context, filter trace.TraceFilter)
 		argIdx++
 	}
 	if filter.NameContains != "" {
-		query += fmt.Sprintf(" AND name LIKE $%d", argIdx)
-		args = append(args, "%"+filter.NameContains+"%")
+		query += fmt.Sprintf(" AND name LIKE $%d ESCAPE '\\'", argIdx)
+		args = append(args, "%"+escapeLike(filter.NameContains)+"%")
 		argIdx++
 	}
 
@@ -125,4 +130,11 @@ func (s *PgTraceStore) ListTraces(ctx context.Context, filter trace.TraceFilter)
 		return nil, fmt.Errorf("iterate traces: %w", err)
 	}
 	return traceIDs, nil
+}
+
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
 }
