@@ -1,6 +1,8 @@
 package command
 
 import (
+	"time"
+
 	"github.com/ddd-qce/core/cqrs/command"
 	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
 )
@@ -61,4 +63,16 @@ type GenerateReportResult struct {
 	OrderID   orderdomain.OrderID
 	Content   string
 	Generated bool
+}
+
+type ProcessBatchCommand struct {
+	command.BaseCommand
+	OrderID  orderdomain.OrderID
+	Duration time.Duration
+}
+
+type ProcessBatchResult struct {
+	OrderID      orderdomain.OrderID
+	Processed    bool
+	DurationUsed time.Duration
 }

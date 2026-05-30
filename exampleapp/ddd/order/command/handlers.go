@@ -135,3 +135,31 @@ func (h *GenerateReportHandler) Handle(ctx context.Context, cmd *GenerateReportC
 }
 
 var _ command.CommandHandler[*GenerateReportCommand, *GenerateReportResult] = (*GenerateReportHandler)(nil)
+
+type ProcessBatchHandler struct{}
+
+func NewProcessBatchHandler() *ProcessBatchHandler {
+	return &ProcessBatchHandler{}
+}
+
+func (h *ProcessBatchHandler) Handle(ctx context.Context, cmd *ProcessBatchCommand) (*ProcessBatchResult, error) {
+	start := time.Now()
+
+	select {
+	case <-time.After(cmd.Duration):
+	case <-ctx.Done():
+		return &ProcessBatchResult{
+			OrderID:      cmd.OrderID,
+			Processed:    false,
+			DurationUsed: time.Since(start),
+		}, ctx.Err()
+	}
+
+	return &ProcessBatchResult{
+		OrderID:      cmd.OrderID,
+		Processed:    true,
+		DurationUsed: time.Since(start),
+	}, nil
+}
+
+var _ command.CommandHandler[*ProcessBatchCommand, *ProcessBatchResult] = (*ProcessBatchHandler)(nil)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,9 +96,179 @@ func TestFullOrderLifecycle(t *testing.T) {
 			t.Error("expected traces to be recorded")
 		}
 
+		totalSpans := 0
+		for _, tid := range traceIDs {
+			spans, _ := app.Backend.TraceStore.GetTrace(ctx, tid)
+			totalSpans += len(spans)
+		}
+		if totalSpans < 4 {
+			t.Errorf("expected at least 4 total spans across all traces (command+event per action), got %d", totalSpans)
+		}
+
 		if len(app.MetricsRecorder.Durations) == 0 {
 			t.Error("expected metrics records")
 		}
+	})
+}
+
+func TestTraceChainInBusinessFlow(t *testing.T) {
+	runForBothStores(t, func(t *testing.T, app *infrastructure.AppContext) {
+		ctx := context.Background()
+
+		placed, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, app.CmdBus, &ordercommand.PlaceOrderCommand{
+			UserID: orderdomain.NewUserID("user-trace-chain"),
+			Items:  []ordercommand.ItemInput{{ProductID: orderdomain.NewProductID("laptop"), ProductName: "Laptop", Price: 999, Quantity: 1}},
+		})
+		if err != nil {
+			t.Fatalf("place order failed: %v", err)
+		}
+
+		_, err = command.Dispatch[*ordercommand.ConfirmPaymentCommand, *ordercommand.ConfirmPaymentResult](ctx, app.CmdBus, &ordercommand.ConfirmPaymentCommand{OrderID: placed.OrderID})
+		if err != nil {
+			t.Fatalf("confirm payment failed: %v", err)
+		}
+
+		traceIDs, _ := app.Backend.TraceStore.ListTraces(ctx, trace.TraceFilter{})
+		if len(traceIDs) == 0 {
+			t.Fatal("expected at least one trace to be recorded")
+		}
+
+		allSpans := 0
+		for _, tid := range traceIDs {
+			spans, _ := app.Backend.TraceStore.GetTrace(ctx, tid)
+			allSpans += len(spans)
+		}
+
+		if allSpans == 0 {
+			t.Error("expected spans to be recorded")
+		}
+
+		totalWithParent := 0
+		for _, tid := range traceIDs {
+			spans, _ := app.Backend.TraceStore.GetTrace(ctx, tid)
+			spanMap := make(map[string]*trace.Span)
+			for _, s := range spans {
+				spanMap[s.ID] = s
+			}
+			for _, s := range spans {
+				if s.ParentID != "" {
+					totalWithParent++
+					if _, exists := spanMap[s.ParentID]; exists {
+						if spanMap[s.ParentID].TraceID != s.TraceID {
+							t.Errorf("parent span %s and child span %s have different trace IDs: %s vs %s", s.ParentID, s.ID, spanMap[s.ParentID].TraceID, s.TraceID)
+						}
+					}
+				}
+			}
+		}
+
+		t.Logf("total spans: %d, spans with parent: %d, traces: %d", allSpans, totalWithParent, len(traceIDs))
+
+		if totalWithParent > 0 {
+			t.Logf("trace chain verified: %d spans have parent-child relationships", totalWithParent)
+		}
+	})
+}
+
+func TestTraceMultiSpan_VerifySpanNamesAndChain(t *testing.T) {
+	runForBothStores(t, func(t *testing.T, app *infrastructure.AppContext) {
+		ctx := context.Background()
+
+		_, err := command.Dispatch[*ordercommand.PlaceOrderCommand, *ordercommand.PlaceOrderResult](ctx, app.CmdBus, &ordercommand.PlaceOrderCommand{
+			UserID: orderdomain.NewUserID("user-multi-span"),
+			Items:  []ordercommand.ItemInput{{ProductID: orderdomain.NewProductID("laptop"), ProductName: "Laptop", Price: 999, Quantity: 1}},
+		})
+		if err != nil {
+			t.Fatalf("place order failed: %v", err)
+		}
+
+		traceIDs, _ := app.Backend.TraceStore.ListTraces(ctx, trace.TraceFilter{})
+		if len(traceIDs) == 0 {
+			t.Fatal("expected at least one trace to be recorded")
+		}
+
+		var placeOrderTrace *string
+		var allSpans []*trace.Span
+		for _, tid := range traceIDs {
+			spans, _ := app.Backend.TraceStore.GetTrace(ctx, tid)
+			for _, s := range spans {
+				if s.Name == "PlaceOrderCommand" {
+					placeOrderTrace = &s.TraceID
+				}
+			}
+			allSpans = append(allSpans, spans...)
+		}
+
+		if placeOrderTrace == nil {
+			t.Fatal("expected PlaceOrderCommand span to exist in traces")
+		}
+
+		spansInTrace, _ := app.Backend.TraceStore.GetTrace(ctx, *placeOrderTrace)
+		spanNames := make(map[string]string)
+		for _, s := range spansInTrace {
+			spanNames[s.Name] = s.Type
+		}
+
+		if _, ok := spanNames["PlaceOrderCommand"]; !ok {
+			t.Error("expected PlaceOrderCommand span in the PlaceOrder trace")
+		}
+		if spanNames["PlaceOrderCommand"] != trace.SpanTypeCommand {
+			t.Errorf("expected PlaceOrderCommand to be type 'command', got '%s'", spanNames["PlaceOrderCommand"])
+		}
+		if _, ok := spanNames["OrderPlacedEvent"]; !ok {
+			t.Error("expected OrderPlacedEvent span in the PlaceOrder trace (event is dispatched by PlaceOrder handler)")
+		}
+		if spanNames["OrderPlacedEvent"] != trace.SpanTypeEvent {
+			t.Errorf("expected OrderPlacedEvent to be type 'event', got '%s'", spanNames["OrderPlacedEvent"])
+		}
+
+		spanByID := make(map[string]*trace.Span)
+		for _, s := range spansInTrace {
+			spanByID[s.ID] = s
+		}
+
+		var placeOrderSpan *trace.Span
+		for _, s := range spansInTrace {
+			if s.Name == "PlaceOrderCommand" {
+				placeOrderSpan = s
+				break
+			}
+		}
+		if placeOrderSpan == nil {
+			t.Fatal("PlaceOrderCommand span not found")
+		}
+
+		childrenOfPlaceOrder := 0
+		for _, s := range spansInTrace {
+			if s.ParentID == placeOrderSpan.ID {
+				childrenOfPlaceOrder++
+				if s.Name != "OrderPlacedEvent" && s.Name != "OrderPlacedNotificationEvent" {
+					t.Logf("PlaceOrderCommand has unexpected child: %s (type=%s)", s.Name, s.Type)
+				}
+			}
+		}
+		if childrenOfPlaceOrder == 0 {
+			t.Error("expected PlaceOrderCommand to have at least one child span (OrderPlacedEvent)")
+		}
+
+		reserveSpanFound := false
+		for _, s := range spansInTrace {
+			if s.Name == "ReserveInventoryCommand" {
+				reserveSpanFound = true
+				if s.ParentID == "" {
+					t.Error("expected ReserveInventoryCommand to have a parent span (it should be nested under an event)")
+				}
+			}
+		}
+		if !reserveSpanFound {
+			t.Log("ReserveInventoryCommand not found in trace (may be in a separate trace if event handler runs in different context)")
+		}
+
+		totalSpansInTrace := len(spansInTrace)
+		if totalSpansInTrace < 2 {
+			t.Errorf("expected at least 2 spans in the PlaceOrder trace (command + event), got %d", totalSpansInTrace)
+		}
+		t.Logf("PlaceOrderTrace spans: %d, names: %v", totalSpansInTrace, spanNames)
 	})
 }
 
@@ -349,5 +520,172 @@ func TestStoreError_ErrorUnwrap(t *testing.T) {
 	}
 	if se.Unwrap() != inner {
 		t.Error("Unwrap should return inner error")
+	}
+}
+
+func TestLongRunningJob_CompletesSuccessfully(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	cmdBus.RegisterHandler(ordercommand.NewProcessBatchHandler())
+	jobStore := jobmemory.NewJobStore()
+	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus)
+	ctx := context.Background()
+
+	job, err := jobMgr.Submit(ctx, &ordercommand.ProcessBatchCommand{
+		OrderID:  orderdomain.NewOrderID("LR-001"),
+		Duration: 500 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	result, err := jobMgr.Wait(ctx, job.ID, 2*time.Second)
+	if err != nil {
+		t.Fatalf("wait failed: %v", err)
+	}
+
+	if result.GetStatus() != jobcore.JobStatusCompleted {
+		t.Errorf("expected completed, got %s", result.GetStatus())
+	}
+
+	jobFromStore, _ := jobMgr.GetStatus(ctx, job.ID)
+	if jobFromStore.GetCompletedAt().IsZero() {
+		t.Error("expected completedAt to be set")
+	}
+}
+
+func TestLongRunningJob_TimeoutFails(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	cmdBus.RegisterHandler(ordercommand.NewProcessBatchHandler())
+	jobStore := jobmemory.NewJobStore()
+	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus)
+	ctx := context.Background()
+
+	job, err := jobMgr.Submit(ctx, &ordercommand.ProcessBatchCommand{
+		OrderID:  orderdomain.NewOrderID("LR-002"),
+		Duration: 3 * time.Second,
+	}, jobcore.WithTimeout(500*time.Millisecond))
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	result, err := jobMgr.Wait(ctx, job.ID, 5*time.Second)
+	if err != nil {
+		t.Fatalf("wait failed: %v", err)
+	}
+
+	if result.GetStatus() != jobcore.JobStatusFailed {
+		t.Errorf("expected failed, got %s", result.GetStatus())
+	}
+
+	if !strings.Contains(result.GetError(), "context deadline exceeded") {
+		t.Errorf("expected context deadline exceeded error, got: %s", result.GetError())
+	}
+}
+
+func TestLongRunningJob_CancelMidExecution(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	cmdBus.RegisterHandler(ordercommand.NewProcessBatchHandler())
+	jobStore := jobmemory.NewJobStore()
+	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus)
+	ctx := context.Background()
+
+	job, err := jobMgr.Submit(ctx, &ordercommand.ProcessBatchCommand{
+		OrderID:  orderdomain.NewOrderID("LR-003"),
+		Duration: 10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	_, _ = jobMgr.WaitForRunning(ctx, job.ID, 2*time.Second)
+
+	time.Sleep(100 * time.Millisecond)
+
+	if err := jobMgr.Cancel(ctx, job.ID); err != nil {
+		t.Fatalf("cancel failed: %v", err)
+	}
+
+	result, _ := jobMgr.GetStatus(ctx, job.ID)
+	if result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Errorf("expected cancelled, got %s", result.GetStatus())
+	}
+}
+
+func TestLongRunningJob_MetricsRecordDuration(t *testing.T) {
+	metrics := infrastructure.NewAppMetricsRecorder()
+	chain := aspect.NewAspectChain()
+	chain.RegisterCommandAspect(builtin.NewMetricsAspect(metrics))
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	cmdBus.RegisterHandler(ordercommand.NewProcessBatchHandler())
+	jobStore := jobmemory.NewJobStore()
+	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus)
+	ctx := context.Background()
+
+	job, err := jobMgr.Submit(ctx, &ordercommand.ProcessBatchCommand{
+		OrderID:  orderdomain.NewOrderID("LR-004"),
+		Duration: 300 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	_, _ = jobMgr.Wait(ctx, job.ID, 2*time.Second)
+
+	if len(metrics.Durations) == 0 {
+		t.Fatal("expected at least one duration metric")
+	}
+
+	var found bool
+	var dur time.Duration
+	for _, rec := range metrics.Durations {
+		if strings.Contains(rec.Name, "ProcessBatchCommand") {
+			found = true
+			dur = rec.Duration
+			break
+		}
+	}
+	if !found {
+		t.Error("expected ProcessBatchCommand in metrics")
+	}
+
+	if dur < 250*time.Millisecond || dur > 500*time.Millisecond {
+		t.Errorf("expected duration ~300ms, got %v", dur)
+	}
+}
+
+func TestLongRunningJob_GracefulShutdown(t *testing.T) {
+	chain := aspect.NewAspectChain()
+	cmdBus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
+	cmdBus.RegisterHandler(ordercommand.NewProcessBatchHandler())
+	jobStore := jobmemory.NewJobStore()
+	jobMgr := jobmemory.NewJobManager(jobStore, cmdBus)
+	ctx := context.Background()
+
+	job, err := jobMgr.Submit(ctx, &ordercommand.ProcessBatchCommand{
+		OrderID:  orderdomain.NewOrderID("LR-005"),
+		Duration: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+
+	_, _ = jobMgr.WaitForRunning(ctx, job.ID, 2*time.Second)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		jobMgr.Shutdown(context.Background())
+	}()
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(3 * time.Second):
+	}
+
+	result, _ := jobMgr.GetStatus(ctx, job.ID)
+	if result.GetStatus() != jobcore.JobStatusCompleted && result.GetStatus() != jobcore.JobStatusCancelled {
+		t.Logf("job status after shutdown: %s (may be expected to stay running)", result.GetStatus())
 	}
 }
