@@ -1,0 +1,180 @@
+<h2>方案1详细设计: 流式扩展</h2>
+<p class="subtitle">具体CSS改动和效果预览</p>
+
+<div class="mockup">
+  <div class="mockup-header">改动清单 (ddd_layout.html CSS)</div>
+  <div class="mockup-body">
+    <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+      <thead>
+        <tr style="background: #f0f0f0;">
+          <th style="padding: 8px; text-align: left;">属性</th>
+          <th style="padding: 8px; text-align: left;">当前值</th>
+          <th style="padding: 8px; text-align: left;">新值</th>
+          <th style="padding: 8px; text-align: left;">效果</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding: 8px;"><code>.container</code> max-width</td>
+          <td style="padding: 8px;">1100px</td>
+          <td style="padding: 8px;"><strong>1600px</strong></td>
+          <td style="padding: 8px;">宽屏利用率提升 45%</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px;"><code>.container</code> margin</td>
+          <td style="padding: 8px;">2rem auto</td>
+          <td style="padding: 8px;"><strong>1rem auto</strong></td>
+          <td style="padding: 8px;">减少顶部空白</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px;"><code>.json-preview</code> max-height</td>
+          <td style="padding: 8px;">200px</td>
+          <td style="padding: 8px;"><strong>400px</strong></td>
+          <td style="padding: 8px;">JSON预览区扩大2倍</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px;"><code>.card</code> padding</td>
+          <td style="padding: 8px;">1.5rem</td>
+          <td style="padding: 8px;"><strong>1rem</strong></td>
+          <td style="padding: 8px;">紧凑卡片间距</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px;"><code>.card</code> margin-bottom</td>
+          <td style="padding: 8px;">1.5rem</td>
+          <td style="padding: 8px;"><strong>0.8rem</strong></td>
+          <td style="padding: 8px;">减少卡片间隔</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px;"><code>nav</code> height</td>
+          <td style="padding: 8px;">56px</td>
+          <td style="padding: 8px;"><strong>48px</strong></td>
+          <td style="padding: 8px;">导航栏更紧凑</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px;"><code>h1</code> margin-bottom</td>
+          <td style="padding: 8px;">1.5rem</td>
+          <td style="padding: 8px;"><strong>0.8rem</strong></td>
+          <td style="padding: 8px;">标题间距减少</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px;"><code>.stats</code> grid min</td>
+          <td style="padding: 8px;">160px</td>
+          <td style="padding: 8px;"><strong>120px</strong></td>
+          <td style="padding: 8px;">统计卡片更灵活</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="split" style="margin-top: 20px;">
+  <div class="mockup">
+    <div class="mockup-header">1920px 宽屏效果</div>
+    <div class="mockup-body" style="background: #f5f5f5;">
+      <div class="mock-nav" style="background: #1a1a2e; color: #e0e0e0; padding: 6px 12px; font-size: 10px; height: 24px;">
+        DDD Viewer | Overview | Domains | Schema | Command_Types | Query_Types | Event_Types | Commands | Queries | Events | Stats | Jobs | Traces
+      </div>
+      <div style="padding: 10px; max-width: 83%; margin: 0 auto;">
+        <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">DDD Overview</div>
+        <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-bottom: 10px;">
+          <div style="background: #fff; padding: 8px; text-align: center; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+            <div style="font-size: 18px; font-weight: bold;">4</div>
+            <div style="font-size: 10px; color: #888;">Tables</div>
+          </div>
+          <div style="background: #fff; padding: 8px; text-align: center; border-radius: 4px;">
+            <div style="font-size: 18px; font-weight: bold;">120</div>
+            <div style="font-size: 10px; color: #888;">Commands</div>
+          </div>
+          <div style="background: #fff; padding: 8px; text-align: center; border-radius: 4px;">
+            <div style="font-size: 18px; font-weight: bold;">80</div>
+            <div style="font-size: 10px; color: #888;">Queries</div>
+          </div>
+          <div style="background: #fff; padding: 8px; text-align: center; border-radius: 4px;">
+            <div style="font-size: 18px; font-weight: bold;">200</div>
+            <div style="font-size: 10px; color: #888;">Events</div>
+          </div>
+        </div>
+        <div style="background: #fff; border-radius: 6px; padding: 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+          <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px;">Tables</div>
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr 0.6fr 0.6fr; gap: 4px; font-size: 9px; padding: 4px; background: #f0f0f0; border-radius: 3px;">
+            <div>Name</div>
+            <div>Description</div>
+            <div>Rows</div>
+            <div>Size</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr 0.6fr 0.6fr; gap: 4px; font-size: 9px; padding: 4px;">
+            <div style="color: #1565c0;">ddd_orders</div>
+            <div>订单聚合根表</div>
+            <div>1,234</div>
+            <div>128KB</div>
+          </div>
+        </div>
+        <div style="background: #fff; border-radius: 6px; padding: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+          <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px;">Operations</div>
+          <div style="display: grid; grid-template-columns: 1fr 0.6fr 0.5fr 0.5fr 0.5fr 0.5fr; gap: 4px; font-size: 9px; padding: 4px; background: #f0f0f0; border-radius: 3px;">
+            <div>Name</div><div>Type</div><div>Count</div><div>Errors</div><div>Avg</div><div>P99</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Commands页面效果</div>
+    <div class="mockup-body" style="background: #f5f5f5;">
+      <div class="mock-nav" style="background: #1a1a2e; color: #e0e0e0; padding: 6px 12px; font-size: 10px; height: 24px;">
+        DDD Viewer | ... | <span style="color: #4fc3f7;">Commands</span> | ...
+      </div>
+      <div style="padding: 10px; max-width: 83%; margin: 0 auto;">
+        <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">Commands</div>
+        <div style="background: #fff; padding: 8px; border-radius: 4px; margin-bottom: 8px; display: flex; gap: 8px; font-size: 10px;">
+          <input style="padding: 4px 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="Type">
+          <input style="padding: 4px 6px; border: 1px solid #ddd; border-radius: 3px;" placeholder="Trace ID">
+          <select style="padding: 4px 6px;"><option>All</option></select>
+          <button style="padding: 4px 8px; background: #1a1a2e; color: #fff; border-radius: 3px;">Filter</button>
+        </div>
+        <div style="background: #fff; border-radius: 6px; padding: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr 0.6fr 0.6fr 1fr; gap: 4px; font-size: 9px; padding: 4px; background: #f0f0f0; border-radius: 3px;">
+            <div>Type</div><div>Trace ID</div><div>Duration</div><div>Status</div><div>Time</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr 0.6fr 0.6fr 1fr; gap: 4px; font-size: 9px; padding: 6px 4px; border-bottom: 1px solid #eee;">
+            <div style="font-weight: bold;">PlaceOrder</div>
+            <div>abc123...</div>
+            <div>45μs</div>
+            <div><span style="background: #e8f5e9; color: #2e7d32; padding: 2px 4px; border-radius: 2px; font-size: 8px;">ok</span></div>
+            <div>10:30:45</div>
+          </div>
+          <div style="padding: 8px; background: #fafbfc;">
+            <details style="cursor: pointer;">
+              <summary style="color: #1565c0; font-size: 10px;">Command Data</summary>
+              <div style="background: #f8f9fa; padding: 8px; border-radius: 3px; font-family: monospace; font-size: 9px; max-height: 200px; overflow-y: auto; white-space: pre;">
+{
+  "order_id": "abc123",
+  "customer_id": "cust001",
+  "items": [...],
+  "total": 150.00
+}</div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top: 24px;">这个设计方向正确吗?</h3>
+<div class="options">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>确认,继续细化</h3>
+      <p>方向正确,可以开始实现</p>
+    </div>
+  </div>
+  <div class="option" data-choice="adjust" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>需要调整</h3>
+      <p>某些参数需要修改,在终端说明</p>
+    </div>
+  </div>
+</div>

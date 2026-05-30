@@ -1,0 +1,19 @@
+{
+  "name": "ddd-qce-e2e-browser",
+  "version": "2.0.0",
+  "description": "Browser end-to-end tests for DDD-QCE exampleapp using Playwright",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "test:navigation": "npx playwright test tests/navigation.spec.ts",
+    "test:order-flow": "npx playwright test tests/order-flow.spec.ts",
+    "test:ddd-viewer": "npx playwright test tests/ddd-viewer.spec.ts",
+    "test:trace-multi-span": "npx playwright test tests/trace-multi-span.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3"
+  }
+}

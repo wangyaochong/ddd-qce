@@ -69,3 +69,6 @@ cmd/ddd/ddd
 
 ddd-lint
 ddd-shop
+
+node_modules
+dist

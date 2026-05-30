@@ -1,0 +1,150 @@
+<h2>三种全优化方案对比</h2>
+<p class="subtitle">宽度、高度、布局同时改进</p>
+
+<div class="cards">
+  <div class="card" data-choice="approach1" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="min-height: 180px;">
+        <div class="mockup-header">方案1: 流式扩展 (保守)</div>
+        <div class="mockup-body" style="background: #f5f5f5; font-size: 11px;">
+          <div class="mock-nav" style="background: #1a1a2e; color: #e0e0e0; padding: 4px 8px; font-size: 9px;">DDD Viewer</div>
+          <div style="padding: 8px;">
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 8px;">
+              <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">4 Tables</div>
+              <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">120 Cmds</div>
+              <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">80 Qrys</div>
+              <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">200 Evts</div>
+            </div>
+            <div style="background: #fff; border: 1px solid #ddd; padding: 6px; border-radius: 3px;">
+              <div style="font-size: 9px; color: #666; border-bottom: 1px solid #eee; padding-bottom: 4px;">宽表格 (全宽)</div>
+              <div style="display: grid; grid-template-columns: 1fr 2fr 1fr 1fr 1fr 1fr; gap: 2px; padding-top: 4px;">
+                <div style="background: #f8f9fa; padding: 2px;">Col1</div>
+                <div style="background: #f8f9fa; padding: 2px;">Col2(更宽)</div>
+                <div style="background: #f8f9fa; padding: 2px;">Col3</div>
+                <div style="background: #f8f9fa; padding: 2px;">Col4</div>
+                <div style="background: #f8f9fa; padding: 2px;">Col5</div>
+                <div style="background: #f8f9fa; padding: 2px;">Col6</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案1: 流式扩展</h3>
+      <p>保持现有结构,仅调整尺寸参数</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>优点</h4>
+          <ul><li>改动最小,风险低</li><li>保持现有交互习惯</li><li>易维护</li></ul>
+        </div>
+        <div class="cons">
+          <h4>缺点</h4>
+          <ul><li>改进有限</li><li>仍需滚动</li></ul>
+        </div>
+      </div>
+      <div style="margin-top: 8px; font-size: 12px; color: #666;">
+        <strong>改动:</strong> max-width: 1600px, margin: 1rem, JSON预览: 400px, 紧凑间距
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="approach2" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="min-height: 180px;">
+        <div class="mockup-header">方案2: 侧边栏布局 (推荐)</div>
+        <div class="mockup-body" style="background: #f5f5f5; font-size: 11px;">
+          <div style="display: flex; height: 100%;">
+            <div style="width: 180px; background: #1a1a2e; color: #e0e0e0; padding: 8px;">
+              <div style="font-size: 10px; font-weight: bold; margin-bottom: 8px;">DDD Viewer</div>
+              <div style="font-size: 9px; padding: 3px 0; color: #4fc3f7;">Overview</div>
+              <div style="font-size: 9px; padding: 3px 0;">Domains</div>
+              <div style="font-size: 9px; padding: 3px 0;">Commands</div>
+              <div style="font-size: 9px; padding: 3px 0;">Queries</div>
+              <div style="font-size: 9px; padding: 3px 0;">Events</div>
+            </div>
+            <div style="flex: 1; padding: 8px;">
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 8px;">
+                <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">4</div>
+                <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">120</div>
+                <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">80</div>
+                <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">200</div>
+              </div>
+              <div style="background: #fff; padding: 6px; border-radius: 3px; margin-bottom: 6px;">
+                <div style="font-size: 9px; color: #666;">主内容区 (表格/列表)</div>
+              </div>
+              <div style="background: #fff; padding: 6px; border-radius: 3px;">
+                <div style="font-size: 9px; color: #666;">详情区 (JSON预览 400px+)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案2: 侧边栏布局</h3>
+      <p>导航移至左侧固定,主区域最大化</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>优点</h4>
+          <ul><li>主区域宽度和高度都最大化</li><li>减少页面切换滚动</li><li>信息密度显著提升</li></ul>
+        </div>
+        <div class="cons">
+          <h4>缺点</h4>
+          <ul><li>需要重构模板结构</li><li>移动端需适配</li></ul>
+        </div>
+      </div>
+      <div style="margin-top: 8px; font-size: 12px; color: #666;">
+        <strong>改动:</strong> 左侧固定nav(180px), 主区域calc(100% - 180px), 全高度容器
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="approach3" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="min-height: 180px;">
+        <div class="mockup-header">方案3: 双栏内容布局</div>
+        <div class="mockup-body" style="background: #f5f5f5; font-size: 11px;">
+          <div class="mock-nav" style="background: #1a1a2e; color: #e0e0e0; padding: 4px 8px; font-size: 9px;">DDD Viewer | Overview | Domains...</div>
+          <div style="padding: 8px;">
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 8px;">
+              <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">4</div>
+              <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">120</div>
+              <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">80</div>
+              <div style="background: #fff; padding: 6px; text-align: center; border-radius: 3px;">200</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <div style="flex: 1; background: #fff; padding: 6px; border-radius: 3px;">
+                <div style="font-size: 9px; color: #666; border-bottom: 1px solid #eee; padding-bottom: 4px;">左栏: 表格/列表</div>
+                <div style="padding-top: 4px; font-size: 8px;">行数据...</div>
+              </div>
+              <div style="width: 45%; background: #fff; padding: 6px; border-radius: 3px;">
+                <div style="font-size: 9px; color: #666; border-bottom: 1px solid #eee; padding-bottom: 4px;">右栏: 详情预览</div>
+                <div style="padding-top: 4px; font-size: 8px; background: #f8f9fa; height: 40px;">JSON...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案3: 双栏内容布局</h3>
+      <p>主内容区左右分栏,列表+详情并排</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>优点</h4>
+          <ul><li>列表和详情同时可见</li><li>适合数据查看场景</li><li>点击查看详情无需滚动</li></ul>
+        </div>
+        <div class="cons">
+          <h4>缺点</h4>
+          <ul><li>部分页面不适合双栏</li><li>需要交互逻辑调整</li></ul>
+        </div>
+      </div>
+      <div style="margin-top: 8px; font-size: 12px; color: #666;">
+        <strong>改动:</strong> Commands/Queries等页面用双栏, Overview/Domains保持单栏
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top: 16px; font-size: 13px; color: #666;">点击选择你倾向的方案。我推荐<strong>方案2</strong>,因为它最大化利用了宽屏空间,同时保持简洁结构。</p>
