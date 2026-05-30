@@ -27,15 +27,8 @@ func TestPgJobStore_CreateAndGet(t *testing.T) {
 	ctx := context.Background()
 
 	now := time.Now().Truncate(time.Microsecond)
-	job := &jobcore.Job{
-		ID:         "job-1",
-		Command:    map[string]any{"action": "process"},
-		CreatedAt:  now,
-		Timeout:    30 * time.Second,
-		MaxRetries: 3,
-		RetryCount: 0,
-	}
-	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+	job := jobcore.NewJob("job-1", map[string]any{"action": "process"}, jobcore.WithMaxRetries(3))
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", now, time.Time{})
 
 	if err := store.Create(ctx, job); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -45,8 +38,8 @@ func TestPgJobStore_CreateAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-	if got.ID != "job-1" {
-		t.Errorf("expected ID 'job-1', got %s", got.ID)
+	if got.ID() != "job-1" {
+		t.Errorf("expected ID 'job-1', got %s", got.ID())
 	}
 	if got.GetStatus() != jobcore.JobStatusPending {
 		t.Errorf("expected status pending, got %s", got.GetStatus())
@@ -58,14 +51,9 @@ func TestPgJobStore_Update(t *testing.T) {
 	store := pgjob.NewJobStore(db)
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID:         "job-2",
-		Command:    map[string]any{"action": "run"},
-		CreatedAt:  time.Now().Truncate(time.Microsecond),
-		Timeout:    time.Minute,
-		MaxRetries: 3,
-	}
-	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+	now := time.Now().Truncate(time.Microsecond)
+	job := jobcore.NewJob("job-2", map[string]any{"action": "run"}, jobcore.WithMaxRetries(3), jobcore.WithTimeout(time.Minute))
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", now, time.Time{})
 	store.Create(ctx, job)
 
 	job.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Now().Truncate(time.Microsecond), time.Time{})
@@ -84,11 +72,8 @@ func TestPgJobStore_Delete(t *testing.T) {
 	store := pgjob.NewJobStore(db)
 	ctx := context.Background()
 
-	job := &jobcore.Job{
-		ID: "job-3", Command: "delete-me",
-		CreatedAt: time.Now(), Timeout: time.Minute, MaxRetries: 0,
-	}
-	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+	job := jobcore.NewJob("job-3", "delete-me", jobcore.WithTimeout(time.Minute))
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Now(), time.Time{})
 	store.Create(ctx, job)
 
 	if err := store.Delete(ctx, "job-3"); err != nil {
@@ -118,12 +103,8 @@ func TestPgJobStore_List(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
-		job := &jobcore.Job{
-			ID: fmt.Sprintf("job-list-%d", i), Command: "list-test",
-			CreatedAt: time.Now(),
-			Timeout: time.Minute, MaxRetries: 0,
-		}
-		job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+		job := jobcore.NewJob(fmt.Sprintf("job-list-%d", i), "list-test", jobcore.WithTimeout(time.Minute))
+		job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Now(), time.Time{})
 		store.Create(ctx, job)
 	}
 
@@ -181,13 +162,8 @@ func TestPgJobStore_TypedRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	cmd := &testGenReportCmd{Duration: 5 * time.Second}
-	job := &jobcore.Job{
-		ID:        "job-typed-1",
-		Command:   cmd,
-		CreatedAt: time.Now().Truncate(time.Microsecond),
-		Timeout:   time.Minute,
-	}
-	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+	job := jobcore.NewJob("job-typed-1", cmd, jobcore.WithTimeout(time.Minute))
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Now().Truncate(time.Microsecond), time.Time{})
 
 	if err := store.Create(ctx, job); err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -198,9 +174,9 @@ func TestPgJobStore_TypedRoundTrip(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	typedCmd, ok := got.Command.(*testGenReportCmd)
+	typedCmd, ok := got.Command().(*testGenReportCmd)
 	if !ok {
-		t.Fatalf("expected *testGenReportCmd, got %T", got.Command)
+		t.Fatalf("expected *testGenReportCmd, got %T", got.Command())
 	}
 	if typedCmd.Duration != 5*time.Second {
 		t.Errorf("expected duration 5s, got %v", typedCmd.Duration)
@@ -216,13 +192,8 @@ func TestPgJobStore_TypedResultRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	cmd := &testGenReportCmd{Duration: 3 * time.Second}
-	job := &jobcore.Job{
-		ID:        "job-typed-2",
-		Command:   cmd,
-		CreatedAt: time.Now().Truncate(time.Microsecond),
-		Timeout:   time.Minute,
-	}
-	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+	job := jobcore.NewJob("job-typed-2", cmd, jobcore.WithTimeout(time.Minute))
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Now().Truncate(time.Microsecond), time.Time{})
 	store.Create(ctx, job)
 
 	job.RestoreJobState(jobcore.JobStatusCompleted, &testGenReportResult{File: "report.pdf"}, "", "", time.Time{}, time.Time{})
@@ -250,23 +221,18 @@ func TestPgJobStore_WithoutRegistry_Fallback(t *testing.T) {
 	ctx := context.Background()
 
 	cmd := &testGenReportCmd{Duration: 2 * time.Second}
-	job := &jobcore.Job{
-		ID:        "job-fallback-1",
-		Command:   cmd,
-		CreatedAt: time.Now().Truncate(time.Microsecond),
-		Timeout:   time.Minute,
-	}
-	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
+	job := jobcore.NewJob("job-fallback-1", cmd, jobcore.WithTimeout(time.Minute))
+	job.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Now().Truncate(time.Microsecond), time.Time{})
 	store.Create(ctx, job)
 
 	got, err := store.Get(ctx, "job-fallback-1")
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-	if _, ok := got.Command.(*testGenReportCmd); ok {
+	if _, ok := got.Command().(*testGenReportCmd); ok {
 		t.Error("expected fallback to map[string]any without registry")
 	}
-	if _, ok := got.Command.(map[string]any); !ok {
-		t.Errorf("expected map[string]any fallback, got %T", got.Command)
+	if _, ok := got.Command().(map[string]any); !ok {
+		t.Errorf("expected map[string]any fallback, got %T", got.Command())
 	}
 }

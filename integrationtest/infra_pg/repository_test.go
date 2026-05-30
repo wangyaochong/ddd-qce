@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ddd-qce/core/cqrs/event"
 	pgevent "github.com/ddd-qce/core/cqrs/impl/pg"
 	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
-	"github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	pgrepo "github.com/ddd-qce/core/infra/repository/pg"
 	rep "github.com/ddd-qce/core/infra/repository"
 	"github.com/ddd-qce/core/domain/repository/repositorytest"
@@ -35,13 +36,13 @@ func newTestOrder(id string) *testOrder {
 	return o
 }
 
-func (o *testOrder) When(_ event.Event) error { return nil }
+func (o *testOrder) When(_ domainevent.Event) error { return nil }
 
-func (o *testOrder) Apply(ctx context.Context, evt event.Event) error {
+func (o *testOrder) Apply(ctx context.Context, evt domainevent.Event) error {
 	return aggregate.ApplyChange(o, ctx, evt)
 }
 
-func (o *testOrder) LoadFromHistory(events []event.Event) error {
+func (o *testOrder) LoadFromHistory(events []domainevent.Event) error {
 	return aggregate.LoadFromHistory(o, events)
 }
 
@@ -60,10 +61,10 @@ type testOrderEvent struct {
 func (e *testOrderEvent) AggregateID() string   { return e.BaseEvent.AggregateID() }
 func (e *testOrderEvent) OccurredAt() time.Time { return e.BaseEvent.OccurredAt() }
 
-func newEventStore(db *sql.DB) *pgevent.EventSourceStore[event.Event] {
-	store, err := pgevent.NewEventSourceStore[event.Event](
+func newEventStore(db *sql.DB) *pgdomainevent.EventSourceStore[domainevent.Event] {
+	store, err := pgevent.NewEventSourceStore[domainevent.Event](
 		db,
-		pgevent.WithFactory[event.Event](func() event.Event {
+		pgevent.WithFactory[domainevent.Event](func() domainevent.Event {
 			return &testOrderEvent{}
 		}),
 	)

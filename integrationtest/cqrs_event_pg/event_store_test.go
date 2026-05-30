@@ -8,6 +8,7 @@ import (
 	"github.com/ddd-qce/core/cqrs/event"
 	pgevent "github.com/ddd-qce/core/cqrs/impl/pg"
 	"github.com/ddd-qce/core/cqrs/event/eventtest"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/integrationtest/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -124,7 +125,7 @@ func TestPgEventStore_WithFactory(t *testing.T) {
 	}
 }
 
-var _ event.Event = (*testDomainEvent)(nil)
+var _ domainevent.Event = (*testDomainEvent)(nil)
 
 func TestPgEventStore_Contract(t *testing.T) {
 	db := testutil.OpenTestDB(t)

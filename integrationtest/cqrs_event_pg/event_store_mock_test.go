@@ -10,6 +10,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/ddd-qce/core/cqrs/event"
 	pgevent "github.com/ddd-qce/core/cqrs/impl/pg"
+	domainevent "github.com/ddd-qce/core/domain/event"
 )
 
 type mockTestStoreEvent struct {
@@ -43,7 +44,7 @@ func TestMockNewEventSourceStore_WithFactory(t *testing.T) {
 	}
 	defer db.Close()
 
-	store, err := pgevent.NewEventSourceStore[event.Event](db, pgevent.WithFactory(func() event.Event {
+	store, err := pgevent.NewEventSourceStore[domainevent.Event](db, pgevent.WithFactory(func() domainevent.Event {
 		return &mockTestStoreEvent{}
 	}))
 	if err != nil {
@@ -61,7 +62,7 @@ func TestMockNewEventSourceStore_InvalidType(t *testing.T) {
 	}
 	defer db.Close()
 
-	_, err = pgevent.NewEventSourceStore[event.Event](db)
+	_, err = pgevent.NewEventSourceStore[domainevent.Event](db)
 	if err == nil {
 		t.Error("NewEventSourceStore() should error for interface type without factory")
 	}

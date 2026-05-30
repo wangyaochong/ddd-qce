@@ -42,7 +42,6 @@ func TestPgJobManager_Recovery_PendingReExecuted(t *testing.T) {
 	cmd := &testReportCommand{Value: "recovery-test"}
 	pendingJob := jobcore.NewJob("pg-recover-pending", cmd)
 	pendingJob.RestoreJobState(jobcore.JobStatusPending, nil, "", "", time.Time{}, time.Time{})
-	pendingJob.CommandType = jobcore.TypeName(cmd)
 	if err := store.Create(ctx, pendingJob); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -76,7 +75,6 @@ func TestPgJobManager_Recovery_RunningMarkedFailed(t *testing.T) {
 	cmd := &testReportCommand{Value: "recovery-test"}
 	runningJob := jobcore.NewJob("pg-recover-running", cmd)
 	runningJob.RestoreJobState(jobcore.JobStatusRunning, nil, "", "", time.Time{}, time.Time{})
-	runningJob.CommandType = jobcore.TypeName(cmd)
 	if err := store.Create(ctx, runningJob); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
@@ -116,11 +114,8 @@ func TestPgJobManager_Recovery_FailedWithRetry(t *testing.T) {
 	ctx := context.Background()
 
 	cmd := &testReportCommand{Value: "retry-test"}
-	failedJob := jobcore.NewJob("pg-recover-failed-retry", cmd)
+	failedJob := jobcore.NewJob("pg-recover-failed-retry", cmd, jobcore.WithMaxRetries(3))
 	failedJob.RestoreJobState(jobcore.JobStatusFailed, nil, "", "previous failure", time.Time{}, time.Time{})
-	failedJob.CommandType = jobcore.TypeName(cmd)
-	failedJob.MaxRetries = 3
-	failedJob.RetryCount = 1
 	if err := store.Create(ctx, failedJob); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
