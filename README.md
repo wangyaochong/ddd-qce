@@ -22,8 +22,17 @@ DDD-QCE 是一个基于 **CQRS + Event Sourcing + AOP** 的 Go 领域驱动开�
 ### 安装
 
 ```bash
-go get github.com/ddd-qce/core
+go get github.com/ddd-qce/core@v20260530.v1
 ```
+
+#### 版本命名
+
+本项目使用日期版本号：`v{YYYYMMDD}.v{N}`
+
+- `v20260530.v1` — 2026-05-30 第一个发布
+- `v20260531.v1` — 2026-05-31 第一个发布
+
+生产环境请锁定具体版本号。`main` 分支始终保持可用。
 
 ### 5 分钟示例
 
