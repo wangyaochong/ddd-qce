@@ -369,6 +369,21 @@ func (h *testSlowEventHandler) Handle(ctx context.Context, evt *testUserEvent) e
 	return nil
 }
 
+type testSlowEventHandlerWithNotify struct {
+	started  chan struct{}
+	duration time.Duration
+}
+
+func (h *testSlowEventHandlerWithNotify) Handle(ctx context.Context, evt *testUserEvent) error {
+	close(h.started)
+	select {
+	case <-time.After(h.duration):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
+}
+
 func TestEventBus_ConcurrentHandlersFaster(t *testing.T) {
 	bus := NewEventBus(WithEventBusAspectChain(aspect.NewAspectChain()))
 	delay := 50 * time.Millisecond
@@ -513,18 +528,16 @@ func TestEventBus_Shutdown(t *testing.T) {
 
 func TestEventBus_Shutdown_WaitsForInFlight(t *testing.T) {
 	bus := NewEventBus(WithEventBusAspectChain(aspect.NewAspectChain()))
-	RegisterHandler[*testUserEvent](bus, &testSlowEventHandler{duration: 100 * time.Millisecond})
+	handlerStarted := make(chan struct{})
+	RegisterHandler[*testUserEvent](bus, &testSlowEventHandlerWithNotify{started: handlerStarted, duration: 100 * time.Millisecond})
 
-	started := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
-		close(started)
 		_ = bus.Publish(context.Background(), &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 		close(done)
 	}()
 
-	<-started
-	time.Sleep(20 * time.Millisecond)
+	<-handlerStarted
 
 	shutdownDone := make(chan error, 1)
 	go func() {
@@ -551,16 +564,14 @@ func TestEventBus_Shutdown_WaitsForInFlight(t *testing.T) {
 
 func TestEventBus_Shutdown_ContextCancelled(t *testing.T) {
 	bus := NewEventBus(WithEventBusAspectChain(aspect.NewAspectChain()))
-	RegisterHandler[*testUserEvent](bus, &testSlowEventHandler{duration: 5 * time.Second})
+	handlerStarted := make(chan struct{})
+	RegisterHandler[*testUserEvent](bus, &testSlowEventHandlerWithNotify{started: handlerStarted, duration: 5 * time.Second})
 
-	started := make(chan struct{})
 	go func() {
-		close(started)
 		_ = bus.Publish(context.Background(), &testUserEvent{BaseEvent: event.NewBaseEvent("1", time.Now())})
 	}()
 
-	<-started
-	time.Sleep(20 * time.Millisecond)
+	<-handlerStarted
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()

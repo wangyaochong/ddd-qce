@@ -73,6 +73,20 @@ func (h *testSlowCommandHandler) Handle(ctx context.Context, cmd *testSlowComman
 	}
 }
 
+type testSlowCommandHandlerWithNotify struct {
+	started chan struct{}
+}
+
+func (h *testSlowCommandHandlerWithNotify) Handle(ctx context.Context, cmd *testSlowCommand) (*testSlowCommandResult, error) {
+	close(h.started)
+	select {
+	case <-time.After(cmd.Duration):
+		return &testSlowCommandResult{Done: true}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 func TestCommandBus_Dispatch(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := NewCommandBus(WithCommandBusAspectChain(chain))
@@ -306,19 +320,16 @@ func TestCommandBus_Shutdown(t *testing.T) {
 
 func TestCommandBus_Shutdown_WaitsForInFlight(t *testing.T) {
 	bus := NewCommandBus()
-	RegisterCommand(bus, &testSlowCommandHandler{})
+	handlerStarted := make(chan struct{})
+	RegisterCommand(bus, &testSlowCommandHandlerWithNotify{started: handlerStarted})
 
-	started := make(chan struct{})
 	done := make(chan struct{})
-
 	go func() {
-		close(started)
 		_, _ = bus.Execute(context.Background(), &testSlowCommand{Duration: 100 * time.Millisecond})
 		close(done)
 	}()
 
-	<-started
-	time.Sleep(20 * time.Millisecond)
+	<-handlerStarted
 
 	shutdownDone := make(chan error, 1)
 	go func() {
@@ -345,16 +356,14 @@ func TestCommandBus_Shutdown_WaitsForInFlight(t *testing.T) {
 
 func TestCommandBus_Shutdown_ContextCancelled(t *testing.T) {
 	bus := NewCommandBus()
-	RegisterCommand(bus, &testSlowCommandHandler{})
+	handlerStarted := make(chan struct{})
+	RegisterCommand(bus, &testSlowCommandHandlerWithNotify{started: handlerStarted})
 
-	started := make(chan struct{})
 	go func() {
-		close(started)
 		_, _ = bus.Execute(context.Background(), &testSlowCommand{Duration: 5 * time.Second})
 	}()
 
-	<-started
-	time.Sleep(20 * time.Millisecond)
+	<-handlerStarted
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()

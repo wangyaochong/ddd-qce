@@ -74,6 +74,20 @@ func (h *testSlowQueryHandler) Handle(ctx context.Context, q *testSlowQuery) (*t
 	}
 }
 
+type testSlowQueryHandlerWithNotify struct {
+	started chan struct{}
+}
+
+func (h *testSlowQueryHandlerWithNotify) Handle(ctx context.Context, q *testSlowQuery) (*testSlowQueryResult, error) {
+	close(h.started)
+	select {
+	case <-time.After(q.Duration):
+		return &testSlowQueryResult{Done: true}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 func TestQueryBus_Ask(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := NewQueryBus(WithQueryBusAspectChain(chain))
@@ -292,18 +306,16 @@ func TestQueryBus_Shutdown(t *testing.T) {
 
 func TestQueryBus_Shutdown_WaitsForInFlight(t *testing.T) {
 	bus := NewQueryBus()
-	RegisterQuery(bus, &testSlowQueryHandler{})
+	handlerStarted := make(chan struct{})
+	RegisterQuery(bus, &testSlowQueryHandlerWithNotify{started: handlerStarted})
 
-	started := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
-		close(started)
 		_, _ = bus.Execute(context.Background(), &testSlowQuery{Duration: 100 * time.Millisecond})
 		close(done)
 	}()
 
-	<-started
-	time.Sleep(20 * time.Millisecond)
+	<-handlerStarted
 
 	shutdownDone := make(chan error, 1)
 	go func() {
@@ -330,16 +342,14 @@ func TestQueryBus_Shutdown_WaitsForInFlight(t *testing.T) {
 
 func TestQueryBus_Shutdown_ContextCancelled(t *testing.T) {
 	bus := NewQueryBus()
-	RegisterQuery(bus, &testSlowQueryHandler{})
+	handlerStarted := make(chan struct{})
+	RegisterQuery(bus, &testSlowQueryHandlerWithNotify{started: handlerStarted})
 
-	started := make(chan struct{})
 	go func() {
-		close(started)
 		_, _ = bus.Execute(context.Background(), &testSlowQuery{Duration: 5 * time.Second})
 	}()
 
-	<-started
-	time.Sleep(20 * time.Millisecond)
+	<-handlerStarted
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()

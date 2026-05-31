@@ -915,12 +915,12 @@ func TestJobManager_Retry_NotInLiveJobs(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		return s.GetStatus() != jobcore.JobStatusFailed
+		return s.GetStatus() == jobcore.JobStatusCompleted
 	}, 2*time.Second, 10*time.Millisecond)
 
 	status, err := manager.GetStatus(ctx, "retry-notlive-test")
 	require.NoError(t, err)
-	require.NotEqual(t, jobcore.JobStatusFailed, status.GetStatus(), "job should have been retried")
+	require.Equal(t, jobcore.JobStatusCompleted, status.GetStatus(), "job should have been retried and completed")
 }
 
 func TestJobManager_Retry_NotInLiveJobs_StoreUpdateError(t *testing.T) {

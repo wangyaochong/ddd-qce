@@ -74,12 +74,16 @@ type testHookCommand struct {
 }
 
 type testHookHandler struct {
-	Duration     time.Duration
-	hook         func(ctx context.Context) error
-	returnedChan chan struct{}
+	Duration       time.Duration
+	hook           func(ctx context.Context) error
+	returnedChan   chan struct{}
+	handlerStarted chan struct{}
 }
 
 func (h *testHookHandler) Handle(ctx context.Context, cmd *testHookCommand) (*testCancellableResult, error) {
+	if h.handlerStarted != nil {
+		close(h.handlerStarted)
+	}
 	select {
 	case <-time.After(h.Duration):
 		return &testCancellableResult{Message: "completed"}, nil
@@ -95,13 +99,14 @@ func (h *testHookHandler) Handle(ctx context.Context, cmd *testHookCommand) (*te
 	}
 }
 
-func newTestCancellableCommandBusWithHook(duration time.Duration, hook func(ctx context.Context) error, returnedChan chan struct{}) *commandmemory.CommandBus {
+func newTestCancellableCommandBusWithHook(duration time.Duration, hook func(ctx context.Context) error, returnedChan chan struct{}, handlerStarted chan struct{}) *commandmemory.CommandBus {
 	chain := aspect.NewAspectChain()
 	bus := commandmemory.NewCommandBus(commandmemory.WithCommandBusAspectChain(chain))
 	commandmemory.RegisterCommand(bus, &testHookHandler{
-		Duration:     duration,
-		hook:         hook,
-		returnedChan: returnedChan,
+		Duration:       duration,
+		hook:           hook,
+		returnedChan:   returnedChan,
+		handlerStarted: handlerStarted,
 	})
 	return bus
 }
@@ -164,11 +169,12 @@ func TestJobManager_CancelledJob_ErrorDuringExecution(t *testing.T) {
 	store := newSameRefJobStore()
 	handlerReturned := make(chan struct{})
 	continueExecuteJob := make(chan struct{})
+	handlerStarted := make(chan struct{})
 
 	cmdBus := newTestCancellableCommandBusWithHook(10*time.Second, func(ctx context.Context) error {
 		<-continueExecuteJob
 		return fmt.Errorf("failed after cancel")
-	}, handlerReturned)
+	}, handlerReturned, handlerStarted)
 	manager := NewJobManager(store, cmdBus)
 
 	ctx := context.Background()
@@ -177,7 +183,7 @@ func TestJobManager_CancelledJob_ErrorDuringExecution(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
+	<-handlerStarted
 
 	err = manager.Cancel(ctx, job.ID())
 	if err != nil {
@@ -199,11 +205,12 @@ func TestJobManager_CancelledJob_SuccessDuringExecution(t *testing.T) {
 	store := newSameRefJobStore()
 	handlerReturned := make(chan struct{})
 	continueExecuteJob := make(chan struct{})
+	handlerStarted := make(chan struct{})
 
 	cmdBus := newTestCancellableCommandBusWithHook(10*time.Second, func(ctx context.Context) error {
 		<-continueExecuteJob
 		return nil
-	}, handlerReturned)
+	}, handlerReturned, handlerStarted)
 	manager := NewJobManager(store, cmdBus)
 
 	ctx := context.Background()
@@ -212,7 +219,7 @@ func TestJobManager_CancelledJob_SuccessDuringExecution(t *testing.T) {
 		t.Fatalf("failed to submit job: %v", err)
 	}
 
-	_, _ = manager.WaitForRunning(ctx, job.ID(), 2*time.Second)
+	<-handlerStarted
 
 	err = manager.Cancel(ctx, job.ID())
 	if err != nil {

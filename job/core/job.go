@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -211,20 +210,9 @@ func (j *Job) Snapshot() *Job {
 	if j.status == JobStatusCompleted || j.status == JobStatusFailed || j.status == JobStatusCancelled {
 		close(done)
 	}
-	var cmdCopy any
-	if cmdData, err := json.Marshal(j.command); err == nil {
-		var v any
-		if json.Unmarshal(cmdData, &v) == nil {
-			cmdCopy = v
-		} else {
-			cmdCopy = j.command
-		}
-	} else {
-		cmdCopy = j.command
-	}
 	return &Job{
 		id:          j.id,
-		command:     cmdCopy,
+		command:     j.command,
 		commandType: j.commandType,
 		status:      j.status,
 		result:      j.result,
