@@ -15,7 +15,7 @@ type OrderRepositoryAdapter interface {
 	Save(ctx context.Context, order *orderdomain.Order) error
 	FindByID(ctx context.Context, id string) (*orderdomain.Order, error)
 	Delete(ctx context.Context, id string) error
-	FindAll() []*orderdomain.Order
+	FindAll(ctx context.Context) ([]*orderdomain.Order, error)
 }
 
 type OrderRepository struct {
@@ -54,14 +54,14 @@ func (r *OrderRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *OrderRepository) FindAll() []*orderdomain.Order {
+func (r *OrderRepository) FindAll(ctx context.Context) ([]*orderdomain.Order, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	result := make([]*orderdomain.Order, 0, len(r.orders))
 	for _, o := range r.orders {
 		result = append(result, o)
 	}
-	return result
+	return result, nil
 }
 
 var _ repository.Repository[*orderdomain.Order] = (*OrderRepository)(nil)

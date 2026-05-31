@@ -34,7 +34,10 @@ func NewListOrdersHandler(repo repository.OrderRepositoryAdapter) *ListOrdersHan
 }
 
 func (h *ListOrdersHandler) Handle(ctx context.Context, q *ListOrdersQuery) (*ListOrdersResult, error) {
-	orders := h.Repo.FindAll()
+	orders, err := h.Repo.FindAll(ctx)
+	if err != nil {
+		return nil, err
+	}
 	result := make([]GetOrderResult, len(orders))
 	for i, o := range orders {
 		result[i] = *toOrderView(o)

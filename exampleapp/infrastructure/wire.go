@@ -47,8 +47,13 @@ type AppContext struct {
 	MetricsRecorder *AppMetricsRecorder
 	TxManager       *AppTransactionManager
 
+	Config    *Config
 	lifecycles []app.Lifecycle
 	store      *StoreComponents
+}
+
+func (app *AppContext) Store() *StoreComponents {
+	return app.store
 }
 
 func (app *AppContext) RegisterLifecycle(l app.Lifecycle) {
@@ -102,10 +107,10 @@ func WireAppWithConfig(cfg *Config) (*AppContext, error) {
 		return nil, err
 	}
 	recoveryEnabled := cfg.StoreType == StoreTypePostgreSQL
-	return WireAppWithStore(store, recoveryEnabled)
+	return WireAppWithStore(cfg, store, recoveryEnabled)
 }
 
-func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext, error) {
+func WireAppWithStore(cfg *Config, store *StoreComponents, recoveryEnabled bool) (*AppContext, error) {
 	backend := store.Backend
 
 	logger := NewAppLogger()
@@ -197,6 +202,7 @@ func WireAppWithStore(store *StoreComponents, recoveryEnabled bool) (*AppContext
 		Inventory:        inventory,
 		MetricsRecorder:  metricsRecorder,
 		TxManager:        txManager,
+		Config:           cfg,
 		lifecycles: []app.Lifecycle{
 			eventBus,
 			cmdBus,

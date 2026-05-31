@@ -52,6 +52,17 @@ func (inv *Inventory) Release(productID orderdomain.ProductID, quantity int) err
 	return nil
 }
 
+func (inv *Inventory) AddStock(productID orderdomain.ProductID, quantity int) error {
+	inv.mu.Lock()
+	defer inv.mu.Unlock()
+	p, ok := inv.products[productID.String()]
+	if !ok {
+		return fmt.Errorf("product %s not found", productID)
+	}
+	p.Stock += quantity
+	return nil
+}
+
 func (inv *Inventory) GetAll() []Product {
 	inv.mu.RLock()
 	defer inv.mu.RUnlock()
@@ -73,15 +84,19 @@ func (inv *Inventory) GetByID(id orderdomain.ProductID) (Product, bool) {
 }
 
 func (inv *Inventory) seed() {
-	items := []Product{
+	items := DefaultProducts()
+	for _, item := range items {
+		p := item
+		inv.products[p.ID.String()] = &p
+	}
+}
+
+func DefaultProducts() []Product {
+	return []Product{
 		{ID: orderdomain.ProductID("laptop"), Name: "Laptop", Price: 999.99, Stock: 10},
 		{ID: orderdomain.ProductID("mouse"), Name: "Mouse", Price: 29.99, Stock: 50},
 		{ID: orderdomain.ProductID("keyboard"), Name: "Keyboard", Price: 79.99, Stock: 30},
 		{ID: orderdomain.ProductID("monitor"), Name: "Monitor", Price: 499.99, Stock: 15},
 		{ID: orderdomain.ProductID("headphone"), Name: "Headphone", Price: 149.99, Stock: 25},
-	}
-	for _, item := range items {
-		p := item
-		inv.products[p.ID.String()] = &p
 	}
 }

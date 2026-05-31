@@ -1,7 +1,6 @@
 package infrastructure
 
 import (
-	"github.com/ddd-qce/core/app"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	domainevent "github.com/ddd-qce/core/domain/event"
 	jobmemory "github.com/ddd-qce/core/job/memory"
@@ -22,5 +21,3 @@ type AppCustom struct {
 	MetricsRecorder  *AppMetricsRecorder
 	TxManager        *AppTransactionManager
 }
-
-type AppContext = app.AppContext[AppCustom]
