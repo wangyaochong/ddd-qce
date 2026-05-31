@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ddd-qce/core/cqrs/event"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/infra/infratest"
 	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
@@ -46,7 +47,7 @@ func testProviderContract(t *testing.T, store *StoreComponents) {
 	t.Run("EventStoreAppendAndLoad", func(t *testing.T) {
 		ctx := context.Background()
 		evt := &orderevent.OrderPlacedEvent{
-			BaseEvent:   event.NewBaseEvent("contract-agg-1", time.Now()),
+			BaseEvent:   cqrsevent.NewBaseEvent("contract-agg-1", time.Now()),
 			UserID:      "u1",
 			TotalAmount: 100,
 		}

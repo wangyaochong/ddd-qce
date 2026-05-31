@@ -206,19 +206,19 @@ func TestTraceMultiSpan_VerifySpanNamesAndChain(t *testing.T) {
 		spansInTrace, _ := app.Backend.TraceStore.GetTrace(ctx, *placeOrderTrace)
 		spanNames := make(map[string]string)
 		for _, s := range spansInTrace {
-			spanNames[s.Name] = s.Type
+			spanNames[s.Name] = string(s.Type)
 		}
 
 		if _, ok := spanNames["PlaceOrderCommand"]; !ok {
 			t.Error("expected PlaceOrderCommand span in the PlaceOrder trace")
 		}
-		if spanNames["PlaceOrderCommand"] != trace.SpanTypeCommand {
+		if spanNames["PlaceOrderCommand"] != string(trace.SpanTypeCommand) {
 			t.Errorf("expected PlaceOrderCommand to be type 'command', got '%s'", spanNames["PlaceOrderCommand"])
 		}
 		if _, ok := spanNames["OrderPlacedEvent"]; !ok {
 			t.Error("expected OrderPlacedEvent span in the PlaceOrder trace (event is dispatched by PlaceOrder handler)")
 		}
-		if spanNames["OrderPlacedEvent"] != trace.SpanTypeEvent {
+		if spanNames["OrderPlacedEvent"] != string(trace.SpanTypeEvent) {
 			t.Errorf("expected OrderPlacedEvent to be type 'event', got '%s'", spanNames["OrderPlacedEvent"])
 		}
 
@@ -420,7 +420,7 @@ func TestRepositoryDelete(t *testing.T) {
 		if err != nil {
 			t.Fatalf("find failed: %v", err)
 		}
-		if found.ID()() != "ORD-DEL" {
+		if found.ID() != "ORD-DEL" {
 			t.Error("order not found")
 		}
 		app.OrderRepo.Delete(ctx, "ORD-DEL")
