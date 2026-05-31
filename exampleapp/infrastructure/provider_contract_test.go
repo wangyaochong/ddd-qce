@@ -10,8 +10,8 @@ import (
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/infra/infratest"
-	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
+	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 )
 
 func TestProviderContract_Memory(t *testing.T) {

@@ -45,10 +45,10 @@ func WithCorrelation(ctx context.Context, aggregateID string) BaseEvent {
 	}
 }
 
-func (e BaseEvent) AggregateID() string     { return e.aggregateID }
-func (e BaseEvent) OccurredAt() time.Time   { return e.occurredAt }
-func (e BaseEvent) CorrelationID() string   { return e.correlationID }
-func (e BaseEvent) CausationID() string     { return e.causationID }
+func (e BaseEvent) AggregateID() string   { return e.aggregateID }
+func (e BaseEvent) OccurredAt() time.Time { return e.occurredAt }
+func (e BaseEvent) CorrelationID() string { return e.correlationID }
+func (e BaseEvent) CausationID() string   { return e.causationID }
 
 func ApplyCorrelation(evt domainevent.Event, correlationID, causationID string) {
 	setBaseEventField(evt, "correlationID", correlationID)

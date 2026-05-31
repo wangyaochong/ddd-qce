@@ -59,9 +59,9 @@ func NewSchemaViewer(opts ...SchemaViewerOption) *SchemaViewer {
 	}
 
 	funcMap := template.FuncMap{
-		"formatSize":     formatSize,
-		"formatTime":     formatTime,
-		"formatCount":    formatCount,
+		"formatSize":  formatSize,
+		"formatTime":  formatTime,
+		"formatCount": formatCount,
 		"formatDuration": func(d time.Duration) string {
 			if d == 0 {
 				return "-"

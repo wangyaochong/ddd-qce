@@ -12,9 +12,9 @@ const (
 )
 
 type PkgInfo struct {
-	DDDPrefix  string      // everything before "ddd/" in the path
-	DomainName string      // e.g., "order"
-	SubPkg     string      // e.g., "command", "domain/model"
+	DDDPrefix  string // everything before "ddd/" in the path
+	DomainName string // e.g., "order"
+	SubPkg     string // e.g., "command", "domain/model"
 	Kind       PackageKind
 }
 

@@ -10,12 +10,12 @@ import (
 
 	"github.com/ddd-qce/core/cqrs/event"
 	pgevent "github.com/ddd-qce/core/cqrs/impl/pg"
-	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/domain/aggregate"
 	domainevent "github.com/ddd-qce/core/domain/event"
-	pgrepo "github.com/ddd-qce/core/infra/repository/pg"
-	rep "github.com/ddd-qce/core/infra/repository"
 	"github.com/ddd-qce/core/domain/repository/repositorytest"
+	ddderror "github.com/ddd-qce/core/error"
+	rep "github.com/ddd-qce/core/infra/repository"
+	pgrepo "github.com/ddd-qce/core/infra/repository/pg"
 	"github.com/ddd-qce/integrationtest/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )

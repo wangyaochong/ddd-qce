@@ -9,8 +9,8 @@ import (
 	"github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/query"
 	"github.com/ddd-qce/core/trace"
 )
 
@@ -34,9 +34,9 @@ func (h *PlaceOrderHandler) Handle(ctx context.Context, cmd *PlaceOrderCommand) 
 
 	h.eventBus.Publish(ctx, &OrderPlacedEvent{
 		BaseEvent: event.NewBaseEvent(orderID, time.Now()),
-		UserID:          cmd.UserID,
-		Product:         cmd.Product,
-		Amount:          cmd.Amount,
+		UserID:    cmd.UserID,
+		Product:   cmd.Product,
+		Amount:    cmd.Amount,
 	})
 
 	return &PlaceOrderResult{OrderID: orderID}, nil

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	corequery "github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	corequery "github.com/ddd-qce/core/cqrs/query"
 )
 
 type GetUserQuery struct {

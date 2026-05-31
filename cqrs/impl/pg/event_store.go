@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/cqrs/event"
 	domainevent "github.com/ddd-qce/core/domain/event"
+	ddderror "github.com/ddd-qce/core/error"
 	corepg "github.com/ddd-qce/core/pg"
 )
 

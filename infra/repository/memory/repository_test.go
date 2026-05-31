@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	ddderror "github.com/ddd-qce/core/error"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/aggregate"
 	domainevent "github.com/ddd-qce/core/domain/event"
-	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/repository"
 	"github.com/ddd-qce/core/domain/repository/repositorytest"
+	ddderror "github.com/ddd-qce/core/error"
 	rep "github.com/ddd-qce/core/infra/repository"
 )
 

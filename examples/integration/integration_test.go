@@ -10,8 +10,8 @@ import (
 	"github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/query"
 )
 
 type testOrder struct {
@@ -110,8 +110,8 @@ func TestIntegration_CommandEventQueryFlow(t *testing.T) {
 
 	err = eventBus.Publish(ctx, &testOrderCreatedEvent{
 		BaseEvent: event.NewBaseEvent(result.OrderID, time.Now()),
-		UserID:          "user-001",
-		Amount:          99.99,
+		UserID:    "user-001",
+		Amount:    99.99,
 	})
 	if err != nil {
 		t.Fatalf("event publish failed: %v", err)

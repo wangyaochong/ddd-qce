@@ -23,12 +23,12 @@ type TypePrototype struct {
 }
 
 type DomainStats struct {
-	CommandCount   int
-	CommandErrors  int
-	QueryCount     int
-	QueryErrors    int
-	EventCount     int
-	EventErrors    int
+	CommandCount  int
+	CommandErrors int
+	QueryCount    int
+	QueryErrors   int
+	EventCount    int
+	EventErrors   int
 }
 
 type DomainInfo struct {
@@ -39,14 +39,14 @@ type DomainInfo struct {
 }
 
 type DomainEntry struct {
-	Type       string
-	Category   string
-	Status     string
-	Duration   string
-	CreatedAt  string
-	Error      string
-	Data       string
-	Result     string
+	Type      string
+	Category  string
+	Status    string
+	Duration  string
+	CreatedAt string
+	Error     string
+	Data      string
+	Result    string
 }
 
 type TypePrototypeRegistry struct {
@@ -84,7 +84,7 @@ func (r *TypePrototypeRegistry) RegisterWithDomain(cat, domain, name string, fie
 	}
 	r.prototypes[name] = proto
 	r.byCategory[cat] = append(r.byCategory[cat], proto)
-	
+
 	if domain != "" {
 		if _, exists := r.byDomain[domain]; !exists {
 			r.domains = append(r.domains, domain)
@@ -292,10 +292,10 @@ func extractFields(t reflect.Type) []FieldInfo {
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if f.IsExported() {
-fieldInfo := FieldInfo{
-			Name: f.Name,
-			Type: formatFieldType(f.Type),
-		}
+			fieldInfo := FieldInfo{
+				Name: f.Name,
+				Type: formatFieldType(f.Type),
+			}
 			fields = append(fields, fieldInfo)
 		}
 	}

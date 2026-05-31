@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/cqrs/event"
-	pgevent "github.com/ddd-qce/core/cqrs/impl/pg"
 	"github.com/ddd-qce/core/cqrs/event/eventtest"
+	pgevent "github.com/ddd-qce/core/cqrs/impl/pg"
 	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/integrationtest/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"

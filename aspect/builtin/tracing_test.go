@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/cqrs/event"
+	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/trace"
 )
 

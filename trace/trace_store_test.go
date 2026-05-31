@@ -538,7 +538,7 @@ func TestInMemoryTraceStore_Evict_EmptyAfterAllExpired(t *testing.T) {
 }
 
 func TestInMemoryTraceStore_Evict_PreservesRecent(t *testing.T) {
-	store := NewInMemoryTraceStore(WithTTL(1 * time.Hour), WithMaxSpans(10000))
+	store := NewInMemoryTraceStore(WithTTL(1*time.Hour), WithMaxSpans(10000))
 	defer store.Close()
 	ctx := context.Background()
 

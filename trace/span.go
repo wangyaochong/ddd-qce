@@ -14,7 +14,7 @@ type SpanStatus string
 
 const (
 	SpanStatusSuccess       SpanStatus = "success"
-	SpanStatusError        SpanStatus = "error"
+	SpanStatusError         SpanStatus = "error"
 	SpanStatusBusinessError SpanStatus = "business_error"
 )
 

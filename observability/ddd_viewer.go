@@ -105,9 +105,9 @@ func NewDDDViewer(opts ...DDDViewerOption) *DDDViewer {
 	}
 
 	funcMap := template.FuncMap{
-		"formatSize":    formatSize,
-		"formatTime":    formatTime,
-		"formatCount":   formatCount,
+		"formatSize":  formatSize,
+		"formatTime":  formatTime,
+		"formatCount": formatCount,
 		"formatDuration": func(d time.Duration) string {
 			if d == 0 {
 				return "-"
@@ -208,14 +208,14 @@ func (v *DDDViewer) handleOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v.render(w, "ddd_overview", map[string]any{
-		"Tables":      tables,
-		"Relations":   relations,
-		"AllStats":    allStats,
-		"CmdCount":    cmdCount,
-		"QueryCount":  queryCount,
-		"EventCount":  eventCount,
-		"Prefix":      v.config.Prefix,
-		"HasMsgReader": v.msgReader != nil,
+		"Tables":        tables,
+		"Relations":     relations,
+		"AllStats":      allStats,
+		"CmdCount":      cmdCount,
+		"QueryCount":    queryCount,
+		"EventCount":    eventCount,
+		"Prefix":        v.config.Prefix,
+		"HasMsgReader":  v.msgReader != nil,
 		"HasTraceStore": v.traceStore != nil,
 		"HasJobMgr":     v.jobMgr != nil,
 	})
@@ -274,9 +274,9 @@ func (v *DDDViewer) handleCommands(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v.render(w, "ddd_commands", map[string]any{
-		"Entries":  entries,
-		"Filter":   filter,
-		"Prefix":   v.config.Prefix,
+		"Entries": entries,
+		"Filter":  filter,
+		"Prefix":  v.config.Prefix,
 	})
 }
 
@@ -297,9 +297,9 @@ func (v *DDDViewer) handleQueries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v.render(w, "ddd_queries", map[string]any{
-		"Entries":  entries,
-		"Filter":   filter,
-		"Prefix":   v.config.Prefix,
+		"Entries": entries,
+		"Filter":  filter,
+		"Prefix":  v.config.Prefix,
 	})
 }
 
@@ -320,9 +320,9 @@ func (v *DDDViewer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v.render(w, "ddd_events", map[string]any{
-		"Entries":  entries,
-		"Filter":   filter,
-		"Prefix":   v.config.Prefix,
+		"Entries": entries,
+		"Filter":  filter,
+		"Prefix":  v.config.Prefix,
 	})
 }
 
@@ -423,7 +423,7 @@ func (v *DDDViewer) handleTraces(w http.ResponseWriter, r *http.Request) {
 	}
 
 	v.render(w, "ddd_traces", map[string]any{
-		"Traces":      traces,
+		"Traces":       traces,
 		"FilterStatus": filter.Status,
 		"FilterType":   filter.Type,
 		"Prefix":       v.config.Prefix,

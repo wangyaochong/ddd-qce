@@ -7,13 +7,13 @@ import (
 	"reflect"
 	"time"
 
-	ddderror "github.com/ddd-qce/core/error"
+	"github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/aggregate"
 	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/domain/repository"
-	"github.com/ddd-qce/core/cqrs/event"
-	corepg "github.com/ddd-qce/core/pg"
+	ddderror "github.com/ddd-qce/core/error"
 	infrarepo "github.com/ddd-qce/core/infra/repository"
+	corepg "github.com/ddd-qce/core/pg"
 )
 
 type PgRepository[T aggregate.AggregateRef] struct {
@@ -211,7 +211,6 @@ func (r *PgEventSourcedRepository[T]) Save(ctx context.Context, agg T) error {
 func (r *PgEventSourcedRepository[T]) Load(ctx context.Context, id string) (T, error) {
 	snapshotVersion := -1
 	agg := r.reconstructor(id)
-	root := agg.GetAggregateRoot()
 
 	data, version, err := r.loadSnapshot(ctx, id)
 	if err == nil {
@@ -220,7 +219,7 @@ func (r *PgEventSourcedRepository[T]) Load(ctx context.Context, id string) (T, e
 			return agg, fmt.Errorf("deserialize snapshot for aggregate %s: %w", id, err2)
 		}
 		agg = deserAgg
-		root = agg.GetAggregateRoot()
+		root := agg.GetAggregateRoot()
 		root.SetSnapshotVersion(version)
 		snapshotVersion = version
 	}
@@ -298,4 +297,3 @@ func (r *PgEventSourcedRepository[T]) loadSnapshot(ctx context.Context, id strin
 	).Scan(&data, &version)
 	return data, version, err
 }
-

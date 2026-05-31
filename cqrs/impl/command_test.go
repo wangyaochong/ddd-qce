@@ -42,15 +42,15 @@ type testCommandWithoutBase struct {
 }
 
 func TestBaseCommand_ImplementsCommand(t *testing.T) {
-	var _ 	command.Command = (*testCommand)(nil)
-	var _ 	command.Command = (*testFailingCommand)(nil)
-	var _ 	command.Command = (*testCommandWithoutBase)(nil)
-	var _ 	command.Command = command.BaseCommand{}
+	var _ command.Command = (*testCommand)(nil)
+	var _ command.Command = (*testFailingCommand)(nil)
+	var _ command.Command = (*testCommandWithoutBase)(nil)
+	var _ command.Command = command.BaseCommand{}
 }
 
 func TestCommandNameOf_PointerType(t *testing.T) {
 	c := &testCommand{Name: "test"}
-	name := 	command.CommandNameOf(c)
+	name := command.CommandNameOf(c)
 	if name != "testCommand" {
 		t.Errorf("expected 'testCommand', got '%s'", name)
 	}
@@ -58,7 +58,7 @@ func TestCommandNameOf_PointerType(t *testing.T) {
 
 func TestCommandNameOf_ValueType(t *testing.T) {
 	c := testCommand{Name: "test"}
-	name := 	command.CommandNameOf(c)
+	name := command.CommandNameOf(c)
 	if name != "testCommand" {
 		t.Errorf("expected 'testCommand', got '%s'", name)
 	}
@@ -76,7 +76,7 @@ func TestCommandNameOf_DifferentTypes(t *testing.T) {
 		{command.BaseCommand{}, "BaseCommand"},
 	}
 	for _, tt := range tests {
-		got := 	command.CommandNameOf(tt.cmd)
+		got := command.CommandNameOf(tt.cmd)
 		if got != tt.want {
 			t.Errorf("CommandNameOf(%T) = '%s', want '%s'", tt.cmd, got, tt.want)
 		}
@@ -110,20 +110,20 @@ func TestCommandHandler_Error(t *testing.T) {
 }
 
 func TestCommandHandler_InterfaceSatisfaction(t *testing.T) {
-	var _ 	command.CommandHandler[*testCommand, *testCommandResult] = &testCommandHandler{}
-	var _ 	command.CommandHandler[*testFailingCommand, *testFailingCommandResult] = &testFailingCommandHandler{}
+	var _ command.CommandHandler[*testCommand, *testCommandResult] = &testCommandHandler{}
+	var _ command.CommandHandler[*testFailingCommand, *testFailingCommandResult] = &testFailingCommandHandler{}
 }
 
 func TestCommand_InterfaceEnforcement(t *testing.T) {
 	c := &testCommand{Name: "test"}
-	var _ 	command.Command = c
+	var _ command.Command = c
 
-	if _, ok := any(c).(	command.Command); !ok {
+	if _, ok := any(c).(command.Command); !ok {
 		t.Error("testCommand should implement Command interface")
 	}
 
 	plain := &struct{ Name string }{Name: "not-a-command"}
-	if _, ok := any(plain).(	command.Command); ok {
+	if _, ok := any(plain).(command.Command); ok {
 		t.Error("plain struct should NOT implement Command interface")
 	}
 }
@@ -134,20 +134,20 @@ func TestCommandNameOf_UnexportedType(t *testing.T) {
 		Data string
 	}
 	c := &internalCommand{Data: "test"}
-	name := 	command.CommandNameOf(c)
+	name := command.CommandNameOf(c)
 	if name != "internalCommand" {
 		t.Errorf("expected 'internalCommand', got '%s'", name)
 	}
 }
 
 func TestBaseCommand_MarkerMethod(t *testing.T) {
-	var c 	command.Command = command.BaseCommand{}
+	var c command.Command = command.BaseCommand{}
 	_ = c
 }
 
 func TestCommandNameOf_ReflectTypeConsistency(t *testing.T) {
 	c := &testCommand{Name: "test"}
-	ptrName := 	command.CommandNameOf(c)
+	ptrName := command.CommandNameOf(c)
 
 	var zero *testCommand
 	typeName := reflect.TypeOf(zero).Elem().Name()
@@ -172,7 +172,7 @@ func TestCommandHandler_ContextPropagation(t *testing.T) {
 
 func TestCommand_WithCustomIsCommand(t *testing.T) {
 	type customCmd struct{ id int }
-	if _, ok := any(&customCmd{}).(	command.Command); ok {
+	if _, ok := any(&customCmd{}).(command.Command); ok {
 		t.Error("type without isCommand() should NOT satisfy Command")
 	}
 }

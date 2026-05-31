@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/ddd-qce/core/infra"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventpg "github.com/ddd-qce/core/cqrs/impl/pg"
 	domainevent "github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/infra"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	inventoryevent "github.com/ddd-qce/exampleapp/ddd/inventory/event"
@@ -18,10 +18,10 @@ import (
 )
 
 type StoreComponents struct {
-	Backend      *infra.Backend
-	EventStore   cqrsevent.AggregateEventStore[domainevent.Event]
-	OrderRepo    repository.OrderRepositoryAdapter
-	DB           *sql.DB
+	Backend    *infra.Backend
+	EventStore cqrsevent.AggregateEventStore[domainevent.Event]
+	OrderRepo  repository.OrderRepositoryAdapter
+	DB         *sql.DB
 }
 
 const defaultSQLDriver = "pgx"

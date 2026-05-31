@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"sync"
 
-	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/cqrs/event"
 	domainevent "github.com/ddd-qce/core/domain/event"
+	ddderror "github.com/ddd-qce/core/error"
 )
 
 type globalEntry[T domainevent.Event] struct {

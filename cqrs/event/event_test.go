@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ddd-qce/core/trace"
 	domainevent "github.com/ddd-qce/core/domain/event"
+	"github.com/ddd-qce/core/trace"
 )
 
 type testEvent struct {
@@ -246,10 +246,10 @@ type bareEvent struct {
 	aggregateID string
 }
 
-func (e *bareEvent) AggregateID() string     { return e.aggregateID }
-func (e *bareEvent) OccurredAt() time.Time   { return time.Time{} }
-func (e *bareEvent) CorrelationID() string   { return "" }
-func (e *bareEvent) CausationID() string     { return "" }
+func (e *bareEvent) AggregateID() string   { return e.aggregateID }
+func (e *bareEvent) OccurredAt() time.Time { return time.Time{} }
+func (e *bareEvent) CorrelationID() string { return "" }
+func (e *bareEvent) CausationID() string   { return "" }
 
 func TestRestoreBaseEvent_EventWithoutBaseEventField(t *testing.T) {
 	evt := &bareEvent{aggregateID: "original"}

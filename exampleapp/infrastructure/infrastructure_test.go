@@ -9,8 +9,8 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
-	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/event"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )

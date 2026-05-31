@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	pgtrace "github.com/ddd-qce/core/trace/pg"
 	"github.com/ddd-qce/core/trace"
+	pgtrace "github.com/ddd-qce/core/trace/pg"
 	"github.com/ddd-qce/core/trace/tracetest"
 	"github.com/ddd-qce/integrationtest/testutil"
 	_ "github.com/jackc/pgx/v5/stdlib"

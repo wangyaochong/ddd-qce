@@ -188,8 +188,8 @@ func TestShortPackageName(t *testing.T) {
 
 func TestInferDomainFromPkgPath(t *testing.T) {
 	tests := []struct {
-		pkgPath   string
-		expected  string
+		pkgPath  string
+		expected string
 	}{
 		{"github.com/ddd-qce/exampleapp/ddd/order/command", "order"},
 		{"github.com/ddd-qce/exampleapp/ddd/inventory/query", "inventory"},

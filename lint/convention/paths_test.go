@@ -127,10 +127,10 @@ func TestParsePkgPath(t *testing.T) {
 
 func TestSameDomain(t *testing.T) {
 	tests := []struct {
-		name  string
-		pkg1  string
-		pkg2  string
-		want  bool
+		name string
+		pkg1 string
+		pkg2 string
+		want bool
 	}{
 		{
 			name: "same domain",

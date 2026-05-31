@@ -153,12 +153,12 @@ func TestMessageStoreContract(t *testing.T, store builtin.MessageStore) {
 		}
 
 		query := &builtin.QueryEntry{
-			TraceID:    "tc-trace-all",
-			SpanID:     "tc-span-qry",
-			QueryType:  "GetOrder",
-			QueryData:  json.RawMessage(`{"id":"123"}`),
-			Duration:   10 * time.Millisecond,
-			CreatedAt:  time.Now().Truncate(time.Microsecond),
+			TraceID:   "tc-trace-all",
+			SpanID:    "tc-span-qry",
+			QueryType: "GetOrder",
+			QueryData: json.RawMessage(`{"id":"123"}`),
+			Duration:  10 * time.Millisecond,
+			CreatedAt: time.Now().Truncate(time.Microsecond),
 		}
 		if err := store.RecordQuery(context.Background(), query); err != nil {
 			t.Fatalf("RecordQuery returned error: %v", err)

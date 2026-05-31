@@ -50,17 +50,17 @@ func NewJob(id string, cmd any, opts ...JobOption) *Job {
 	return job
 }
 
-func (j *Job) ID() string            { return j.id }
-func (j *Job) Command() any          { return j.command }
-func (j *Job) CommandType() string   { return j.commandType }
-func (j *Job) CreatedAt() time.Time  { return j.createdAt }
-func (j *Job) Timeout() time.Duration { return j.timeout }
-func (j *Job) RetryCount() int       { return j.retryCount }
-func (j *Job) MaxRetries() int       { return j.maxRetries }
-func (j *Job) GetStatus() JobStatus  { return j.status }
-func (j *Job) GetResult() any        { return j.result }
-func (j *Job) GetResultType() string { return j.resultType }
-func (j *Job) GetError() string      { return j.err }
+func (j *Job) ID() string                { return j.id }
+func (j *Job) Command() any              { return j.command }
+func (j *Job) CommandType() string       { return j.commandType }
+func (j *Job) CreatedAt() time.Time      { return j.createdAt }
+func (j *Job) Timeout() time.Duration    { return j.timeout }
+func (j *Job) RetryCount() int           { return j.retryCount }
+func (j *Job) MaxRetries() int           { return j.maxRetries }
+func (j *Job) GetStatus() JobStatus      { return j.status }
+func (j *Job) GetResult() any            { return j.result }
+func (j *Job) GetResultType() string     { return j.resultType }
+func (j *Job) GetError() string          { return j.err }
 func (j *Job) GetStartedAt() time.Time   { return j.startedAt }
 func (j *Job) GetCompletedAt() time.Time { return j.completedAt }
 

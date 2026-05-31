@@ -14,12 +14,12 @@ import (
 )
 
 type App struct {
-	CmdBus    command.CommandBus
-	QueryBus  query.QueryBus
-	EventBus  event.EventBus
-	Chain     *aspect.AspectChain
-	Backend   *infra.Backend
-	Config    *config.Config
+	CmdBus     command.CommandBus
+	QueryBus   query.QueryBus
+	EventBus   event.EventBus
+	Chain      *aspect.AspectChain
+	Backend    *infra.Backend
+	Config     *config.Config
 	lifecycles []Lifecycle
 	cleanup    []func() error
 }

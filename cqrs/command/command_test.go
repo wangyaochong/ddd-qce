@@ -30,9 +30,9 @@ func (h *testCommandHandler) Handle(ctx context.Context, cmd testCommand) (testR
 }
 
 type testCommandBus struct {
-	handlers    map[string]any
-	executeErr  error
-	executeRet  any
+	handlers   map[string]any
+	executeErr error
+	executeRet any
 }
 
 func (b *testCommandBus) Execute(ctx context.Context, cmd any) (any, error) {

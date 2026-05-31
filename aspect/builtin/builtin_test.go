@@ -527,8 +527,6 @@ func TestLoggingAspect_GetLogger(t *testing.T) {
 	}
 }
 
-
-
 func TestNewInMemMetricsRecorder(t *testing.T) {
 	recorder := NewInMemMetricsRecorder()
 	if recorder == nil {
@@ -622,8 +620,6 @@ func TestMetricsAspect_GetRecorder(t *testing.T) {
 		t.Error("expected GetRecorder to return the same recorder")
 	}
 }
-
-
 
 func TestNoOpTransactionManager(t *testing.T) {
 	mgr := NewNoOpTransactionManager()

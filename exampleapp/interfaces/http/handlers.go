@@ -16,20 +16,20 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ddd-qce/core/cqrs/command"
-	"github.com/ddd-qce/core/cqrs/query"
 	"github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/query"
 	jobcore "github.com/ddd-qce/core/job/core"
+	pgmigrate "github.com/ddd-qce/core/pg"
 	"github.com/ddd-qce/core/trace"
 	inventorycommand "github.com/ddd-qce/exampleapp/ddd/inventory/command"
+	inventorydomain "github.com/ddd-qce/exampleapp/ddd/inventory/domain"
 	inventoryevent "github.com/ddd-qce/exampleapp/ddd/inventory/event"
 	inventoryquery "github.com/ddd-qce/exampleapp/ddd/inventory/query"
-	inventorydomain "github.com/ddd-qce/exampleapp/ddd/inventory/domain"
 	ordercommand "github.com/ddd-qce/exampleapp/ddd/order/command"
-	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 	orderdomain "github.com/ddd-qce/exampleapp/ddd/order/domain"
+	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 	orderquery "github.com/ddd-qce/exampleapp/ddd/order/query"
 	"github.com/ddd-qce/exampleapp/infrastructure"
-	pgmigrate "github.com/ddd-qce/core/pg"
 )
 
 type Handler struct {
@@ -297,38 +297,38 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) InventoryManage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	
+
 	if r.Method == http.MethodPost {
 		productID := r.FormValue("product_id")
 		quantity := r.FormValue("quantity")
-		
+
 		if productID == "" || quantity == "" {
 			http.Error(w, "product_id and quantity are required", http.StatusBadRequest)
 			return
 		}
-		
+
 		qty, err := strconv.Atoi(quantity)
 		if err != nil || qty <= 0 {
 			http.Error(w, "quantity must be a positive integer", http.StatusBadRequest)
 			return
 		}
-		
+
 		product, ok := h.app.Inventory.GetByID(orderdomain.ProductID(productID))
 		if !ok || product.ID == "" {
 			http.Error(w, "product not found", http.StatusNotFound)
 			return
 		}
-		
+
 		err = h.app.Inventory.AddStock(orderdomain.ProductID(productID), qty)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to add stock: %v", err), http.StatusInternalServerError)
 			return
 		}
-		
+
 		http.Redirect(w, r, "/inventory/manage", http.StatusFound)
 		return
 	}
-	
+
 	result, err := query.Dispatch[*inventoryquery.GetInventoryQuery, *inventoryquery.GetInventoryResult](ctx, h.app.QueryBus, &inventoryquery.GetInventoryQuery{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

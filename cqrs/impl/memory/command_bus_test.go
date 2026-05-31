@@ -93,7 +93,7 @@ func TestCommandBus_Dispatch(t *testing.T) {
 	RegisterCommand(bus, &testCreateUserHandler{})
 
 	ctx := context.Background()
-	result, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
+	result, err := command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -108,7 +108,7 @@ func TestCommandBus_Dispatch_NoHandler(t *testing.T) {
 	bus := NewCommandBus(WithCommandBusAspectChain(chain))
 
 	ctx := context.Background()
-	_, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
+	_, err := command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
 
 	if err == nil {
 		t.Fatal("expected error for unregistered command type")
@@ -123,7 +123,7 @@ func TestCommandBus_MultipleHandlers(t *testing.T) {
 
 	ctx := context.Background()
 
-	r1, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "alice"})
+	r1, err := command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "alice"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestCommandBus_MultipleHandlers(t *testing.T) {
 		t.Errorf("unexpected result: %v", r1)
 	}
 
-	r2, err := 	command.Dispatch[*testDeleteUserCommand, *testDeleteUserResult](ctx, bus, &testDeleteUserCommand{UserID: "123"})
+	r2, err := command.Dispatch[*testDeleteUserCommand, *testDeleteUserResult](ctx, bus, &testDeleteUserCommand{UserID: "123"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestCommandBus_HandlerError(t *testing.T) {
 	RegisterCommand(bus, &testErrorCommandHandler{})
 
 	ctx := context.Background()
-	_, err := 	command.Dispatch[*testErrorCommand, *testErrorCommandResult](ctx, bus, &testErrorCommand{})
+	_, err := command.Dispatch[*testErrorCommand, *testErrorCommandResult](ctx, bus, &testErrorCommand{})
 
 	if err == nil {
 		t.Fatal("expected error from handler")
@@ -169,7 +169,7 @@ func TestCommandBus_Concurrent(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			_, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: string(rune(id))})
+			_, err := command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: string(rune(id))})
 			if err != nil {
 				errs <- err
 			}
@@ -189,7 +189,7 @@ func TestCommandBus_NilChain(t *testing.T) {
 	RegisterCommand(bus, &testCreateUserHandler{})
 
 	ctx := context.Background()
-	result, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
+	result, err := command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -228,7 +228,7 @@ func TestCommandBus_WithAspects(t *testing.T) {
 	RegisterCommand(bus, &testCreateUserHandler{})
 
 	ctx := context.Background()
-	_, err := 	command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
+	_, err := command.Dispatch[*testCreateUserCommand, *testCreateUserResult](ctx, bus, &testCreateUserCommand{Name: "test"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

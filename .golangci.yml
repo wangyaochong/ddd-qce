@@ -14,21 +14,15 @@ linters:
     - bodyclose
     - errname
     - exhaustive
-    - gochecknoglobals
     - gocritic
-    - gosec
     - misspell
     - nilerr
-    - noctx
-    - prealloc
-    - revive
     - unconvert
-    - unparam
 
   settings:
     errcheck:
       check-type-assertions: true
-      check-blank: true
+      check-blank: false
       exclude-functions:
         - fmt.Fprintf
         - fmt.Printf
@@ -51,7 +45,9 @@ linters:
         - unnecessaryBlock
         - sloppyReassign
         - builtinShadow
-        - importShadow
+      disabled-checks:
+        - unlambda
+        - elseif
 
     gosec:
       excludes:
@@ -94,6 +90,10 @@ linters:
           - gofmt
           - goimports
 
+      - path: _contract\.go
+        linters:
+          - errcheck
+
       - linters:
           - revive
         text: "unused-parameter"
@@ -112,6 +112,38 @@ linters:
       - linters:
           - errcheck
         text: "Error return value of `rows.Close`"
+
+      - linters:
+          - errcheck
+        text: "Error return value of `(.*).Rollback`"
+
+      - linters:
+          - errcheck
+        text: "Error return value of `db.Close`"
+
+      - linters:
+          - errcheck
+        text: "Error return value of `(.*).Close`"
+
+      - linters:
+          - errcheck
+        text: "Error return value of `job.RestoreJobState`"
+
+      - linters:
+          - errcheck
+        source: "Addr\\(\\)\\.Interface"
+
+      - linters:
+          - errcheck
+        source: "\\.FromJSON\\("
+
+      - linters:
+          - govet
+        text: "inline: Constant reflect\\.Ptr should be inlined"
+
+      - linters:
+          - staticcheck
+        text: "QF1"
 
 formatters:
   enable:

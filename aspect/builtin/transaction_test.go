@@ -82,7 +82,7 @@ func TestTransactionAspect_Success_Commits(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err != nil {
 		t.Fatalf("dispatch failed: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestTransactionAspect_Error_Rollbacks(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: true})
 
 	ctx := context.Background()
-	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error from handler")
 	}
@@ -140,7 +140,7 @@ func TestTransactionAspect_RollbackError_ReturnsBothErrors(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: true})
 
 	ctx := context.Background()
-	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -202,7 +202,7 @@ func TestTransactionAspect_BeginError_ReturnsError(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error from begin failure")
 	}
@@ -221,7 +221,7 @@ func TestTransactionAspect_CommitError_ReturnsError(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error from commit failure")
 	}
@@ -229,7 +229,7 @@ func TestTransactionAspect_CommitError_ReturnsError(t *testing.T) {
 
 func TestTransactionAspect_MultiErrorFormatting(t *testing.T) {
 	txMgr := &mockTxManager{
-		commitErr:    errors.New("commit failed"),
+		commitErr:   errors.New("commit failed"),
 		rollbackErr: errors.New("rollback failed"),
 	}
 	txAspect := &builtin.TransactionAspect{TxManager: txMgr}
@@ -241,7 +241,7 @@ func TestTransactionAspect_MultiErrorFormatting(t *testing.T) {
 	memory.RegisterCommand(bus, &testTxHandler{fail: false})
 
 	ctx := context.Background()
-	_, err := 	command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
+	_, err := command.Dispatch[*testTxCommand, *testTxResult](ctx, bus, &testTxCommand{})
 	if err == nil {
 		t.Fatal("expected error")
 	}

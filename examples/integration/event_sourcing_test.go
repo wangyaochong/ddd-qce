@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	"github.com/ddd-qce/core/cqrs/event"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 )
 
 type orderCreated struct {

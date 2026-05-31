@@ -39,7 +39,7 @@ func (h *integrationFailingHandler) Handle(ctx context.Context, c *integrationFa
 
 func TestCommandBus_InterfaceSatisfaction(t *testing.T) {
 	chain := aspect.NewAspectChain()
-	var _ 	command.CommandBus = memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
+	var _ command.CommandBus = memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 }
 
 func TestCommandBus_Execute(t *testing.T) {
@@ -47,7 +47,7 @@ func TestCommandBus_Execute(t *testing.T) {
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 	memory.RegisterCommand(bus, &integrationHandler{})
 
-	var executor 	command.CommandBus = bus
+	var executor command.CommandBus = bus
 
 	result, err := executor.Execute(context.Background(), &integrationCommand{Name: "via-executor"})
 	if err != nil {
@@ -66,7 +66,7 @@ func TestCommandBus_Execute_NoHandler(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 
-	var executor 	command.CommandBus = bus
+	var executor command.CommandBus = bus
 
 	_, err := executor.Execute(context.Background(), &integrationCommand{Name: "no-handler"})
 	if err == nil {
@@ -79,7 +79,7 @@ func TestCommandBus_Execute_Error(t *testing.T) {
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 	memory.RegisterCommand(bus, &integrationFailingHandler{})
 
-	var executor 	command.CommandBus = bus
+	var executor command.CommandBus = bus
 
 	_, err := executor.Execute(context.Background(), &integrationFailingCommand{})
 	if err == nil {
@@ -92,7 +92,7 @@ func TestCommandDispatch_GenericAPI(t *testing.T) {
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 	memory.RegisterCommand(bus, &integrationHandler{})
 
-	result, err := 	command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "dispatch"})
+	result, err := command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "dispatch"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestDispatch_GenericAPI_NoHandler(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 
-	_, err := 	command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "no-handler"})
+	_, err := command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "no-handler"})
 	if err == nil {
 		t.Fatal("expected error for unregistered command")
 	}
@@ -123,7 +123,7 @@ func TestCommandBus_Execute_WithAspects(t *testing.T) {
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 	memory.RegisterCommand(bus, &integrationHandler{})
 
-	var executor 	command.CommandBus = bus
+	var executor command.CommandBus = bus
 
 	_, err := executor.Execute(context.Background(), &integrationCommand{Name: "aspected"})
 	if err != nil {
@@ -139,7 +139,7 @@ func TestCommandBus_Execute_WithAspects(t *testing.T) {
 
 func TestCommandNameOf_ViaInterface(t *testing.T) {
 	c := &integrationCommand{Name: "test"}
-	name := 	command.CommandNameOf(c)
+	name := command.CommandNameOf(c)
 	if name != "integrationCommand" {
 		t.Errorf("expected 'integrationCommand', got '%s'", name)
 	}
@@ -170,7 +170,7 @@ func TestCommandDispatch_InterfaceLevel(t *testing.T) {
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 	memory.RegisterCommand(bus, &integrationHandler{})
 
-	result, err := 	command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "iface-dispatch"})
+	result, err := command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "iface-dispatch"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestCommandDispatch_InterfaceLevel_NoHandler(t *testing.T) {
 	chain := aspect.NewAspectChain()
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 
-	_, err := 	command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "no-handler"})
+	_, err := command.Dispatch[*integrationCommand, *integrationResult](context.Background(), bus, &integrationCommand{Name: "no-handler"})
 	if err == nil {
 		t.Fatal("expected error for unregistered command")
 	}
@@ -194,7 +194,7 @@ func TestCommandDispatch_InterfaceLevel_HandlerError(t *testing.T) {
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 	memory.RegisterCommand(bus, &integrationFailingHandler{})
 
-	_, err := 	command.Dispatch[*integrationFailingCommand, *integrationFailingResult](context.Background(), bus, &integrationFailingCommand{})
+	_, err := command.Dispatch[*integrationFailingCommand, *integrationFailingResult](context.Background(), bus, &integrationFailingCommand{})
 	if err == nil {
 		t.Fatal("expected error from failing handler")
 	}
@@ -205,7 +205,7 @@ func TestCommandDispatch_InterfaceLevel_NilResult(t *testing.T) {
 	bus := memory.NewCommandBus(memory.WithCommandBusAspectChain(chain))
 	memory.RegisterCommand(bus, &nilResultHandler{})
 
-	result, err := 	command.Dispatch[*nilResultCommand, *nilResult](context.Background(), bus, &nilResultCommand{})
+	result, err := command.Dispatch[*nilResultCommand, *nilResult](context.Background(), bus, &nilResultCommand{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

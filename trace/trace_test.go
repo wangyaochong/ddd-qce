@@ -34,8 +34,8 @@ type level2Event struct{}
 func (e *level2Event) AggregateID() string   { return "agg-2" }
 func (e *level2Event) EventType() string     { return "Level2Event" }
 func (e *level2Event) OccurredAt() time.Time { return time.Now() }
-func (e *level2Event) CorrelationID() string  { return "" }
-func (e *level2Event) CausationID() string    { return "" }
+func (e *level2Event) CorrelationID() string { return "" }
+func (e *level2Event) CausationID() string   { return "" }
 
 type level2Handler struct{}
 
@@ -67,8 +67,8 @@ type level4Event struct{}
 func (e *level4Event) AggregateID() string   { return "agg-4" }
 func (e *level4Event) EventType() string     { return "Level4Event" }
 func (e *level4Event) OccurredAt() time.Time { return time.Now() }
-func (e *level4Event) CorrelationID() string  { return "" }
-func (e *level4Event) CausationID() string    { return "" }
+func (e *level4Event) CorrelationID() string { return "" }
+func (e *level4Event) CausationID() string   { return "" }
 
 type level4Handler struct{}
 
@@ -104,7 +104,7 @@ func init() {
 func TestCommandBus_WithEventBus(t *testing.T) {
 	ctx := context.Background()
 
-	result, err := 	command.Dispatch[*level1Command, *level1Result](ctx, testCmdBus, &level1Command{})
+	result, err := command.Dispatch[*level1Command, *level1Result](ctx, testCmdBus, &level1Command{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestCommandBus_DispatchDeep(t *testing.T) {
 	eventmemory.RegisterHandler(eventBus, &level2Handler{})
 	eventmemory.RegisterHandler(eventBus, &level4Handler{})
 
-	result, err := 	command.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
+	result, err := command.Dispatch[*level1Command, *level1Result](ctx, cmdBus, &level1Command{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestCommandBus_ConcurrentDispatch(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			r, e := 	command.Dispatch[*level1Command, *level1Result](ctx, testCmdBus, &level1Command{})
+			r, e := command.Dispatch[*level1Command, *level1Result](ctx, testCmdBus, &level1Command{})
 			results[idx] = r
 			errors[idx] = e
 		}(i)
@@ -189,7 +189,7 @@ func TestCommandBus_WithErroringHandler(t *testing.T) {
 	cmdBus := commandmemory.NewCommandBus()
 	commandmemory.RegisterCommand(cmdBus, &errorHandler{})
 
-	_, err := 	command.Dispatch[*errorCommand, *errorResult](context.Background(), cmdBus, &errorCommand{})
+	_, err := command.Dispatch[*errorCommand, *errorResult](context.Background(), cmdBus, &errorCommand{})
 	if err == nil {
 		t.Fatal("expected error from erroring handler")
 	}

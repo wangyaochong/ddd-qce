@@ -386,15 +386,15 @@ func TestDashboard_CommandsWithReader(t *testing.T) {
 func TestComposeMetrics_RecordErrorAndDuration(t *testing.T) {
 	rec1 := NewStatsCollector()
 	rec2 := NewStatsCollector()
-	
+
 	composed := ComposeMetrics(rec1, rec2)
 	if composed == nil {
 		t.Error("ComposeMetrics should not return nil")
 	}
-	
+
 	// Test RecordDuration delegates to all recorders
 	composed.RecordDuration("test", 100*time.Millisecond)
-	
+
 	stats, ok := rec1.GetStats("test")
 	if !ok {
 		t.Fatal("expected stats in rec1")
@@ -402,7 +402,7 @@ func TestComposeMetrics_RecordErrorAndDuration(t *testing.T) {
 	if stats.Count != 1 {
 		t.Errorf("expected count 1, got %d", stats.Count)
 	}
-	
+
 	stats2, ok := rec2.GetStats("test")
 	if !ok {
 		t.Fatal("expected stats in rec2")
@@ -415,10 +415,10 @@ func TestComposeMetrics_RecordErrorAndDuration(t *testing.T) {
 func TestComposeMetrics_DelegatesToAll(t *testing.T) {
 	rec1 := NewStatsCollector()
 	rec2 := NewStatsCollector()
-	
+
 	composed := ComposeMetrics(rec1, rec2)
 	composed.RecordError("test", fmt.Errorf("test error"))
-	
+
 	stats, ok := rec1.GetStats("test")
 	if !ok {
 		t.Fatal("expected stats in rec1")
@@ -440,7 +440,7 @@ func TestClassifyOpType(t *testing.T) {
 		{"unknown", "SomeOther", "unknown"},
 		{"empty", "", "unknown"},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := classifyOpType(tt.input)
@@ -453,26 +453,26 @@ func TestClassifyOpType(t *testing.T) {
 
 func TestStatsCollector_GetStatsByType_Filtering(t *testing.T) {
 	s := NewStatsCollector()
-	
+
 	s.RecordDuration("Command/PlaceOrder", 100*time.Millisecond)
 	s.RecordDuration("Query/GetOrder", 50*time.Millisecond)
 	s.RecordDuration("Event/OrderPlaced", 25*time.Millisecond)
-	
+
 	cmdStats := s.GetStatsByType("command")
 	if len(cmdStats) != 1 {
 		t.Errorf("expected 1 command stat, got %d", len(cmdStats))
 	}
-	
+
 	queryStats := s.GetStatsByType("query")
 	if len(queryStats) != 1 {
 		t.Errorf("expected 1 query stat, got %d", len(queryStats))
 	}
-	
+
 	eventStats := s.GetStatsByType("event")
 	if len(eventStats) != 1 {
 		t.Errorf("expected 1 event stat, got %d", len(eventStats))
 	}
-	
+
 	unknownStats := s.GetStatsByType("unknown")
 	if len(unknownStats) != 0 {
 		t.Errorf("expected 0 unknown stats, got %d", len(unknownStats))
@@ -481,15 +481,15 @@ func TestStatsCollector_GetStatsByType_Filtering(t *testing.T) {
 
 func TestStatsCollector_GetAllStats_ReturnsSortedList(t *testing.T) {
 	s := NewStatsCollector()
-	
+
 	s.RecordDuration("Command/PlaceOrder", 100*time.Millisecond)
 	s.RecordDuration("Query/GetOrder", 50*time.Millisecond)
-	
+
 	allStats := s.GetAllStats()
 	if len(allStats) != 2 {
 		t.Errorf("expected 2 stats, got %d", len(allStats))
 	}
-	
+
 	// Verify sorted by name
 	if allStats[0].Name != "Command/PlaceOrder" {
 		t.Errorf("expected first to be Command/PlaceOrder, got %s", allStats[0].Name)
@@ -501,7 +501,7 @@ func TestStatsCollector_GetAllStats_ReturnsSortedList(t *testing.T) {
 
 func TestStatsCollector_GetStats_NotFound(t *testing.T) {
 	s := NewStatsCollector()
-	
+
 	_, ok := s.GetStats("nonexistent")
 	if ok {
 		t.Error("expected false for nonexistent stats")
@@ -511,7 +511,7 @@ func TestStatsCollector_GetStats_NotFound(t *testing.T) {
 func TestStatsCollector_RecordError_NilError(t *testing.T) {
 	s := NewStatsCollector()
 	s.RecordError("test", nil)
-	
+
 	stats, ok := s.GetStats("test")
 	if !ok {
 		t.Fatal("expected stats to exist")
@@ -1366,4 +1366,3 @@ func TestDashboard_AllDisabled(t *testing.T) {
 		}
 	}
 }
-

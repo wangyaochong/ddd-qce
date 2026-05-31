@@ -18,9 +18,7 @@ type memTxState struct {
 	aborted bool
 }
 
-type MemoryTransactionManager struct {
-	mu sync.Mutex
-}
+type MemoryTransactionManager struct{}
 
 func NewMemoryTransactionManager() *MemoryTransactionManager {
 	return &MemoryTransactionManager{}

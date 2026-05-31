@@ -1,8 +1,8 @@
 package command
 
 import (
-	orderdomain "myproject/ddd/order/domain"
 	inventorydomain "myproject/ddd/inventory/domain"
+	orderdomain "myproject/ddd/order/domain"
 )
 
 type PlaceOrderResult struct {

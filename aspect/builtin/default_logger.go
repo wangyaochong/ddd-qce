@@ -45,11 +45,11 @@ type ContextKey string
 
 const (
 	LogKeyAggregateID ContextKey = "aggregate_id"
-	LogKeyCommand    ContextKey = "command"
-	LogKeyQuery      ContextKey = "query"
-	LogKeyEvent      ContextKey = "event"
-	LogKeyDuration   ContextKey = "duration_ms"
-	LogKeyError      ContextKey = "error"
+	LogKeyCommand     ContextKey = "command"
+	LogKeyQuery       ContextKey = "query"
+	LogKeyEvent       ContextKey = "event"
+	LogKeyDuration    ContextKey = "duration_ms"
+	LogKeyError       ContextKey = "error"
 )
 
 func (l *StdLogger) WithContext(ctx context.Context) *slog.Logger {

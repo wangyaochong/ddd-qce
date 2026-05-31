@@ -11,8 +11,8 @@ import (
 	"github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/query"
 )
 
 type OrderStatus string
@@ -127,7 +127,7 @@ type testConfirmOrderResult struct {
 }
 
 type testConfirmOrderHandler struct {
-	repo       *OrderRepository
+	repo     *OrderRepository
 	eventBus *eventmemory.EventBus
 }
 

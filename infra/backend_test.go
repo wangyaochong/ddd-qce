@@ -328,10 +328,10 @@ func (testQueryHandler) Handle(_ context.Context, _ testQuery) (string, error) {
 
 type testEvent struct{ event.BaseEvent }
 
-func (testEvent) AggregateID() string     { return "agg1" }
-func (testEvent) OccurredAt() time.Time   { return time.Now() }
-func (testEvent) CorrelationID() string   { return "" }
-func (testEvent) CausationID() string     { return "" }
+func (testEvent) AggregateID() string   { return "agg1" }
+func (testEvent) OccurredAt() time.Time { return time.Now() }
+func (testEvent) CorrelationID() string { return "" }
+func (testEvent) CausationID() string   { return "" }
 
 type testEventHandler struct{}
 

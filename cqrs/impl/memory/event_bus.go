@@ -10,9 +10,9 @@ import (
 
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
-	ddderror "github.com/ddd-qce/core/error"
 	"github.com/ddd-qce/core/cqrs/event"
 	domainevent "github.com/ddd-qce/core/domain/event"
+	ddderror "github.com/ddd-qce/core/error"
 )
 
 func handlerTypeName(h any) string {
@@ -58,8 +58,6 @@ func WithHandlerTimeout(timeout time.Duration) EventBusOption {
 func WithConcurrencyLimit(n int) EventBusOption {
 	return func(b *EventBus) { b.sem = make(chan struct{}, n) }
 }
-
-
 
 func NewEventBus(opts ...EventBusOption) *EventBus {
 	b := &EventBus{

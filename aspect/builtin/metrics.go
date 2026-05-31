@@ -13,17 +13,17 @@ type MetricsRecorder interface {
 }
 
 type metricsData struct {
-	mu           sync.RWMutex
-	durations    map[string][]time.Duration
-	errorCounts  map[string]int
-	totalCounts  map[string]int
+	mu          sync.RWMutex
+	durations   map[string][]time.Duration
+	errorCounts map[string]int
+	totalCounts map[string]int
 }
 
 func NewInMemMetricsRecorder() *InMemMetricsRecorder {
 	return &InMemMetricsRecorder{
 		data: &metricsData{
 			durations:   make(map[string][]time.Duration),
-			errorCounts:  make(map[string]int),
+			errorCounts: make(map[string]int),
 			totalCounts: make(map[string]int),
 		},
 	}

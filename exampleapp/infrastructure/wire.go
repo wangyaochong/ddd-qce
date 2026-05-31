@@ -13,12 +13,12 @@ import (
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
 	"github.com/ddd-qce/core/cqrs/command"
-	domainevent "github.com/ddd-qce/core/domain/event"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
-	"github.com/ddd-qce/core/cqrs/query"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/query"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	"github.com/ddd-qce/core/infra"
 	jobcore "github.com/ddd-qce/core/job/core"
 	jobmemory "github.com/ddd-qce/core/job/memory"
@@ -35,9 +35,9 @@ type AppContext struct {
 	CmdBus     command.CommandBus
 	QueryBus   query.QueryBus
 	EventBus   cqrsevent.EventBus
-	Backend       *infra.Backend
-	JobManager    *jobmemory.JobManager
-	DDDViewer     *observability.DDDViewer
+	Backend    *infra.Backend
+	JobManager *jobmemory.JobManager
+	DDDViewer  *observability.DDDViewer
 
 	OrderRepo        orderrepo.OrderRepositoryAdapter
 	EventSourcedRepo *orderrepo.OrderEventSourcedRepository
@@ -47,7 +47,7 @@ type AppContext struct {
 	MetricsRecorder *AppMetricsRecorder
 	TxManager       *AppTransactionManager
 
-	Config    *Config
+	Config     *Config
 	lifecycles []app.Lifecycle
 	store      *StoreComponents
 }

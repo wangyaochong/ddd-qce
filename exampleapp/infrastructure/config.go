@@ -10,9 +10,9 @@ const (
 )
 
 type Config struct {
-	StoreType    string
-	PostgresURI  string
-	TestMode     bool
+	StoreType   string
+	PostgresURI string
+	TestMode    bool
 }
 
 func LoadConfig() *Config {

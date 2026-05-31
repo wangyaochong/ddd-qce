@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/domain/aggregate"
 	"github.com/ddd-qce/core/domain/entity"
 	domainevent "github.com/ddd-qce/core/domain/event"
-	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	orderevent "github.com/ddd-qce/exampleapp/ddd/order/event"
 )
 
@@ -24,7 +24,7 @@ func NewUserID(s string) UserID  { return UserID(s) }
 
 type ProductID string
 
-func (id ProductID) String() string { return string(id) }
+func (id ProductID) String() string   { return string(id) }
 func NewProductID(s string) ProductID { return ProductID(s) }
 
 type OrderStatus string

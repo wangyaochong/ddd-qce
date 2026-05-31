@@ -18,9 +18,9 @@ func NewTracingAspect(store trace.TraceStore) *TracingAspect {
 	return &TracingAspect{store: store}
 }
 
-func (a *TracingAspect) GetStore() trace.TraceStore  { return a.store }
-func (a *TracingAspect) GetLogger() Logger            { return a.logger }
-func (a *TracingAspect) SetLogger(logger Logger)       { a.logger = logger }
+func (a *TracingAspect) GetStore() trace.TraceStore { return a.store }
+func (a *TracingAspect) GetLogger() Logger          { return a.logger }
+func (a *TracingAspect) SetLogger(logger Logger)    { a.logger = logger }
 
 func (a *TracingAspect) Name() string {
 	return "tracing"

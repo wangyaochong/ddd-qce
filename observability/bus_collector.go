@@ -82,7 +82,7 @@ type ReflectionSampleProvider struct {
 }
 
 type samplePair struct {
-	sample     any
+	sample       any
 	resultSample any
 }
 

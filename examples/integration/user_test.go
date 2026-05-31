@@ -11,8 +11,8 @@ import (
 	"github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
-	"github.com/ddd-qce/core/cqrs/query"
 	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/query"
 )
 
 type User struct {
@@ -116,7 +116,7 @@ type testCreateUserResult struct {
 }
 
 type testCreateUserHandler struct {
-	repo       *UserRepository
+	repo     *UserRepository
 	eventBus *eventmemory.EventBus
 }
 
@@ -127,7 +127,7 @@ func (h *testCreateUserHandler) Handle(ctx context.Context, cmd *testCreateUserC
 	}
 	h.eventBus.Publish(ctx, &testUserCreatedEvent{
 		BaseEvent: event.NewBaseEvent(user.ID, time.Now()),
-		Name:            user.Name,
+		Name:      user.Name,
 	})
 	return &testCreateUserResult{UserID: user.ID}, nil
 }

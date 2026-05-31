@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	domainevent "github.com/ddd-qce/core/domain/event"
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
+	domainevent "github.com/ddd-qce/core/domain/event"
 )
 
 type testDomainEvent struct {

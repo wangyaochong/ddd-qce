@@ -55,7 +55,7 @@ func RunExample(ctx context.Context, bus *eventmemory.EventBus) {
 	fmt.Println("=== Event: UserCreated ===")
 	err := bus.Publish(ctx, &UserCreatedEvent{
 		BaseEvent: event.NewBaseEvent("user-001", time.Now()),
-		Name:            "李四",
+		Name:      "李四",
 	})
 	if err != nil {
 		panic(err)
@@ -64,7 +64,7 @@ func RunExample(ctx context.Context, bus *eventmemory.EventBus) {
 	fmt.Println("\n=== Event: UserUpdated ===")
 	err = bus.Publish(ctx, &UserUpdatedEvent{
 		BaseEvent: event.NewBaseEvent("1", time.Now()),
-		Name:            "张三更新",
+		Name:      "张三更新",
 	})
 	if err != nil {
 		panic(err)
@@ -73,7 +73,7 @@ func RunExample(ctx context.Context, bus *eventmemory.EventBus) {
 	fmt.Println("\n=== Event: OrderCancelled ===")
 	err = bus.Publish(ctx, &OrderCancelledEvent{
 		BaseEvent: event.NewBaseEvent("ORD-001", time.Now()),
-		Reason:          "用户取消",
+		Reason:    "用户取消",
 	})
 	if err != nil {
 		panic(err)

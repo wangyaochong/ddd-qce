@@ -22,9 +22,9 @@ func NewAuditableEntity(id string) (*AuditableEntity, error) {
 	}
 	now := time.Now()
 	return &AuditableEntity{
-		Entity:     *e,
-		createdAt:  now,
-		updatedAt:  now,
+		Entity:    *e,
+		createdAt: now,
+		updatedAt: now,
 	}, nil
 }
 
@@ -34,9 +34,9 @@ func NewAuditableEntityFromData(id string, createdAt, updatedAt time.Time) (*Aud
 		return nil, err
 	}
 	return &AuditableEntity{
-		Entity:     *e,
-		createdAt:  createdAt,
-		updatedAt:  updatedAt,
+		Entity:    *e,
+		createdAt: createdAt,
+		updatedAt: updatedAt,
 	}, nil
 }
 

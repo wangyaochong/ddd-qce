@@ -4,8 +4,8 @@ import (
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/cqrs/command"
 	"github.com/ddd-qce/core/cqrs/event"
-	"github.com/ddd-qce/core/cqrs/query"
 	"github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/query"
 )
 
 type BusFactory interface {

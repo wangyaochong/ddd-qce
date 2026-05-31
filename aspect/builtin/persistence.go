@@ -119,12 +119,12 @@ func (a *PersistenceAspect) AfterQuery(ctx context.Context, query any, result an
 		queryData = json.RawMessage(fmt.Sprintf(`{"_marshal_error":%q}`, marshalErr.Error()))
 	}
 	entry := &QueryEntry{
-		TraceID:    trace.GetTraceID(ctx),
-		SpanID:     trace.GetSpanID(ctx),
-		QueryType:  typeName(query),
-		QueryData:  queryData,
-		Duration:   duration,
-		CreatedAt:  time.Now(),
+		TraceID:   trace.GetTraceID(ctx),
+		SpanID:    trace.GetSpanID(ctx),
+		QueryType: typeName(query),
+		QueryData: queryData,
+		Duration:  duration,
+		CreatedAt: time.Now(),
 	}
 	if result != nil {
 		entry.ResultType = typeName(result)

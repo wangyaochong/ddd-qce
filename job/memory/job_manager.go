@@ -328,7 +328,7 @@ func (m *JobManager) recoverJobs() {
 	running, err := m.store.List(ctx, jobcore.JobStatusRunning)
 	if err == nil {
 		for _, job := range running {
-		job.RestoreJobState(jobcore.JobStatusFailed, nil, "", "process restarted during execution", time.Time{}, time.Now())
+			job.RestoreJobState(jobcore.JobStatusFailed, nil, "", "process restarted during execution", time.Time{}, time.Now())
 			if updateErr := m.store.Update(ctx, job); updateErr != nil {
 				m.handleStoreError(ctx, job.ID(), "recovery_running", updateErr)
 			}

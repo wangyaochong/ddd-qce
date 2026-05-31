@@ -12,8 +12,8 @@ import (
 	"github.com/ddd-qce/core/job/memory"
 	pgjob "github.com/ddd-qce/core/job/pg"
 	"github.com/ddd-qce/integrationtest/testutil"
-	"github.com/stretchr/testify/require"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/stretchr/testify/require"
 )
 
 type testReportCommand struct {

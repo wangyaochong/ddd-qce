@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect"
-	"github.com/ddd-qce/core/cqrs/query"
 	"github.com/ddd-qce/core/cqrs/impl/memory"
+	"github.com/ddd-qce/core/cqrs/query"
 )
 
 type integrationQuery struct {
