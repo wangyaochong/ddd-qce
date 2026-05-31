@@ -4,18 +4,18 @@ import (
 	"reflect"
 
 	"github.com/ddd-qce/core/cqrs/command"
-	"github.com/ddd-qce/core/cqrs/event"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
-	"github.com/ddd-qce/core/domain/domainevent"
+	"github.com/ddd-qce/core/domain/event"
 )
 
 type BusTypeSampleProvider interface {
 	GetCommandSample(typeName string) (any, any)
 	GetQuerySample(typeName string) (any, any)
-	GetEventSample(typeName string) domainevent.Event
+	GetEventSample(typeName string) event.Event
 }
 
-func CollectFromBuses(cmdBus command.CommandBus, queryBus query.QueryBus, evtBus event.EventBus, registry *TypePrototypeRegistry, provider BusTypeSampleProvider) {
+func CollectFromBuses(cmdBus command.CommandBus, queryBus query.QueryBus, evtBus cqrsevent.EventBus, registry *TypePrototypeRegistry, provider BusTypeSampleProvider) {
 	CollectFromCommandBus(cmdBus, registry, provider)
 	CollectFromQueryBus(queryBus, registry, provider)
 	CollectFromEventBus(evtBus, registry, provider)
@@ -57,7 +57,7 @@ func CollectFromQueryBus(bus query.QueryBus, registry *TypePrototypeRegistry, pr
 	}
 }
 
-func CollectFromEventBus(bus event.EventBus, registry *TypePrototypeRegistry, provider BusTypeSampleProvider) {
+func CollectFromEventBus(bus cqrsevent.EventBus, registry *TypePrototypeRegistry, provider BusTypeSampleProvider) {
 	if bus == nil || registry == nil {
 		return
 	}
@@ -102,7 +102,7 @@ func (p *ReflectionSampleProvider) RegisterQuery(name string, sample, resultSamp
 	p.querySamples[name] = samplePair{sample: sample, resultSample: resultSample}
 }
 
-func (p *ReflectionSampleProvider) RegisterEvent(name string, sample domainevent.Event) {
+func (p *ReflectionSampleProvider) RegisterEvent(name string, sample event.Event) {
 	p.eventSamples[name] = sample
 }
 
@@ -120,9 +120,9 @@ func (p *ReflectionSampleProvider) GetQuerySample(typeName string) (any, any) {
 	return nil, nil
 }
 
-func (p *ReflectionSampleProvider) GetEventSample(typeName string) domainevent.Event {
+func (p *ReflectionSampleProvider) GetEventSample(typeName string) event.Event {
 	if sample, ok := p.eventSamples[typeName]; ok {
-		if evt, ok := sample.(domainevent.Event); ok {
+		if evt, ok := sample.(event.Event); ok {
 			return evt
 		}
 	}
