@@ -12,6 +12,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/ddd-qce/core/lint/crossdomain"
+	"github.com/ddd-qce/core/lint/eventimmutable"
 	"github.com/ddd-qce/core/lint/implimport"
 	"github.com/ddd-qce/core/lint/infraimplement"
 	"github.com/ddd-qce/core/lint/publicleak"
@@ -24,6 +25,7 @@ var analyzers = []*analysis.Analyzer{
 	crossdomain.Analyzer,
 	publicleak.Analyzer,
 	implimport.Analyzer,
+	eventimmutable.Analyzer,
 	wirecomplexity.Analyzer,
 	wireimport.Analyzer,
 	wirelogic.Analyzer,

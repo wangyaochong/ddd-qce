@@ -18,8 +18,10 @@ type memTxState struct {
 	aborted bool
 }
 
+// MemoryTransactionManager provides in-memory transaction semantics with nested transaction support.
 type MemoryTransactionManager struct{}
 
+// NewMemoryTransactionManager creates a new MemoryTransactionManager.
 func NewMemoryTransactionManager() *MemoryTransactionManager {
 	return &MemoryTransactionManager{}
 }
@@ -74,6 +76,7 @@ func (m *MemoryTransactionManager) Rollback(ctx context.Context) error {
 	return nil
 }
 
+// NewMemoryBackend creates a Backend with all in-memory defaults.
 func NewMemoryBackend(opts ...BackendOption) *Backend {
 	defaults := []BackendOption{
 		WithTransactionManager(NewMemoryTransactionManager()),

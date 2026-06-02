@@ -45,13 +45,6 @@ func NewRepository[T aggregate.AggregateRef](db *sql.DB, opts ...RepoOption[T]) 
 	return r
 }
 
-func isUniqueViolation(err error) bool {
-	if sq, ok := err.(interface{ SQLState() string }); ok {
-		return sq.SQLState() == "23505"
-	}
-	return false
-}
-
 func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 	q := corepg.GetQuerier(ctx, r.db)
 	data, err := r.serializer.Serialize(agg)
@@ -69,7 +62,7 @@ func (r *PgRepository[T]) Save(ctx context.Context, agg T) error {
 			root.ID(), r.typeName, data, newVersion, time.Now(),
 		)
 		if err != nil {
-			if isUniqueViolation(err) {
+			if corepg.IsUniqueViolation(err) {
 				return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: snapshotVersion}
 			}
 			return err
@@ -255,7 +248,7 @@ func (r *PgEventSourcedRepository[T]) saveSnapshot(ctx context.Context, agg T, r
 			root.ID(), r.typeName, data, newVersion, time.Now(),
 		)
 		if err != nil {
-			if isUniqueViolation(err) {
+			if corepg.IsUniqueViolation(err) {
 				return &infrarepo.OptimisticLockError{AggregateID: root.ID(), ExpectedVersion: snapshotVersion}
 			}
 			return err

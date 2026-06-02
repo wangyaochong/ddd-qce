@@ -15,6 +15,7 @@ const (
 	defaultMaxSpans = 10000
 )
 
+// TraceStore persists and retrieves trace spans.
 type TraceStore interface {
 	RecordSpan(ctx context.Context, span *Span) error
 	GetTrace(ctx context.Context, traceID string) ([]*Span, error)
@@ -22,6 +23,7 @@ type TraceStore interface {
 	Close() error
 }
 
+// InMemoryTraceStore is a TTL-based in-memory store for trace spans.
 type InMemoryTraceStore struct {
 	mu         sync.RWMutex
 	spans      []*Span
@@ -31,16 +33,20 @@ type InMemoryTraceStore struct {
 	stopCh     chan struct{}
 }
 
+// InMemoryTraceStoreOption configures an InMemoryTraceStore during construction.
 type InMemoryTraceStoreOption func(*InMemoryTraceStore)
 
+// WithTTL sets the maximum age of spans before eviction.
 func WithTTL(ttl time.Duration) InMemoryTraceStoreOption {
 	return func(s *InMemoryTraceStore) { s.ttl = ttl }
 }
 
+// WithMaxSpans sets the maximum number of spans to retain.
 func WithMaxSpans(n int) InMemoryTraceStoreOption {
 	return func(s *InMemoryTraceStore) { s.maxSpans = n }
 }
 
+// WithBackgroundCleanup starts a background goroutine that evicts expired spans at the given interval.
 func WithBackgroundCleanup(interval time.Duration) InMemoryTraceStoreOption {
 	return func(s *InMemoryTraceStore) {
 		go func() {
@@ -60,6 +66,7 @@ func WithBackgroundCleanup(interval time.Duration) InMemoryTraceStoreOption {
 	}
 }
 
+// NewInMemoryTraceStore creates an InMemoryTraceStore with the provided options.
 func NewInMemoryTraceStore(opts ...InMemoryTraceStoreOption) *InMemoryTraceStore {
 	s := &InMemoryTraceStore{
 		spans:      make([]*Span, 0),
@@ -74,6 +81,7 @@ func NewInMemoryTraceStore(opts ...InMemoryTraceStoreOption) *InMemoryTraceStore
 	return s
 }
 
+// Close stops the background cleanup goroutine.
 func (s *InMemoryTraceStore) Close() error {
 	select {
 	case <-s.stopCh:
@@ -83,6 +91,7 @@ func (s *InMemoryTraceStore) Close() error {
 	return nil
 }
 
+// RecordSpan appends a span to the store, evicting old entries if limits are exceeded.
 func (s *InMemoryTraceStore) RecordSpan(ctx context.Context, span *Span) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -118,6 +127,7 @@ func (s *InMemoryTraceStore) rebuildIndex() {
 	}
 }
 
+// GetTrace returns all spans belonging to the given trace ID.
 func (s *InMemoryTraceStore) GetTrace(ctx context.Context, traceID string) ([]*Span, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -135,6 +145,7 @@ func (s *InMemoryTraceStore) GetTrace(ctx context.Context, traceID string) ([]*S
 	return result, nil
 }
 
+// ListTraces returns trace IDs matching the given filter.
 func (s *InMemoryTraceStore) ListTraces(ctx context.Context, filter TraceFilter) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

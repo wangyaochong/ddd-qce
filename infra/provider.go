@@ -12,6 +12,8 @@ import (
 
 const defaultSQLDriver = "pgx"
 
+// NewBackendFromConfig creates a Backend based on the DDD_STORE_TYPE environment variable
+// or config value. Supports "memory" and "postgres" types.
 func NewBackendFromConfig(cfg config.StoreConfig, opts ...BackendOption) (*Backend, error) {
 	switch cfg.Type {
 	case "memory", "":

@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 )
 
+// ErrBusClosed is returned when Publish or Execute is called on a bus
+// that has already been shut down.
 var ErrBusClosed = errors.New("bus is closed")
 
 func extractHandlerPayloadType(handlerType reflect.Type) (reflect.Type, bool) {

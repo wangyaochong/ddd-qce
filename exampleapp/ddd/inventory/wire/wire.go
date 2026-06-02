@@ -53,9 +53,9 @@ func NewOrderPlacedInventoryHandler(cmdBus command.CommandBus) *OrderPlacedInven
 }
 
 func (h *OrderPlacedInventoryHandler) Handle(ctx context.Context, evt *orderevent.OrderPlacedEvent) error {
-	log.Printf("[EventHandler] OrderPlaced: reserving inventory for order %s", evt.AggregateID())
+	log.Printf("[EventHandler] OrderPlaced: reserving inventory for order %s", evt.AggregateID)
 	_, err := command.Dispatch[*inventorycommand.ReserveInventoryCommand, *inventorycommand.ReserveInventoryResult](ctx, h.CmdBus, &inventorycommand.ReserveInventoryCommand{
-		OrderID:   orderdomain.OrderID(evt.AggregateID()),
+		OrderID:   orderdomain.OrderID(evt.AggregateID),
 		ProductID: orderdomain.ProductID("laptop"),
 		Quantity:  1,
 	})
@@ -71,9 +71,9 @@ func NewOrderCancelledInventoryHandler(cmdBus command.CommandBus) *OrderCancelle
 }
 
 func (h *OrderCancelledInventoryHandler) Handle(ctx context.Context, evt *orderevent.OrderCancelledEvent) error {
-	log.Printf("[EventHandler] OrderCancelled: releasing inventory for order %s", evt.AggregateID())
+	log.Printf("[EventHandler] OrderCancelled: releasing inventory for order %s", evt.AggregateID)
 	_, err := command.Dispatch[*inventorycommand.ReleaseInventoryCommand, *inventorycommand.ReleaseInventoryResult](ctx, h.CmdBus, &inventorycommand.ReleaseInventoryCommand{
-		OrderID:   orderdomain.OrderID(evt.AggregateID()),
+		OrderID:   orderdomain.OrderID(evt.AggregateID),
 		ProductID: orderdomain.ProductID("laptop"),
 		Quantity:  1,
 	})

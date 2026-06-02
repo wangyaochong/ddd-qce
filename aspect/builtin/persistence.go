@@ -201,9 +201,7 @@ func extractHandlerType(ctx context.Context) string {
 }
 
 func extractEventMeta(evt any) (aggregateID, eventType string) {
-	if de, ok := evt.(interface{ AggregateID() string }); ok {
-		aggregateID = de.AggregateID()
-	}
+	aggregateID = event.MetadataOf(evt).AggregateID
 	eventType = event.EventNameOf(evt)
 	return
 }

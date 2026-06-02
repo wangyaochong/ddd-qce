@@ -22,57 +22,46 @@ func TestNewEntity_EmptyID_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestEquals_SameID(t *testing.T) {
-	e1 := MustNewEntity("user-1")
-	e2 := MustNewEntity("user-1")
-	if !e1.Equals(e2) {
-		t.Error("expected entities with same ID to be equal")
+func TestEquals(t *testing.T) {
+	alice1 := MustNewEntity("user-1")
+	alice2 := MustNewEntity("user-1")
+	bob := MustNewEntity("user-2")
+
+	tests := []struct {
+		name string
+		a, b *Entity
+		want bool
+	}{
+		{"same ID", alice1, alice2, true},
+		{"different ID", alice1, bob, false},
+		{"nil receiver", nil, alice1, false},
+		{"nil other", alice1, nil, false},
+		{"both nil", nil, nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.Equals(tt.b); got != tt.want {
+				t.Errorf("Equals() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestEquals_DifferentID(t *testing.T) {
-	e1 := MustNewEntity("user-1")
-	e2 := MustNewEntity("user-2")
-	if e1.Equals(e2) {
-		t.Error("expected entities with different IDs to not be equal")
+func TestIsEmpty(t *testing.T) {
+	tests := []struct {
+		name string
+		e    *Entity
+		want bool
+	}{
+		{"empty ID", &Entity{}, true},
+		{"non-empty ID", MustNewEntity("user-1"), false},
 	}
-}
-
-func TestEquals_NilReceiver(t *testing.T) {
-	var e1 *Entity = nil
-	e2 := MustNewEntity("user-1")
-	if e1.Equals(e2) {
-		t.Error("expected nil receiver to not equal non-nil entity")
-	}
-}
-
-func TestEquals_NilOther(t *testing.T) {
-	e1 := MustNewEntity("user-1")
-	var e2 *Entity = nil
-	if e1.Equals(e2) {
-		t.Error("expected non-nil entity to not equal nil")
-	}
-}
-
-func TestEquals_BothNil(t *testing.T) {
-	var e1 *Entity = nil
-	var e2 *Entity = nil
-	if !e1.Equals(e2) {
-		t.Error("expected both nil entities to be equal")
-	}
-}
-
-func TestIsEmpty_True(t *testing.T) {
-	e := &Entity{}
-	if !e.IsEmpty() {
-		t.Error("expected entity with empty ID to be empty")
-	}
-}
-
-func TestIsEmpty_False(t *testing.T) {
-	e := MustNewEntity("user-1")
-	if e.IsEmpty() {
-		t.Error("expected entity with non-empty ID to not be empty")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.e.IsEmpty(); got != tt.want {
+				t.Errorf("IsEmpty() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

@@ -45,20 +45,27 @@ type EventBus struct {
 
 var _ event.EventBus = (*EventBus)(nil)
 
+// EventBusOption configures an EventBus during construction.
 type EventBusOption func(*EventBus)
 
+// WithEventBusAspectChain sets the aspect chain used to wrap event publishing.
 func WithEventBusAspectChain(chain *aspect.AspectChain) EventBusOption {
 	return func(b *EventBus) { b.chain = chain }
 }
 
+// WithHandlerTimeout sets the maximum duration each handler may run before
+// its context is cancelled. Defaults to 30 seconds.
 func WithHandlerTimeout(timeout time.Duration) EventBusOption {
 	return func(b *EventBus) { b.handlerTimeout = timeout }
 }
 
+// WithConcurrencyLimit caps the number of handler goroutines that can run
+// concurrently per Publish call.
 func WithConcurrencyLimit(n int) EventBusOption {
 	return func(b *EventBus) { b.sem = make(chan struct{}, n) }
 }
 
+// NewEventBus creates an in-memory EventBus with the given options.
 func NewEventBus(opts ...EventBusOption) *EventBus {
 	b := &EventBus{
 		handlers:       make(map[reflect.Type][]handlerEntry),
@@ -186,6 +193,7 @@ func (b *EventBus) Publish(ctx context.Context, evt domainevent.Event) error {
 	}
 }
 
+// HandlerCount returns the number of handlers registered for the given event type.
 func (b *EventBus) HandlerCount(evtType reflect.Type) int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -210,6 +218,8 @@ func (b *EventBus) Shutdown(ctx context.Context) error {
 	return shutdownBus(&b.closed, &b.inFlight, ctx)
 }
 
+// RegisterHandler registers a typed event handler on the bus.
+// It infers the event type from the handler's generic parameter T.
 func RegisterHandler[T domainevent.Event](bus *EventBus, handler event.EventHandler[T]) error {
 	return bus.SubscribeHandler(handler)
 }

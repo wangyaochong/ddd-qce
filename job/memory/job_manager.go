@@ -14,6 +14,7 @@ import (
 	"github.com/ddd-qce/core/trace"
 )
 
+// JobManager executes submitted commands asynchronously with retry and cancellation support.
 type JobManager struct {
 	store        jobcore.JobStore
 	executor     command.CommandBus
@@ -27,6 +28,7 @@ type JobManager struct {
 	recovery     bool
 }
 
+// NewJobManager creates a JobManager with the given store and command executor.
 func NewJobManager(store jobcore.JobStore, executor command.CommandBus, opts ...JobManagerOption) *JobManager {
 	m := &JobManager{
 		store:     store,
@@ -44,14 +46,17 @@ func NewJobManager(store jobcore.JobStore, executor command.CommandBus, opts ...
 	return m
 }
 
+// JobManagerOption configures a JobManager during construction.
 type JobManagerOption func(*JobManager)
 
+// WithStoreErrorHandler sets a callback for job store operation failures.
 func WithStoreErrorHandler(handler jobcore.StoreErrorHandler) JobManagerOption {
 	return func(m *JobManager) {
 		m.onStoreError = handler
 	}
 }
 
+// WithRecovery enables automatic recovery of pending and running jobs on startup.
 func WithRecovery() JobManagerOption {
 	return func(m *JobManager) {
 		m.recovery = true
@@ -69,6 +74,7 @@ func (m *JobManager) handleStoreError(ctx context.Context, jobID string, operati
 	})
 }
 
+// Submit enqueues a command for asynchronous execution and returns the created job.
 func (m *JobManager) Submit(ctx context.Context, cmd any, opts ...jobcore.JobOption) (*jobcore.Job, error) {
 	jobID := uuid.New()
 	job := jobcore.NewJob(hex.EncodeToString(jobID[:]), cmd, opts...)
@@ -156,10 +162,12 @@ func (m *JobManager) executeJob(job *jobcore.Job, parentTraceID, parentSpanID st
 	}
 }
 
+// GetStatus returns the current state of a job from the store.
 func (m *JobManager) GetStatus(ctx context.Context, jobID string) (*jobcore.Job, error) {
 	return m.store.Get(ctx, jobID)
 }
 
+// Cancel requests cancellation of a job by ID.
 func (m *JobManager) Cancel(ctx context.Context, jobID string) error {
 	m.mu.Lock()
 	liveJob, liveExists := m.jobs[jobID]
@@ -198,6 +206,7 @@ func (m *JobManager) Cancel(ctx context.Context, jobID string) error {
 	return m.store.Update(ctx, job)
 }
 
+// Retry re-executes a failed job.
 func (m *JobManager) Retry(ctx context.Context, jobID string) error {
 	m.mu.Lock()
 	liveJob, liveExists := m.jobs[jobID]
@@ -249,6 +258,7 @@ func (m *JobManager) Retry(ctx context.Context, jobID string) error {
 	return nil
 }
 
+// Wait blocks until the job completes or the timeout expires.
 func (m *JobManager) Wait(ctx context.Context, jobID string, timeout time.Duration) (*jobcore.Job, error) {
 	m.mu.Lock()
 	job, exists := m.jobs[jobID]
@@ -268,6 +278,7 @@ func (m *JobManager) Wait(ctx context.Context, jobID string, timeout time.Durati
 	}
 }
 
+// WaitForRunning blocks until the job transitions out of pending state or the timeout expires.
 func (m *JobManager) WaitForRunning(ctx context.Context, jobID string, timeout time.Duration) (*jobcore.Job, error) {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -289,10 +300,12 @@ func (m *JobManager) WaitForRunning(ctx context.Context, jobID string, timeout t
 	}
 }
 
+// ListByStatus returns all jobs matching the given status.
 func (m *JobManager) ListByStatus(ctx context.Context, status jobcore.JobStatus) ([]*jobcore.Job, error) {
 	return m.store.List(ctx, status)
 }
 
+// Shutdown stops all running jobs and waits for them to finish or the context to expire.
 func (m *JobManager) Shutdown(ctx context.Context) error {
 	m.mu.Lock()
 	if m.closed {

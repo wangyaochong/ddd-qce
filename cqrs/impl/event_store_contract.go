@@ -212,8 +212,8 @@ func TestAggregateEventStoreContract(t *testing.T, newStore func() event.Aggrega
 		if loaded[0].Data != "hello" {
 			t.Errorf("expected Data 'hello', got '%s'", loaded[0].Data)
 		}
-		if loaded[0].AggregateID() != "contract-7" {
-			t.Errorf("expected AggregateID 'contract-7', got '%s'", loaded[0].AggregateID())
+		if loaded[0].AggregateID != "contract-7" {
+			t.Errorf("expected AggregateID 'contract-7', got '%s'", loaded[0].AggregateID)
 		}
 	})
 }

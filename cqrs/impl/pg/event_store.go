@@ -82,13 +82,6 @@ func NewEventSourceStore[T domainevent.Event](db *sql.DB, opts ...EventSourceSto
 	return s, nil
 }
 
-func isUniqueViolation(err error) bool {
-	if sq, ok := err.(interface{ SQLState() string }); ok {
-		return sq.SQLState() == "23505"
-	}
-	return false
-}
-
 func (s *EventSourceStore[T]) alloc(eventType string) (T, error) {
 	if s.factoryMap != nil {
 		if fn, ok := s.factoryMap[eventType]; ok {
@@ -129,15 +122,16 @@ func (s *EventSourceStore[T]) appendEvents(ctx context.Context, q corepg.DBTX, a
 		if err != nil {
 			return fmt.Errorf("marshal event: %w", err)
 		}
+		meta := event.MetadataOf(evt)
 		version := expectedVersion + i + 1
 		_, err = q.ExecContext(ctx,
 			`INSERT INTO ddd_domain_events (aggregate_id, event_type, event_data, occurred_at, version, correlation_id, causation_id)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			evt.AggregateID(), event.EventNameOf(evt), data, evt.OccurredAt(), version,
-			evt.CorrelationID(), evt.CausationID(),
+			meta.AggregateID, event.EventNameOf(evt), data, meta.OccurredAt, version,
+			meta.CorrelationID, meta.CausationID,
 		)
 		if err != nil {
-			if isUniqueViolation(err) {
+			if corepg.IsUniqueViolation(err) {
 				return fmt.Errorf("concurrency conflict: version %d already exists for aggregate %s: %w", version, aggregateID, ddderror.ErrConcurrency)
 			}
 			return fmt.Errorf("insert event: %w", err)
@@ -177,7 +171,6 @@ func (s *EventSourceStore[T]) Load(ctx context.Context, aggregateID string, afte
 		if err := json.Unmarshal(data, evt); err != nil {
 			return nil, fmt.Errorf("unmarshal event: %w", err)
 		}
-		restoreBaseEvent(evt, aggID, occurredAt, correlationID, causationID)
 		result = append(result, evt)
 	}
 	if err := rows.Err(); err != nil {
@@ -223,7 +216,6 @@ func (s *EventSourceStore[T]) LoadAll(ctx context.Context, afterPosition int64, 
 		if err := json.Unmarshal(data, evt); err != nil {
 			return nil, fmt.Errorf("unmarshal event: %w", err)
 		}
-		restoreBaseEvent(evt, aggID, occurredAt, correlationID, causationID)
 		result = append(result, event.GlobalEvent[T]{
 			Position: id,
 			Event:    evt,
@@ -233,12 +225,4 @@ func (s *EventSourceStore[T]) LoadAll(ctx context.Context, afterPosition int64, 
 		return nil, fmt.Errorf("iterate events: %w", err)
 	}
 	return result, nil
-}
-
-func restoreBaseEvent(evt any, aggregateID string, occurredAt time.Time, correlationID string, causationID string) {
-	e, ok := evt.(domainevent.Event)
-	if !ok {
-		return
-	}
-	event.RestoreBaseEvent(e, aggregateID, occurredAt, correlationID, causationID)
 }

@@ -2,6 +2,7 @@ package event
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 
 type testEvent struct {
 	BaseEvent
-	Value string
+	Value string `json:"value"`
 }
 
 type testEventHandler struct {
@@ -62,11 +63,11 @@ func TestNewBaseEvent(t *testing.T) {
 	now := time.Now()
 	evt := NewBaseEvent("agg-1", now)
 
-	if evt.AggregateID() != "agg-1" {
-		t.Errorf("AggregateID() = %q, want %q", evt.AggregateID(), "agg-1")
+	if evt.AggregateID != "agg-1" {
+		t.Errorf("AggregateID = %q, want %q", evt.AggregateID, "agg-1")
 	}
-	if !evt.OccurredAt().Equal(now) {
-		t.Errorf("OccurredAt() = %v, want %v", evt.OccurredAt(), now)
+	if !evt.OccurredAt.Equal(now) {
+		t.Errorf("OccurredAt = %v, want %v", evt.OccurredAt, now)
 	}
 }
 
@@ -75,49 +76,25 @@ func TestNewDomainEvent(t *testing.T) {
 	evt := NewDomainEvent("agg-1")
 	after := time.Now()
 
-	if evt.AggregateID() != "agg-1" {
-		t.Errorf("AggregateID() = %q, want %q", evt.AggregateID(), "agg-1")
+	if evt.AggregateID != "agg-1" {
+		t.Errorf("AggregateID = %q, want %q", evt.AggregateID, "agg-1")
 	}
-	if evt.OccurredAt().Before(before) || evt.OccurredAt().After(after) {
-		t.Error("OccurredAt() should be close to current time")
-	}
-}
-
-func TestApplyCorrelation(t *testing.T) {
-	evt := &testEvent{BaseEvent: NewBaseEvent("agg-1", time.Now())}
-	if evt.CorrelationID() != "" {
-		t.Errorf("CorrelationID() = %q, want empty before ApplyCorrelation", evt.CorrelationID())
-	}
-
-	ApplyCorrelation(evt, "corr-1", "caus-1")
-
-	if evt.CorrelationID() != "corr-1" {
-		t.Errorf("CorrelationID() = %q, want %q", evt.CorrelationID(), "corr-1")
-	}
-	if evt.CausationID() != "caus-1" {
-		t.Errorf("CausationID() = %q, want %q", evt.CausationID(), "caus-1")
-	}
-}
-
-func TestApplyCorrelation_ZeroBaseEvent(t *testing.T) {
-	evt := &testEvent{}
-	ApplyCorrelation(evt, "corr-1", "caus-1")
-	if evt.CorrelationID() != "corr-1" {
-		t.Errorf("ApplyCorrelation should work on zero-value BaseEvent")
+	if evt.OccurredAt.Before(before) || evt.OccurredAt.After(after) {
+		t.Error("OccurredAt should be close to current time")
 	}
 }
 
 func TestNewDomainEventWithCorrelation(t *testing.T) {
 	evt := NewDomainEventWithCorrelation("agg-1", "corr-1", "caus-1")
 
-	if evt.AggregateID() != "agg-1" {
-		t.Errorf("AggregateID() = %q, want %q", evt.AggregateID(), "agg-1")
+	if evt.AggregateID != "agg-1" {
+		t.Errorf("AggregateID = %q, want %q", evt.AggregateID, "agg-1")
 	}
-	if evt.CorrelationID() != "corr-1" {
-		t.Errorf("CorrelationID() = %q, want %q", evt.CorrelationID(), "corr-1")
+	if evt.CorrelationID != "corr-1" {
+		t.Errorf("CorrelationID = %q, want %q", evt.CorrelationID, "corr-1")
 	}
-	if evt.CausationID() != "caus-1" {
-		t.Errorf("CausationID() = %q, want %q", evt.CausationID(), "caus-1")
+	if evt.CausationID != "caus-1" {
+		t.Errorf("CausationID = %q, want %q", evt.CausationID, "caus-1")
 	}
 }
 
@@ -128,14 +105,14 @@ func TestWithCorrelation_FromTraceContext(t *testing.T) {
 
 	evt := WithCorrelation(ctx, "agg-1")
 
-	if evt.AggregateID() != "agg-1" {
-		t.Errorf("AggregateID() = %q, want %q", evt.AggregateID(), "agg-1")
+	if evt.AggregateID != "agg-1" {
+		t.Errorf("AggregateID = %q, want %q", evt.AggregateID, "agg-1")
 	}
-	if evt.CorrelationID() != traceID {
-		t.Errorf("CorrelationID() = %q, want %q", evt.CorrelationID(), traceID)
+	if evt.CorrelationID != traceID {
+		t.Errorf("CorrelationID = %q, want %q", evt.CorrelationID, traceID)
 	}
-	if evt.CausationID() != spanID {
-		t.Errorf("CausationID() = %q, want %q", evt.CausationID(), spanID)
+	if evt.CausationID != spanID {
+		t.Errorf("CausationID = %q, want %q", evt.CausationID, spanID)
 	}
 }
 
@@ -143,11 +120,11 @@ func TestWithCorrelation_EmptyContext(t *testing.T) {
 	ctx := context.Background()
 	evt := WithCorrelation(ctx, "agg-1")
 
-	if evt.CorrelationID() != "" {
-		t.Errorf("CorrelationID() = %q, want empty when no trace in context", evt.CorrelationID())
+	if evt.CorrelationID != "" {
+		t.Errorf("CorrelationID = %q, want empty when no trace in context", evt.CorrelationID)
 	}
-	if evt.CausationID() != "" {
-		t.Errorf("CausationID() = %q, want empty when no trace in context", evt.CausationID())
+	if evt.CausationID != "" {
+		t.Errorf("CausationID = %q, want empty when no trace in context", evt.CausationID)
 	}
 }
 
@@ -209,58 +186,66 @@ func (s *testGlobalEventStore) LoadAll(ctx context.Context, afterPosition int64,
 	return nil, nil
 }
 
-func TestRestoreBaseEvent_WithBaseEvent(t *testing.T) {
-	evt := &testEvent{}
-	now := time.Now()
-	RestoreBaseEvent(evt, "agg-1", now, "corr-1", "caus-1")
-
-	if evt.AggregateID() != "agg-1" {
-		t.Errorf("AggregateID() = %q, want %q", evt.AggregateID(), "agg-1")
-	}
-	if !evt.OccurredAt().Equal(now) {
-		t.Errorf("OccurredAt() = %v, want %v", evt.OccurredAt(), now)
-	}
-	if evt.CorrelationID() != "corr-1" {
-		t.Errorf("CorrelationID() = %q, want %q", evt.CorrelationID(), "corr-1")
-	}
-	if evt.CausationID() != "caus-1" {
-		t.Errorf("CausationID() = %q, want %q", evt.CausationID(), "caus-1")
-	}
-}
-
-type noRestoreEvent struct {
-	BaseEvent
-}
-
-func TestRestoreBaseEvent_WithBaseEventField(t *testing.T) {
-	evt := &noRestoreEvent{}
-	now := time.Now()
-	RestoreBaseEvent(evt, "agg-1", now, "corr-1", "caus-1")
-
-	if evt.AggregateID() != "agg-1" {
-		t.Errorf("AggregateID() = %q, want %q", evt.AggregateID(), "agg-1")
-	}
-}
-
-type bareEvent struct {
-	aggregateID string
-}
-
-func (e *bareEvent) AggregateID() string   { return e.aggregateID }
-func (e *bareEvent) OccurredAt() time.Time { return time.Time{} }
-func (e *bareEvent) CorrelationID() string { return "" }
-func (e *bareEvent) CausationID() string   { return "" }
-
-func TestRestoreBaseEvent_EventWithoutBaseEventField(t *testing.T) {
-	evt := &bareEvent{aggregateID: "original"}
-	now := time.Now()
-	RestoreBaseEvent(evt, "agg-new", now, "corr-1", "caus-1")
-
-	if evt.AggregateID() != "original" {
-		t.Errorf("AggregateID() = %q, want %q (no-op since no BaseEvent field)", evt.AggregateID(), "original")
-	}
-}
-
 func TestEventHandlerInterface(t *testing.T) {
 	var _ EventHandler[testEvent] = (*testEventHandler)(nil)
+}
+
+func TestBaseEvent_JSONRoundtrip(t *testing.T) {
+	original := NewDomainEventWithCorrelation(
+		"order-1",
+		"corr-1",
+		"caus-1",
+	)
+	original.OccurredAt = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var restored BaseEvent
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if restored.AggregateID != "order-1" {
+		t.Errorf("AggregateID = %q, want %q", restored.AggregateID, "order-1")
+	}
+	if !restored.OccurredAt.Equal(original.OccurredAt) {
+		t.Errorf("OccurredAt = %v, want %v", restored.OccurredAt, original.OccurredAt)
+	}
+	if restored.CorrelationID != "corr-1" {
+		t.Errorf("CorrelationID = %q, want %q", restored.CorrelationID, "corr-1")
+	}
+	if restored.CausationID != "caus-1" {
+		t.Errorf("CausationID = %q, want %q", restored.CausationID, "caus-1")
+	}
+}
+
+func TestEmbeddedEvent_JSONRoundtrip(t *testing.T) {
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	original := &testEvent{
+		BaseEvent: NewBaseEvent("order-1", now),
+		Value:     "hello",
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var restored testEvent
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if restored.AggregateID != "order-1" {
+		t.Errorf("AggregateID = %q, want %q", restored.AggregateID, "order-1")
+	}
+	if !restored.OccurredAt.Equal(now) {
+		t.Errorf("OccurredAt = %v, want %v", restored.OccurredAt, now)
+	}
+	if restored.Value != "hello" {
+		t.Errorf("Value = %q, want %q", restored.Value, "hello")
+	}
 }

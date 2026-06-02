@@ -18,10 +18,12 @@ type txState struct {
 	parentSp  []int
 }
 
+// PgTransactionManager provides PostgreSQL transaction management with nested transaction support via savepoints.
 type PgTransactionManager struct {
 	db *sql.DB
 }
 
+// NewTransactionManager creates a PgTransactionManager backed by the given database connection.
 func NewTransactionManager(db *sql.DB) *PgTransactionManager {
 	return &PgTransactionManager{db: db}
 }
@@ -113,11 +115,13 @@ func (m *PgTransactionManager) Rollback(ctx context.Context) error {
 	return state.tx.Rollback()
 }
 
+// HasTransaction returns true if ctx carries an active transaction.
 func HasTransaction(ctx context.Context) bool {
 	_, ok := ctx.Value(txKey{}).(*txState)
 	return ok
 }
 
+// GetQuerier returns the active transaction from ctx, or falls back to the raw DB.
 func GetQuerier(ctx context.Context, db *sql.DB) DBTX {
 	if state, ok := ctx.Value(txKey{}).(*txState); ok {
 		return state.tx
@@ -125,6 +129,7 @@ func GetQuerier(ctx context.Context, db *sql.DB) DBTX {
 	return db
 }
 
+// DBTX abstracts *sql.DB and *sql.Tx so repositories can use either interchangeably.
 type DBTX interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)

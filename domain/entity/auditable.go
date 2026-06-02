@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+// AuditableEntity extends Entity with created and updated timestamps.
+// It tracks when an entity was first created and last modified.
 type AuditableEntity struct {
 	Entity
 	createdAt time.Time
@@ -15,6 +17,9 @@ type AuditableEntity struct {
 func (e *AuditableEntity) CreatedAt() time.Time { return e.createdAt }
 func (e *AuditableEntity) UpdatedAt() time.Time { return e.updatedAt }
 
+// NewAuditableEntity creates an AuditableEntity with the given identity.
+// CreatedAt and UpdatedAt are set to the current time.
+// Returns an error if id is empty.
 func NewAuditableEntity(id string) (*AuditableEntity, error) {
 	e, err := NewEntity(id)
 	if err != nil {
@@ -28,6 +33,9 @@ func NewAuditableEntity(id string) (*AuditableEntity, error) {
 	}, nil
 }
 
+// NewAuditableEntityFromData creates an AuditableEntity with explicit timestamps.
+// Use this when rehydrating from persistent storage.
+// Returns an error if id is empty.
 func NewAuditableEntityFromData(id string, createdAt, updatedAt time.Time) (*AuditableEntity, error) {
 	e, err := NewEntity(id)
 	if err != nil {
@@ -40,6 +48,7 @@ func NewAuditableEntityFromData(id string, createdAt, updatedAt time.Time) (*Aud
 	}, nil
 }
 
+// Touch updates the UpdatedAt timestamp to the current time.
 func (e *AuditableEntity) Touch() {
 	e.updatedAt = time.Now()
 }
@@ -74,6 +83,7 @@ func (e *AuditableEntity) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// AuditableEntityJSON is the JSON representation of AuditableEntity.
 type AuditableEntityJSON struct {
 	EntityJSON
 	CreatedAt time.Time `json:"createdAt"`

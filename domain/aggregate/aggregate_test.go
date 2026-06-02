@@ -170,29 +170,25 @@ func TestUncommittedEvents_Empty(t *testing.T) {
 }
 
 func TestMarkEventsAsCommitted(t *testing.T) {
-	agg := newTestEventCollector("order-1")
-	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
-	_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
-
-	if len(agg.UncommittedEvents()) != 2 {
-		t.Fatal("expected 2 uncommitted events before marking")
+	tests := []struct {
+		name           string
+		eventCount     int
+		wantAfterCount int
+	}{
+		{"with events clears them", 2, 0},
+		{"empty is idempotent", 0, 0},
 	}
-
-	agg.MarkEventsAsCommitted()
-
-	events := agg.UncommittedEvents()
-	if len(events) != 0 {
-		t.Errorf("expected 0 uncommitted events after marking, got %d", len(events))
-	}
-}
-
-func TestMarkEventsAsCommitted_Empty(t *testing.T) {
-	agg := newTestEventCollector("order-1")
-	agg.MarkEventsAsCommitted()
-
-	events := agg.UncommittedEvents()
-	if len(events) != 0 {
-		t.Errorf("expected 0 uncommitted events after marking, got %d", len(events))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			agg := newTestEventCollector("order-1")
+			for i := 0; i < tt.eventCount; i++ {
+				_ = agg.Apply(context.Background(), &testDomainEvent{BaseEvent: cqrsevent.NewBaseEvent("order-1", time.Now())})
+			}
+			agg.MarkEventsAsCommitted()
+			if got := len(agg.UncommittedEvents()); got != tt.wantAfterCount {
+				t.Errorf("after MarkEventsAsCommitted: got %d events, want %d", got, tt.wantAfterCount)
+			}
+		})
 	}
 }
 
@@ -389,48 +385,28 @@ func TestAggregateRoot_OrderLifecycle(t *testing.T) {
 	}
 }
 
-func TestAggregateRoot_Equals_SameID(t *testing.T) {
-	agg1 := newTestEventCollector("order-1")
-	agg2 := newTestEventCollector("order-1")
+func TestAggregateRoot_Equals(t *testing.T) {
+	a1 := newTestEventCollector("order-1").GetAggregateRoot()
+	a2 := newTestEventCollector("order-1").GetAggregateRoot()
+	a3 := newTestEventCollector("order-2").GetAggregateRoot()
 
-	if !agg1.GetAggregateRoot().Equals(agg2.GetAggregateRoot()) {
-		t.Error("expected aggregates with same ID to be equal")
+	tests := []struct {
+		name string
+		a, b *AggregateRoot
+		want bool
+	}{
+		{"same ID", a1, a2, true},
+		{"different ID", a1, a3, false},
+		{"nil receiver", nil, a1, false},
+		{"nil other", a1, nil, false},
+		{"both nil", nil, nil, true},
 	}
-}
-
-func TestAggregateRoot_Equals_DifferentID(t *testing.T) {
-	agg1 := newTestEventCollector("order-1")
-	agg2 := newTestEventCollector("order-2")
-
-	if agg1.GetAggregateRoot().Equals(agg2.GetAggregateRoot()) {
-		t.Error("expected aggregates with different IDs to not be equal")
-	}
-}
-
-func TestAggregateRoot_Equals_NilReceiver(t *testing.T) {
-	var agg1 *AggregateRoot
-	agg2 := newTestEventCollector("order-1")
-
-	if agg1.Equals(agg2.GetAggregateRoot()) {
-		t.Error("expected nil receiver to not equal non-nil")
-	}
-}
-
-func TestAggregateRoot_Equals_NilOther(t *testing.T) {
-	agg1 := newTestEventCollector("order-1")
-	var agg2 *AggregateRoot
-
-	if agg1.GetAggregateRoot().Equals(agg2) {
-		t.Error("expected non-nil to not equal nil")
-	}
-}
-
-func TestAggregateRoot_Equals_BothNil(t *testing.T) {
-	var agg1 *AggregateRoot
-	var agg2 *AggregateRoot
-
-	if !agg1.Equals(agg2) {
-		t.Error("expected both nil to be equal")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.Equals(tt.b); got != tt.want {
+				t.Errorf("Equals() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

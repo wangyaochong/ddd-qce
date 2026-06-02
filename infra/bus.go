@@ -8,6 +8,7 @@ import (
 	"github.com/ddd-qce/core/cqrs/query"
 )
 
+// BusFactory creates command, query, and event buses wired with an aspect chain.
 type BusFactory interface {
 	CreateCommandBus(chain *aspect.AspectChain) command.CommandBus
 	CreateQueryBus(chain *aspect.AspectChain) query.QueryBus
@@ -16,6 +17,7 @@ type BusFactory interface {
 
 type memoryBusFactory struct{}
 
+// NewMemoryBusFactory returns a BusFactory that creates in-memory buses.
 func NewMemoryBusFactory() BusFactory {
 	return &memoryBusFactory{}
 }

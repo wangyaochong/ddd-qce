@@ -16,6 +16,7 @@ type aggregateRecord[T aggregate.AggregateRef] struct {
 	version int
 }
 
+// InMemoryRepository is a thread-safe in-memory repository for aggregates.
 type InMemoryRepository[T aggregate.AggregateRef] struct {
 	mu         sync.RWMutex
 	store      map[string]*aggregateRecord[T]
@@ -24,12 +25,15 @@ type InMemoryRepository[T aggregate.AggregateRef] struct {
 
 var _ repository.Repository[aggregate.AggregateRef] = (*InMemoryRepository[aggregate.AggregateRef])(nil)
 
+// RepoOption configures an InMemoryRepository during construction.
 type RepoOption[T aggregate.AggregateRef] func(*InMemoryRepository[T])
 
+// WithSerializer sets a custom snapshot serializer for the repository.
 func WithSerializer[T aggregate.AggregateRef](s repository.SnapshotSerializer[T]) RepoOption[T] {
 	return func(r *InMemoryRepository[T]) { r.serializer = s }
 }
 
+// NewRepository creates an InMemoryRepository with the provided options.
 func NewRepository[T aggregate.AggregateRef](opts ...RepoOption[T]) *InMemoryRepository[T] {
 	r := &InMemoryRepository[T]{
 		store:      make(map[string]*aggregateRecord[T]),
@@ -55,6 +59,7 @@ func deepCopy[T aggregate.AggregateRef](serializer repository.SnapshotSerializer
 	return copied, nil
 }
 
+// Save persists an aggregate snapshot, enforcing optimistic concurrency control.
 func (r *InMemoryRepository[T]) Save(_ context.Context, agg T) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -87,6 +92,7 @@ func (r *InMemoryRepository[T]) Save(_ context.Context, agg T) error {
 	return nil
 }
 
+// FindByID retrieves an aggregate by its ID, returning ErrNotFound if it does not exist.
 func (r *InMemoryRepository[T]) FindByID(_ context.Context, id string) (T, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -100,6 +106,7 @@ func (r *InMemoryRepository[T]) FindByID(_ context.Context, id string) (T, error
 	return deepCopy(r.serializer, rec.agg)
 }
 
+// Delete removes an aggregate by ID, returning ErrNotFound if it does not exist.
 func (r *InMemoryRepository[T]) Delete(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -111,6 +118,7 @@ func (r *InMemoryRepository[T]) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+// InMemoryEventSourcedRepository is a thread-safe in-memory repository for event-sourced aggregates.
 type InMemoryEventSourcedRepository[T aggregate.AggregateRef] struct {
 	mu         sync.RWMutex
 	store      map[string]*aggregateRecord[T]
@@ -119,12 +127,15 @@ type InMemoryEventSourcedRepository[T aggregate.AggregateRef] struct {
 
 var _ repository.EventSourcingRepository[aggregate.AggregateRef] = (*InMemoryEventSourcedRepository[aggregate.AggregateRef])(nil)
 
+// EventSourcedRepoOption configures an InMemoryEventSourcedRepository during construction.
 type EventSourcedRepoOption[T aggregate.AggregateRef] func(*InMemoryEventSourcedRepository[T])
 
+// WithEventSourcedSerializer sets a custom snapshot serializer for the event-sourced repository.
 func WithEventSourcedSerializer[T aggregate.AggregateRef](s repository.SnapshotSerializer[T]) EventSourcedRepoOption[T] {
 	return func(r *InMemoryEventSourcedRepository[T]) { r.serializer = s }
 }
 
+// NewEventSourcedRepository creates an InMemoryEventSourcedRepository with the provided options.
 func NewEventSourcedRepository[T aggregate.AggregateRef](opts ...EventSourcedRepoOption[T]) *InMemoryEventSourcedRepository[T] {
 	r := &InMemoryEventSourcedRepository[T]{
 		store:      make(map[string]*aggregateRecord[T]),
@@ -136,6 +147,7 @@ func NewEventSourcedRepository[T aggregate.AggregateRef](opts ...EventSourcedRep
 	return r
 }
 
+// Save persists uncommitted events from the aggregate and marks them as committed.
 func (r *InMemoryEventSourcedRepository[T]) Save(_ context.Context, agg T) error {
 	root := agg.GetAggregateRoot()
 	events := root.UncommittedEvents()
@@ -173,6 +185,7 @@ func (r *InMemoryEventSourcedRepository[T]) Save(_ context.Context, agg T) error
 	return nil
 }
 
+// Load retrieves an event-sourced aggregate by ID, returning ErrNotFound if it does not exist.
 func (r *InMemoryEventSourcedRepository[T]) Load(_ context.Context, id string) (T, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

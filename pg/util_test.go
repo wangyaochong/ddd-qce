@@ -1,6 +1,7 @@
 package pg
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -80,6 +81,33 @@ func TestJSONOrNull(t *testing.T) {
 			}
 			if !tt.wantNil && result == nil {
 				t.Errorf("JSONOrNull() = nil, want non-nil")
+			}
+		})
+	}
+}
+
+type testSQLError struct {
+	sqlState string
+}
+
+func (e *testSQLError) Error() string { return "sql error" }
+func (e *testSQLError) SQLState() string { return e.sqlState }
+
+func TestIsUniqueViolation(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"unique violation 23505", &testSQLError{sqlState: "23505"}, true},
+		{"other SQL state", &testSQLError{sqlState: "22001"}, false},
+		{"nil error", nil, false},
+		{"non-SQL error", fmt.Errorf("some error"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsUniqueViolation(tt.err); got != tt.want {
+				t.Errorf("IsUniqueViolation() = %v, want %v", got, tt.want)
 			}
 		})
 	}

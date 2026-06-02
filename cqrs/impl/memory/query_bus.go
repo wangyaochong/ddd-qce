@@ -9,18 +9,22 @@ import (
 	"github.com/ddd-qce/core/cqrs/query"
 )
 
+// QueryBus is an in-memory implementation of query.QueryBus.
 type QueryBus struct {
 	core messageBus
 }
 
 var _ query.QueryBus = (*QueryBus)(nil)
 
+// QueryBusOption configures a QueryBus during construction.
 type QueryBusOption func(*QueryBus)
 
+// WithQueryBusAspectChain sets the aspect chain used to wrap query execution.
 func WithQueryBusAspectChain(chain *aspect.AspectChain) QueryBusOption {
 	return func(b *QueryBus) { b.core.chain = chain }
 }
 
+// NewQueryBus creates an in-memory QueryBus with the given options.
 func NewQueryBus(opts ...QueryBusOption) *QueryBus {
 	b := &QueryBus{
 		core: newMessageBus(aspect.NewAspectChain()),
@@ -31,6 +35,8 @@ func NewQueryBus(opts ...QueryBusOption) *QueryBus {
 	return b
 }
 
+// RegisterQuery registers a typed query handler on the bus.
+// It infers the query type from the handler's generic parameter T.
 func RegisterQuery[T query.Query, R any](bus *QueryBus, handler query.QueryHandler[T, R]) error {
 	return bus.RegisterHandler(handler)
 }

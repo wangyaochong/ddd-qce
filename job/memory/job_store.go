@@ -9,11 +9,13 @@ import (
 	jobcore "github.com/ddd-qce/core/job/core"
 )
 
+// InMemoryJobStore is a thread-safe in-memory implementation of JobStore.
 type InMemoryJobStore struct {
 	jobs map[string]*jobcore.Job
 	mu   sync.RWMutex
 }
 
+// NewJobStore creates an empty InMemoryJobStore.
 func NewJobStore() *InMemoryJobStore {
 	return &InMemoryJobStore{
 		jobs: make(map[string]*jobcore.Job),

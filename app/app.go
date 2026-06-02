@@ -13,6 +13,7 @@ import (
 	"github.com/ddd-qce/core/infra"
 )
 
+// App is the top-level application container that wires buses, aspects, and infrastructure.
 type App struct {
 	CmdBus     command.CommandBus
 	QueryBus   query.QueryBus
@@ -24,8 +25,10 @@ type App struct {
 	cleanup    []func() error
 }
 
+// AppOption configures an App during construction.
 type AppOption func(*App) error
 
+// NewApp creates an App with the provided options, aborting on the first option error.
 func NewApp(opts ...AppOption) (*App, error) {
 	app := &App{
 		Config: config.DefaultConfig(),
@@ -40,6 +43,7 @@ func NewApp(opts ...AppOption) (*App, error) {
 	return app, nil
 }
 
+// Close shuts down all registered lifecycles and runs cleanup functions.
 func (a *App) Close(ctx context.Context) error {
 	var errs []error
 	for _, l := range a.lifecycles {
@@ -61,10 +65,12 @@ func (a *App) Close(ctx context.Context) error {
 	return nil
 }
 
+// RegisterLifecycle adds a Lifecycle to be shut down when the app closes.
 func (a *App) RegisterLifecycle(l Lifecycle) {
 	a.lifecycles = append(a.lifecycles, l)
 }
 
+// WithAutoBackend creates a backend from DDD_STORE_TYPE env config and attaches it to the app.
 func WithAutoBackend() AppOption {
 	return func(a *App) error {
 		storeCfg := config.ResolveStoreConfig()
@@ -78,6 +84,7 @@ func WithAutoBackend() AppOption {
 	}
 }
 
+// WithBackend sets the infrastructure backend for the app.
 func WithBackend(backend *infra.Backend) AppOption {
 	return func(a *App) error {
 		a.Backend = backend
@@ -85,6 +92,7 @@ func WithBackend(backend *infra.Backend) AppOption {
 	}
 }
 
+// WithConfigFile loads app configuration from a TOML file.
 func WithConfigFile(path string) AppOption {
 	return func(a *App) error {
 		loader := config.NewConfigLoader()
@@ -104,6 +112,7 @@ func ensureChain(chain *aspect.AspectChain) *aspect.AspectChain {
 	return chain
 }
 
+// WithDefaultAspects registers logging, tracing, metrics, and transaction aspects based on config.
 func WithDefaultAspects() AppOption {
 	return func(a *App) error {
 		a.Chain = ensureChain(a.Chain)
@@ -147,6 +156,7 @@ func (a *App) busFactory() infra.BusFactory {
 	return infra.NewMemoryBusFactory()
 }
 
+// WithCommandHandlers registers command handlers, creating the command bus if needed.
 func WithCommandHandlers(handlers ...any) AppOption {
 	return func(a *App) error {
 		if a.CmdBus == nil {
@@ -162,6 +172,7 @@ func WithCommandHandlers(handlers ...any) AppOption {
 	}
 }
 
+// WithQueryHandlers registers query handlers, creating the query bus if needed.
 func WithQueryHandlers(handlers ...any) AppOption {
 	return func(a *App) error {
 		if a.QueryBus == nil {
@@ -177,6 +188,7 @@ func WithQueryHandlers(handlers ...any) AppOption {
 	}
 }
 
+// WithEventSubscriptions registers event handler subscriptions, creating the event bus if needed.
 func WithEventSubscriptions(subs ...any) AppOption {
 	return func(a *App) error {
 		if a.EventBus == nil {
@@ -192,6 +204,7 @@ func WithEventSubscriptions(subs ...any) AppOption {
 	}
 }
 
+// WithBuses sets all three buses at once.
 func WithBuses(cmdBus command.CommandBus, queryBus query.QueryBus, eventBus event.EventBus) AppOption {
 	return func(a *App) error {
 		a.CmdBus = cmdBus
@@ -201,6 +214,7 @@ func WithBuses(cmdBus command.CommandBus, queryBus query.QueryBus, eventBus even
 	}
 }
 
+// WithCommandBus sets the command bus for the app.
 func WithCommandBus(cmdBus command.CommandBus) AppOption {
 	return func(a *App) error {
 		a.CmdBus = cmdBus
@@ -208,6 +222,7 @@ func WithCommandBus(cmdBus command.CommandBus) AppOption {
 	}
 }
 
+// WithQueryBus sets the query bus for the app.
 func WithQueryBus(queryBus query.QueryBus) AppOption {
 	return func(a *App) error {
 		a.QueryBus = queryBus
@@ -215,6 +230,7 @@ func WithQueryBus(queryBus query.QueryBus) AppOption {
 	}
 }
 
+// WithEventBus sets the event bus for the app.
 func WithEventBus(eventBus event.EventBus) AppOption {
 	return func(a *App) error {
 		a.EventBus = eventBus
@@ -222,6 +238,7 @@ func WithEventBus(eventBus event.EventBus) AppOption {
 	}
 }
 
+// WithLogger registers a logging aspect using the provided logger.
 func WithLogger(logger builtin.Logger) AppOption {
 	return func(a *App) error {
 		if a.Chain == nil {
@@ -232,6 +249,7 @@ func WithLogger(logger builtin.Logger) AppOption {
 	}
 }
 
+// WithMetrics registers a metrics aspect using the provided recorder.
 func WithMetrics(recorder builtin.MetricsRecorder) AppOption {
 	return func(a *App) error {
 		if a.Chain == nil {

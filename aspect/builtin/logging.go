@@ -6,16 +6,23 @@ import (
 	"time"
 )
 
+// Logger defines the minimum interface for structured logging used by aspects.
+// Implementations should support log levels (Info, Error, Debug) with
+// key-value attribute pairs.
 type Logger interface {
 	Info(msg string, args ...interface{})
 	Error(msg string, args ...interface{})
 	Debug(msg string, args ...interface{})
 }
 
+// LoggingAspect logs debug and error messages for each command, query, and
+// event operation. It logs errors on the After hooks and debug messages on
+// the Before/After hooks.
 type LoggingAspect struct {
 	logger Logger
 }
 
+// NewLoggingAspect creates a LoggingAspect that delegates to the given logger.
 func NewLoggingAspect(logger Logger) *LoggingAspect {
 	return &LoggingAspect{logger: logger}
 }

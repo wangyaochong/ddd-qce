@@ -124,7 +124,9 @@ func TestStatsCollector_WindowEviction(t *testing.T) {
 	s := NewStatsCollector(WithWindowSeconds(1))
 
 	s.RecordDuration("Command/Test", 50*time.Millisecond)
-	time.Sleep(1100 * time.Millisecond)
+	// Wait for the first entry to fall outside the 1-second window.
+	// Use 1.5s to avoid flakiness on slow CI runners.
+	time.Sleep(1500 * time.Millisecond)
 	s.RecordDuration("Command/Test", 100*time.Millisecond)
 
 	stats, _ := s.GetStats("Command/Test")

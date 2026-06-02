@@ -16,6 +16,7 @@ var tables = []string{
 	"ddd_domain_events",
 }
 
+// Migrate creates all DDD framework tables if they do not already exist.
 func Migrate(db *sql.DB) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS ddd_domain_events (
@@ -152,6 +153,7 @@ func Migrate(db *sql.DB) error {
 	return nil
 }
 
+// DropAll drops all DDD framework tables.
 func DropAll(db *sql.DB) error {
 	for _, t := range tables {
 		if _, err := db.Exec("DROP TABLE IF EXISTS " + t + " CASCADE"); err != nil {
@@ -161,6 +163,7 @@ func DropAll(db *sql.DB) error {
 	return nil
 }
 
+// TruncateAll truncates all DDD framework tables.
 func TruncateAll(db *sql.DB) error {
 	for _, t := range tables {
 		if _, err := db.Exec("TRUNCATE TABLE " + t + " CASCADE"); err != nil {

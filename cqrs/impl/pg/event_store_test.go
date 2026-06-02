@@ -3,13 +3,11 @@ package pg
 import (
 	"errors"
 	"testing"
+
+	corepg "github.com/ddd-qce/core/pg"
 )
 
 func TestIsUniqueViolation(t *testing.T) {
-	type sqlState interface {
-		SQLState() string
-	}
-
 	err23505 := &testSQLError{sqlState: "23505"}
 	err22001 := &testSQLError{sqlState: "22001"}
 
@@ -26,9 +24,9 @@ func TestIsUniqueViolation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isUniqueViolation(tt.err)
+			result := corepg.IsUniqueViolation(tt.err)
 			if result != tt.expected {
-				t.Errorf("isUniqueViolation(%v) = %v, want %v", tt.err, result, tt.expected)
+				t.Errorf("IsUniqueViolation(%v) = %v, want %v", tt.err, result, tt.expected)
 			}
 		})
 	}

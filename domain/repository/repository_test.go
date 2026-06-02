@@ -282,3 +282,29 @@ func TestJSONSerializer_Deserialize_InvalidJSON(t *testing.T) {
 func TestJSONSerializer_ImplementsSnapshotSerializer(t *testing.T) {
 	var _ SnapshotSerializer[*JSONTestAggregate] = JSONSerializer[*JSONTestAggregate]{}
 }
+
+func TestJSONSerializer_RoundTrip_PreservesID(t *testing.T) {
+	serializer := JSONSerializer[*JSONTestAggregate]{}
+	agg := NewJSONTestAggregate("agg-200", "ID test")
+
+	data, err := serializer.Serialize(agg)
+	if err != nil {
+		t.Fatalf("Serialize failed: %v", err)
+	}
+
+	result, err := serializer.Deserialize(data)
+	if err != nil {
+		t.Fatalf("Deserialize failed: %v", err)
+	}
+	if result.ID() != "agg-200" {
+		t.Errorf("expected ID 'agg-200', got %q", result.ID())
+	}
+}
+
+func TestJSONSerializer_Deserialize_EmptyJSON(t *testing.T) {
+	serializer := JSONSerializer[*JSONTestAggregate]{}
+	_, err := serializer.Deserialize([]byte("{}"))
+	if err != nil {
+		t.Fatalf("unexpected error for empty JSON: %v", err)
+	}
+}

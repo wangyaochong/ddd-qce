@@ -201,7 +201,9 @@ func TestInMemoryTraceStore_WithBackgroundCleanup(t *testing.T) {
 		StartedAt: time.Now().Add(-time.Hour),
 	})
 
-	time.Sleep(200 * time.Millisecond)
+	// Wait long enough for at least one cleanup cycle to run.
+	// TTL=100ms + cleanup=50ms; use 500ms to avoid flakiness on slow CI.
+	time.Sleep(500 * time.Millisecond)
 
 	traceIDs, err := store.ListTraces(ctx, TraceFilter{})
 	if err != nil {

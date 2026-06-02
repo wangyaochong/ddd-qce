@@ -18,6 +18,7 @@ func (m *pgMigrator) Migrate(_ context.Context) error {
 	return corepg.Migrate(m.db)
 }
 
+// NewPgBackend creates a Backend backed by a PostgreSQL database.
 func NewPgBackend(db *sql.DB, opts ...BackendOption) *Backend {
 	defaults := []BackendOption{
 		WithTransactionManager(corepg.NewTransactionManager(db)),

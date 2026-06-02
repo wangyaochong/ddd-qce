@@ -10,6 +10,7 @@ import (
 	"github.com/ddd-qce/core/aspect"
 	"github.com/ddd-qce/core/aspect/builtin"
 	"github.com/ddd-qce/core/cqrs/command"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
 )
@@ -25,17 +26,19 @@ type level1Result struct {
 type level1Handler struct{}
 
 func (h *level1Handler) Handle(ctx context.Context, c *level1Command) (*level1Result, error) {
-	testEventBus.Publish(ctx, &level2Event{})
+	testEventBus.Publish(ctx, newLevel2Event())
 	return &level1Result{Message: "level1 done"}, nil
 }
 
-type level2Event struct{}
+type level2Event struct {
+	cqrsevent.BaseEvent
+}
 
-func (e *level2Event) AggregateID() string   { return "agg-2" }
-func (e *level2Event) EventType() string     { return "Level2Event" }
-func (e *level2Event) OccurredAt() time.Time { return time.Now() }
-func (e *level2Event) CorrelationID() string { return "" }
-func (e *level2Event) CausationID() string   { return "" }
+func newLevel2Event() *level2Event {
+	e := &level2Event{}
+	e.BaseEvent = cqrsevent.BaseEvent{AggregateID: "agg-2", OccurredAt: time.Now()}
+	return e
+}
 
 type level2Handler struct{}
 
@@ -58,17 +61,19 @@ type level3Result struct {
 type level3Handler struct{}
 
 func (h *level3Handler) Handle(ctx context.Context, c *level3Command) (*level3Result, error) {
-	testEventBus.Publish(ctx, &level4Event{})
+	testEventBus.Publish(ctx, newLevel4Event())
 	return &level3Result{Message: "level3 done"}, nil
 }
 
-type level4Event struct{}
+type level4Event struct {
+	cqrsevent.BaseEvent
+}
 
-func (e *level4Event) AggregateID() string   { return "agg-4" }
-func (e *level4Event) EventType() string     { return "Level4Event" }
-func (e *level4Event) OccurredAt() time.Time { return time.Now() }
-func (e *level4Event) CorrelationID() string { return "" }
-func (e *level4Event) CausationID() string   { return "" }
+func newLevel4Event() *level4Event {
+	e := &level4Event{}
+	e.BaseEvent = cqrsevent.BaseEvent{AggregateID: "agg-4", OccurredAt: time.Now()}
+	return e
+}
 
 type level4Handler struct{}
 

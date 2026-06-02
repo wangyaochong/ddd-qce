@@ -12,6 +12,12 @@
 //   - dddimplimport: Checks that CQRS implementation packages (cqrs/impl/*) are only
 //     imported from the wire layer, enforcing dependency inversion.
 //
+//   - dddeventimmutable: Checks that BaseEvent fields (AggregateID, OccurredAt,
+//     CorrelationID, CausationID) are not mutated after event construction. Use
+//     event.NewDomainEvent / event.WithCorrelation or composite literals to set
+//     these fields; once published, the metadata is immutable. Mutation breaks
+//     audit trails, trace chains, and event store records.
+//
 // # Directory Convention
 //
 // All domains reside under a ddd/ directory:

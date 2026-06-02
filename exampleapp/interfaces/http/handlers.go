@@ -252,27 +252,28 @@ func (h *Handler) OrderEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	views := make([]EventView, len(events))
 	for i, e := range events {
+		meta := event.MetadataOf(e)
 		view := EventView{
 			EventType:  event.EventNameOf(e),
-			OccurredAt: e.OccurredAt().Format(time.RFC3339),
+			OccurredAt: meta.OccurredAt.Format(time.RFC3339),
 		}
 		switch evt := e.(type) {
 		case *orderevent.OrderPlacedEvent:
-			view.OrderID = evt.AggregateID()
+			view.OrderID = evt.AggregateID
 			view.UserID = evt.UserID
 			view.Amount = evt.TotalAmount
 			view.Details = fmt.Sprintf("UserID: %s, Amount: %.2f", evt.UserID, evt.TotalAmount)
 		case *orderevent.PaymentConfirmedEvent:
-			view.OrderID = evt.AggregateID()
+			view.OrderID = evt.AggregateID
 			view.Details = "Payment confirmed"
 		case *orderevent.OrderShippedEvent:
-			view.OrderID = evt.AggregateID()
+			view.OrderID = evt.AggregateID
 			view.Details = "Order shipped"
 		case *orderevent.OrderCancelledEvent:
-			view.OrderID = evt.AggregateID()
+			view.OrderID = evt.AggregateID
 			view.Details = fmt.Sprintf("Cancelled: %s", evt.Reason)
 		default:
-			view.OrderID = e.AggregateID()
+			view.OrderID = meta.AggregateID
 		}
 		views[i] = view
 	}

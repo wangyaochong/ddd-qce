@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+// MarshalAggregate serializes an aggregate to JSON, merging the base
+// AggregateRoot fields with the aggregate's own domain fields.
+// It uses reflection to extract fields tagged with "json" that are not
+// part of the embedded base types.
 func MarshalAggregate[T AggregateRef](agg T) ([]byte, error) {
 	root := agg.GetAggregateRoot()
 	baseMap, err := structToMap(root.ToJSON())
@@ -27,6 +31,8 @@ func MarshalAggregate[T AggregateRef](agg T) ([]byte, error) {
 	return json.Marshal(baseMap)
 }
 
+// UnmarshalAggregate deserializes JSON into an aggregate, restoring both the base
+// AggregateRoot fields and the aggregate's domain fields via reflection.
 func UnmarshalAggregate[T AggregateRef](data []byte, agg T) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {

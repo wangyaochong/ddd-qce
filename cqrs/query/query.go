@@ -6,10 +6,14 @@ import (
 	"reflect"
 )
 
+// Query is a marker interface for all queries in the CQRS pattern.
+// Implementations should embed BaseQuery to satisfy this interface.
 type Query interface {
 	isQuery()
 }
 
+// BaseQuery provides the default Query implementation.
+// Embed this in concrete query types to satisfy the Query interface.
 type BaseQuery struct{}
 
 func (BaseQuery) isQuery() {}
@@ -31,10 +35,12 @@ func QueryNameOf(q any) string {
 	return t.Name()
 }
 
+// QueryHandler processes a query of type T and returns a result of type R.
 type QueryHandler[T Query, R any] interface {
 	Handle(ctx context.Context, query T) (R, error)
 }
 
+// QueryBus dispatches queries to their registered handlers and returns results.
 type QueryBus interface {
 	Execute(ctx context.Context, query any) (any, error)
 	RegisterHandler(handler any) error
@@ -42,6 +48,8 @@ type QueryBus interface {
 	Shutdown(ctx context.Context) error
 }
 
+// Dispatch sends a query through the bus and type-asserts the result to R.
+// It panics at compile time if T does not satisfy Query.
 func Dispatch[T Query, R any](ctx context.Context, bus QueryBus, q T) (R, error) {
 	result, err := bus.Execute(ctx, q)
 	if err != nil {

@@ -5,10 +5,12 @@ import (
 	"strings"
 )
 
+// MultiError aggregates multiple errors into a single error value.
 type MultiError struct {
 	Errors []error
 }
 
+// NewMultiError creates a MultiError from the given errors.
 func NewMultiError(errs ...error) *MultiError {
 	return &MultiError{Errors: errs}
 }

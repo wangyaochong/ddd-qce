@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// WaitForSignal blocks until SIGTERM or SIGINT, then gracefully shuts down the app.
 func (a *App) WaitForSignal(timeout time.Duration) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)

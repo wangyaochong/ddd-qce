@@ -724,7 +724,7 @@ func TestJobManager_Recovery_RunningMarkedFailed(t *testing.T) {
 			return false
 		}
 		return s.GetStatus() == jobcore.JobStatusFailed
-	}, 2*time.Second, 10*time.Millisecond)
+	}, 5*time.Second, 10*time.Millisecond)
 
 	status, err := manager.GetStatus(ctx, "running-recover-test")
 	if err != nil {

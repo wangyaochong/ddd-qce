@@ -13,6 +13,6 @@ func NewOrderPlacedNotificationHandler() *OrderPlacedNotificationHandler {
 
 func (h *OrderPlacedNotificationHandler) Handle(ctx context.Context, evt *OrderPlacedEvent) error {
 	fmt.Printf("[Notification] New order %s placed by user %s, total: $%.2f\n",
-		evt.AggregateID(), evt.UserID, evt.TotalAmount)
+		evt.AggregateID, evt.UserID, evt.TotalAmount)
 	return nil
 }

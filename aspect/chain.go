@@ -8,29 +8,47 @@ import (
 	"time"
 )
 
+// Aspect is the base interface that all aspects must implement.
+// Name returns a unique identifier for the aspect; Order determines
+// execution priority in the onion model (lower values execute first
+// on the way in, last on the way out).
 type Aspect interface {
 	Name() string
 	Order() int
 }
 
+// CommandAspect defines an aspect that intercepts command execution.
+// BeforeCommand runs before the command handler and may modify the context.
+// AfterCommand runs after the command handler with the result, error, and
+// elapsed duration.
 type CommandAspect interface {
 	Aspect
 	BeforeCommand(ctx context.Context, cmd any) (context.Context, error)
 	AfterCommand(ctx context.Context, cmd any, result any, err error, duration time.Duration) error
 }
 
+// QueryAspect defines an aspect that intercepts query execution.
+// BeforeQuery runs before the query handler and may modify the context.
+// AfterQuery runs after the query handler with the result, error, and
+// elapsed duration.
 type QueryAspect interface {
 	Aspect
 	BeforeQuery(ctx context.Context, query any) (context.Context, error)
 	AfterQuery(ctx context.Context, query any, result any, err error, duration time.Duration) error
 }
 
+// EventAspect defines an aspect that intercepts event publishing.
+// BeforePublish runs before the event is published and may modify the context.
+// AfterPublish runs after publishing with the error (if any) and elapsed duration.
 type EventAspect interface {
 	Aspect
 	BeforePublish(ctx context.Context, event any) (context.Context, error)
 	AfterPublish(ctx context.Context, event any, err error, duration time.Duration) error
 }
 
+// AspectChain executes registered aspects in onion-model order around
+// command, query, and event operations. Aspects are sorted by Order
+// (ascending) so that lower-order aspects wrap higher-order ones.
 type AspectChain struct {
 	mu             sync.RWMutex
 	queryAspects   []QueryAspect
@@ -38,10 +56,13 @@ type AspectChain struct {
 	eventAspects   []EventAspect
 }
 
+// NewAspectChain creates an empty AspectChain ready for aspect registration.
 func NewAspectChain() *AspectChain {
 	return &AspectChain{}
 }
 
+// HasAspect checks whether an aspect with the given name is registered
+// across any of the command, query, or event aspect lists.
 func (c *AspectChain) HasAspect(name string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -63,6 +84,7 @@ func (c *AspectChain) HasAspect(name string) bool {
 	return false
 }
 
+// RegisteredNames returns a deduplicated list of all registered aspect names.
 func (c *AspectChain) RegisteredNames() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -89,6 +111,9 @@ func (c *AspectChain) RegisteredNames() []string {
 	return names
 }
 
+// RegisterAspect auto-detects which aspect interfaces the given value implements
+// and registers it for each matching role (command, query, event). A single value
+// can implement multiple aspect interfaces simultaneously.
 func (c *AspectChain) RegisterAspect(a any) {
 	if ca, ok := a.(CommandAspect); ok {
 		c.RegisterCommandAspect(ca)
@@ -101,6 +126,7 @@ func (c *AspectChain) RegisterAspect(a any) {
 	}
 }
 
+// RegisterQueryAspect adds a QueryAspect to the chain and re-sorts by Order.
 func (c *AspectChain) RegisterQueryAspect(a QueryAspect) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -110,6 +136,7 @@ func (c *AspectChain) RegisterQueryAspect(a QueryAspect) {
 	})
 }
 
+// RegisterCommandAspect adds a CommandAspect to the chain and re-sorts by Order.
 func (c *AspectChain) RegisterCommandAspect(a CommandAspect) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -119,6 +146,7 @@ func (c *AspectChain) RegisterCommandAspect(a CommandAspect) {
 	})
 }
 
+// RegisterEventAspect adds an EventAspect to the chain and re-sorts by Order.
 func (c *AspectChain) RegisterEventAspect(a EventAspect) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -128,6 +156,9 @@ func (c *AspectChain) RegisterEventAspect(a EventAspect) {
 	})
 }
 
+// ExecuteWithQueryAspects runs the given next function wrapped by all registered
+// QueryAspects. Aspects are applied in onion-model order: Before/After hooks
+// nest around the core operation.
 func (c *AspectChain) ExecuteWithQueryAspects(
 	ctx context.Context,
 	query any,
@@ -173,6 +204,9 @@ func (c *AspectChain) runQueryAspects(
 	return result, err
 }
 
+// ExecuteWithCommandAspects runs the given next function wrapped by all registered
+// CommandAspects. Aspects are applied in onion-model order: Before/After hooks
+// nest around the core operation.
 func (c *AspectChain) ExecuteWithCommandAspects(
 	ctx context.Context,
 	cmd any,

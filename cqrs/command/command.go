@@ -6,10 +6,14 @@ import (
 	"reflect"
 )
 
+// Command is a marker interface for all commands in the CQRS pattern.
+// Implementations should embed BaseCommand to satisfy this interface.
 type Command interface {
 	isCommand()
 }
 
+// BaseCommand provides the default Command implementation.
+// Embed this in concrete command types to satisfy the Command interface.
 type BaseCommand struct{}
 
 func (BaseCommand) isCommand() {}
@@ -31,10 +35,12 @@ func CommandNameOf(cmd any) string {
 	return t.Name()
 }
 
+// CommandHandler processes a command of type T and returns a result of type R.
 type CommandHandler[T Command, R any] interface {
 	Handle(ctx context.Context, cmd T) (R, error)
 }
 
+// CommandBus dispatches commands to their registered handlers.
 type CommandBus interface {
 	Execute(ctx context.Context, cmd any) (any, error)
 	RegisterHandler(handler any) error
@@ -42,6 +48,8 @@ type CommandBus interface {
 	Shutdown(ctx context.Context) error
 }
 
+// Dispatch sends a command through the bus and type-asserts the result to R.
+// It panics at compile time if T does not satisfy Command.
 func Dispatch[T Command, R any](ctx context.Context, bus CommandBus, cmd T) (R, error) {
 	result, err := bus.Execute(ctx, cmd)
 	if err != nil {

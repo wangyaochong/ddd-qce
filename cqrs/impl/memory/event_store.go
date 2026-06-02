@@ -11,11 +11,15 @@ import (
 	ddderror "github.com/ddd-qce/core/error"
 )
 
+// globalEntry holds an event with its position in the global stream.
 type globalEntry[T domainevent.Event] struct {
 	position int64
 	event    T
 }
 
+// EventSourceStore is an in-memory implementation of both event.AggregateEventStore
+// and event.GlobalEventStore. It supports optimistic concurrency, optional
+// event cloning via a sync.Pool, and global event streaming for projections.
 type EventSourceStore[T domainevent.Event] struct {
 	mu           sync.RWMutex
 	events       map[string][]T
@@ -26,12 +30,18 @@ type EventSourceStore[T domainevent.Event] struct {
 	shallowCopy  bool
 }
 
+// EventSourceStoreOption configures an EventSourceStore during construction.
 type EventSourceStoreOption[T domainevent.Event] func(*EventSourceStore[T])
 
+// WithFactory supplies a factory function for creating new event instances.
+// Use this instead of relying on reflection-based cloning when T is a non-pointer type.
 func WithFactory[T domainevent.Event](factory func() T) EventSourceStoreOption[T] {
 	return func(s *EventSourceStore[T]) { s.newFunc = factory }
 }
 
+// NewEventSourceStore creates an in-memory event store.
+// T must be a pointer type unless WithFactory is used to provide a constructor.
+// Returns an error if the type constraints cannot be satisfied.
 func NewEventSourceStore[T domainevent.Event](opts ...EventSourceStoreOption[T]) (*EventSourceStore[T], error) {
 	var zero T
 	t := reflect.TypeOf(zero)
@@ -108,7 +118,7 @@ func (s *EventSourceStore[T]) Append(ctx context.Context, aggregateID string, ex
 	}
 
 	for _, evt := range events {
-		aggID := evt.AggregateID()
+		aggID := event.MetadataOf(evt).AggregateID
 		var eventToStore T
 		if s.shallowCopy {
 			eventToStore = evt

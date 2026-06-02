@@ -124,16 +124,16 @@ func (o *Order) When(evt domainevent.Event) error {
 		o.UserID = UserID(e.UserID)
 		o.TotalAmount = e.TotalAmount
 		o.Status = OrderStatusPending
-		o.CreatedAt = e.OccurredAt()
+		o.CreatedAt = e.OccurredAt
 	case *orderevent.PaymentConfirmedEvent:
 		o.Status = OrderStatusPaid
-		o.PaidAt = e.OccurredAt()
+		o.PaidAt = e.OccurredAt
 	case *orderevent.OrderShippedEvent:
 		o.Status = OrderStatusShipped
-		o.ShippedAt = e.OccurredAt()
+		o.ShippedAt = e.OccurredAt
 	case *orderevent.OrderCancelledEvent:
 		o.Status = OrderStatusCancelled
-		o.CancelledAt = e.OccurredAt()
+		o.CancelledAt = e.OccurredAt
 		o.CancelReason = e.Reason
 	default:
 		return fmt.Errorf("order: unhandled event type %T", evt)

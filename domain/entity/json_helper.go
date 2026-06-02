@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+// MarshalEntity serializes an entity to JSON, merging the base entity fields
+// (Entity, AuditableEntity, or SoftDeletableEntity) with the entity's own domain fields.
+// It uses reflection to extract fields tagged with "json" that are not
+// part of the embedded base types.
 func MarshalEntity[T any](ent T) ([]byte, error) {
 	v := reflect.ValueOf(ent)
 	if v.Kind() == reflect.Ptr {
@@ -30,6 +34,8 @@ func MarshalEntity[T any](ent T) ([]byte, error) {
 	return json.Marshal(baseMap)
 }
 
+// UnmarshalEntity deserializes JSON into an entity, restoring both the base
+// entity fields and the entity's domain fields via reflection.
 func UnmarshalEntity[T any](data []byte, ent T) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {

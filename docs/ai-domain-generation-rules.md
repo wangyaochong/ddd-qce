@@ -540,6 +540,7 @@ ddd/
 | `dddcrossdomain` | 禁止事项 #1, #2 | 跨领域 import 内部包（domain/service/repository） |
 | `dddpublicleak` | 禁止事项 #8 | 公开包（command/query/event）中引用其他领域 domain 类型 |
 | `dddimplimport` | 禁止事项 #6 | 非 wire 层 import `cqrs/impl/*` 实现包 |
+| `dddeventimmutable` | 新增 | 禁止事件构造后修改 `BaseEvent` 字段（`AggregateID`/`OccurredAt`/`CorrelationID`/`CausationID`） |
 
 ### 集成方式
 
