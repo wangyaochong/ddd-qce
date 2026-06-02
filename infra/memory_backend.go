@@ -40,23 +40,17 @@ func (m *MemoryTransactionManager) Begin(ctx context.Context) (context.Context, 
 func (m *MemoryTransactionManager) Commit(ctx context.Context) error {
 	state, ok := ctx.Value(memTxKey{}).(*memTxState)
 	if !ok {
-		return fmt.Errorf("no transaction in context")
+		return fmt.Errorf("memory_tx: no transaction in context")
 	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.depth <= 0 {
-		return fmt.Errorf("no transaction in context")
+		return fmt.Errorf("memory_tx: no transaction in context")
 	}
 	state.depth--
 
-	if state.depth > 0 {
-		if state.aborted {
-			return fmt.Errorf("transaction aborted by inner rollback")
-		}
-		return nil
-	}
 	if state.aborted {
-		return fmt.Errorf("transaction aborted by inner rollback")
+		return fmt.Errorf("memory_tx: transaction aborted by inner rollback")
 	}
 	return nil
 }
@@ -64,12 +58,12 @@ func (m *MemoryTransactionManager) Commit(ctx context.Context) error {
 func (m *MemoryTransactionManager) Rollback(ctx context.Context) error {
 	state, ok := ctx.Value(memTxKey{}).(*memTxState)
 	if !ok {
-		return fmt.Errorf("no transaction in context")
+		return fmt.Errorf("memory_tx: no transaction in context")
 	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if state.depth <= 0 {
-		return fmt.Errorf("no transaction in context")
+		return fmt.Errorf("memory_tx: no transaction in context")
 	}
 	state.aborted = true
 	state.depth--

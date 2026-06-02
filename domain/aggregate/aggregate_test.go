@@ -246,8 +246,8 @@ func TestValidate_NegativeVersion(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for negative version")
 	}
-	if err.Error() != "aggregate version cannot be negative" {
-		t.Errorf("expected 'aggregate version cannot be negative', got '%v'", err)
+	if err.Error() != "aggregate: version cannot be negative" {
+		t.Errorf("expected 'aggregate: version cannot be negative', got '%v'", err)
 	}
 }
 

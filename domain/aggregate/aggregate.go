@@ -135,7 +135,7 @@ func (a *AggregateRoot) Validate() error {
 		return fmt.Errorf("aggregate: %w", err)
 	}
 	if a.version < 0 {
-		return fmt.Errorf("aggregate version cannot be negative")
+		return fmt.Errorf("aggregate: version cannot be negative")
 	}
 	return nil
 }

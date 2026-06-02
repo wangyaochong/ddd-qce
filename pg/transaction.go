@@ -58,13 +58,13 @@ func (m *PgTransactionManager) Begin(ctx context.Context) (context.Context, erro
 func (m *PgTransactionManager) Commit(ctx context.Context) error {
 	state, ok := ctx.Value(txKey{}).(*txState)
 	if !ok {
-		return fmt.Errorf("no transaction in context")
+		return fmt.Errorf("pg_tx: no transaction in context")
 	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
 	if state.depth <= 0 {
-		return fmt.Errorf("no transaction in context")
+		return fmt.Errorf("pg_tx: no transaction in context")
 	}
 
 	spSeq := state.parentSp[len(state.parentSp)-1]
@@ -75,9 +75,9 @@ func (m *PgTransactionManager) Commit(ctx context.Context) error {
 	if state.depth > 0 {
 		if state.aborted {
 			if _, rbErr := state.tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT "+spName); rbErr != nil {
-				return fmt.Errorf("rollback to savepoint: %w (transaction was already aborted)", rbErr)
+				return fmt.Errorf("pg_tx: rollback to savepoint: %w (transaction was already aborted)", rbErr)
 			}
-			return fmt.Errorf("transaction aborted by inner rollback")
+			return fmt.Errorf("pg_tx: transaction aborted by inner rollback")
 		}
 		_, err := state.tx.ExecContext(ctx, "RELEASE SAVEPOINT "+spName)
 		return err
@@ -85,7 +85,7 @@ func (m *PgTransactionManager) Commit(ctx context.Context) error {
 
 	if state.aborted {
 		_ = state.tx.Rollback()
-		return fmt.Errorf("transaction aborted by inner rollback")
+		return fmt.Errorf("pg_tx: transaction aborted by inner rollback")
 	}
 	return state.tx.Commit()
 }
@@ -93,13 +93,13 @@ func (m *PgTransactionManager) Commit(ctx context.Context) error {
 func (m *PgTransactionManager) Rollback(ctx context.Context) error {
 	state, ok := ctx.Value(txKey{}).(*txState)
 	if !ok {
-		return fmt.Errorf("no transaction in context")
+		return fmt.Errorf("pg_tx: no transaction in context")
 	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
 	if state.depth <= 0 {
-		return fmt.Errorf("no transaction in context")
+		return fmt.Errorf("pg_tx: no transaction in context")
 	}
 
 	state.aborted = true

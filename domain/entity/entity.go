@@ -53,7 +53,7 @@ func (e *Entity) IsEmpty() bool {
 // Validate returns an error if the entity's ID is empty.
 func (e *Entity) Validate() error {
 	if e.id == "" {
-		return fmt.Errorf("entity ID cannot be empty")
+		return fmt.Errorf("entity: id is required")
 	}
 	return nil
 }
@@ -94,7 +94,6 @@ type EntityJSON struct {
 	ID string `json:"id"`
 }
 
-// ToJSON converts the entity to its JSON representation struct.
 // ToJSON converts the entity to its JSON representation struct.
 func (e *Entity) ToJSON() EntityJSON {
 	return EntityJSON{ID: e.id}
