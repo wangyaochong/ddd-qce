@@ -43,17 +43,20 @@ func (r *InMemorySchemaReader) GetTable(_ context.Context, name string) (*TableD
 }
 
 func (r *InMemorySchemaReader) ListRelations(_ context.Context) ([]TableRelation, error) {
-	return staticRelations(), nil
+	return StaticRelations(), nil
 }
 
-func staticRelations() []TableRelation {
+// StaticRelations returns the static table relations between DDD framework tables.
+// This is shared by both in-memory and PostgreSQL schema readers.
+func StaticRelations() []TableRelation {
 	return []TableRelation{
 		{FromTable: "ddd_job_execution_log", FromColumn: "job_id", ToTable: "ddd_jobs", ToColumn: "id"},
 		{FromTable: "ddd_event_handler_log", FromColumn: "event_log_id", ToTable: "ddd_event_log", ToColumn: "id"},
 	}
 }
 
-func tableDescription(name string) string {
+// TableDescription returns a human-readable description for a DDD framework table.
+func TableDescription(name string) string {
 	descs := map[string]string{
 		"ddd_domain_events":       "事件溯源事件存储",
 		"ddd_jobs":                "异步任务队列",
@@ -71,7 +74,7 @@ func tableDescription(name string) string {
 func staticSchema() []TableDetail {
 	return []TableDetail{
 		{
-			TableInfo: TableInfo{Name: "ddd_domain_events", Description: tableDescription("ddd_domain_events")},
+			TableInfo: TableInfo{Name: "ddd_domain_events", Description: TableDescription("ddd_domain_events")},
 			Columns: []ColumnInfo{
 				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimaryKey: true, Description: "自增主键"},
 				{Name: "aggregate_id", Type: "TEXT", Nullable: false, Description: "聚合ID"},
@@ -89,7 +92,7 @@ func staticSchema() []TableDetail {
 			},
 		},
 		{
-			TableInfo: TableInfo{Name: "ddd_jobs", Description: tableDescription("ddd_jobs")},
+			TableInfo: TableInfo{Name: "ddd_jobs", Description: TableDescription("ddd_jobs")},
 			Columns: []ColumnInfo{
 				{Name: "id", Type: "TEXT", Nullable: false, IsPrimaryKey: true, Description: "任务ID"},
 				{Name: "command", Type: "JSONB", Nullable: false, Description: "命令数据"},
@@ -110,7 +113,7 @@ func staticSchema() []TableDetail {
 			},
 		},
 		{
-			TableInfo: TableInfo{Name: "ddd_job_execution_log", Description: tableDescription("ddd_job_execution_log")},
+			TableInfo: TableInfo{Name: "ddd_job_execution_log", Description: TableDescription("ddd_job_execution_log")},
 			Columns: []ColumnInfo{
 				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimaryKey: true, Description: "自增主键"},
 				{Name: "job_id", Type: "TEXT", Nullable: false, Description: "任务ID"},
@@ -127,7 +130,7 @@ func staticSchema() []TableDetail {
 			},
 		},
 		{
-			TableInfo: TableInfo{Name: "ddd_spans", Description: tableDescription("ddd_spans")},
+			TableInfo: TableInfo{Name: "ddd_spans", Description: TableDescription("ddd_spans")},
 			Columns: []ColumnInfo{
 				{Name: "id", Type: "TEXT", Nullable: false, IsPrimaryKey: true, Description: "Span ID"},
 				{Name: "trace_id", Type: "TEXT", Nullable: false, Description: "追踪ID"},
@@ -145,7 +148,7 @@ func staticSchema() []TableDetail {
 			},
 		},
 		{
-			TableInfo: TableInfo{Name: "ddd_aggregate_snapshots", Description: tableDescription("ddd_aggregate_snapshots")},
+			TableInfo: TableInfo{Name: "ddd_aggregate_snapshots", Description: TableDescription("ddd_aggregate_snapshots")},
 			Columns: []ColumnInfo{
 				{Name: "aggregate_id", Type: "TEXT", Nullable: false, IsPrimaryKey: true, Description: "聚合ID"},
 				{Name: "aggregate_type", Type: "TEXT", Nullable: false, Description: "聚合类型"},
@@ -158,7 +161,7 @@ func staticSchema() []TableDetail {
 			},
 		},
 		{
-			TableInfo: TableInfo{Name: "ddd_command_log", Description: tableDescription("ddd_command_log")},
+			TableInfo: TableInfo{Name: "ddd_command_log", Description: TableDescription("ddd_command_log")},
 			Columns: []ColumnInfo{
 				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimaryKey: true, Description: "自增主键"},
 				{Name: "trace_id", Type: "TEXT", Nullable: true, Description: "追踪ID"},
@@ -178,7 +181,7 @@ func staticSchema() []TableDetail {
 			},
 		},
 		{
-			TableInfo: TableInfo{Name: "ddd_query_log", Description: tableDescription("ddd_query_log")},
+			TableInfo: TableInfo{Name: "ddd_query_log", Description: TableDescription("ddd_query_log")},
 			Columns: []ColumnInfo{
 				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimaryKey: true, Description: "自增主键"},
 				{Name: "trace_id", Type: "TEXT", Nullable: true, Description: "追踪ID"},
@@ -198,7 +201,7 @@ func staticSchema() []TableDetail {
 			},
 		},
 		{
-			TableInfo: TableInfo{Name: "ddd_event_log", Description: tableDescription("ddd_event_log")},
+			TableInfo: TableInfo{Name: "ddd_event_log", Description: TableDescription("ddd_event_log")},
 			Columns: []ColumnInfo{
 				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimaryKey: true, Description: "自增主键"},
 				{Name: "trace_id", Type: "TEXT", Nullable: true, Description: "追踪ID"},
@@ -219,7 +222,7 @@ func staticSchema() []TableDetail {
 			},
 		},
 		{
-			TableInfo: TableInfo{Name: "ddd_event_handler_log", Description: tableDescription("ddd_event_handler_log")},
+			TableInfo: TableInfo{Name: "ddd_event_handler_log", Description: TableDescription("ddd_event_handler_log")},
 			Columns: []ColumnInfo{
 				{Name: "id", Type: "BIGSERIAL", Nullable: false, IsPrimaryKey: true, Description: "自增主键"},
 				{Name: "event_log_id", Type: "BIGINT", Nullable: true, Description: "事件日志ID"},

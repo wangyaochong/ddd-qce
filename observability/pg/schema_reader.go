@@ -46,7 +46,7 @@ func (r *PgSchemaReader) ListTables(ctx context.Context) ([]observability.TableI
 	for _, name := range tableNames {
 		info := observability.TableInfo{
 			Name:        name,
-			Description: tableDescription(name),
+			Description: observability.TableDescription(name),
 		}
 
 		var count int64
@@ -82,7 +82,7 @@ func (r *PgSchemaReader) GetTable(ctx context.Context, name string) (*observabil
 	detail := &observability.TableDetail{
 		TableInfo: observability.TableInfo{
 			Name:        name,
-			Description: tableDescription(name),
+			Description: observability.TableDescription(name),
 		},
 	}
 
@@ -205,7 +205,7 @@ func (r *PgSchemaReader) ListRelations(ctx context.Context) ([]observability.Tab
 		return nil, err
 	}
 
-	result = append(result, staticRelations()...)
+	result = append(result, observability.StaticRelations()...)
 	return result, nil
 }
 
@@ -267,21 +267,6 @@ func parseIndexColumns(indexDef string) []string {
 		}
 	}
 	return result
-}
-
-func tableDescription(name string) string {
-	descs := map[string]string{
-		"ddd_domain_events":       "事件溯源事件存储",
-		"ddd_jobs":                "异步任务队列",
-		"ddd_job_execution_log":   "任务执行日志",
-		"ddd_spans":               "分布式追踪",
-		"ddd_aggregate_snapshots": "聚合快照",
-		"ddd_command_log":         "命令审计日志",
-		"ddd_query_log":           "查询审计日志",
-		"ddd_event_log":           "事件审计日志",
-		"ddd_event_handler_log":   "事件处理器日志",
-	}
-	return descs[name]
 }
 
 func columnDescription(tableName, columnName string) string {
@@ -373,11 +358,4 @@ func columnDescription(tableName, columnName string) string {
 		{"ddd_event_handler_log", "created_at"}:       "创建时间",
 	}
 	return descs[colKey{tableName, columnName}]
-}
-
-func staticRelations() []observability.TableRelation {
-	return []observability.TableRelation{
-		{FromTable: "ddd_job_execution_log", FromColumn: "job_id", ToTable: "ddd_jobs", ToColumn: "id"},
-		{FromTable: "ddd_event_handler_log", FromColumn: "event_log_id", ToTable: "ddd_event_log", ToColumn: "id"},
-	}
 }
