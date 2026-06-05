@@ -25,6 +25,7 @@ type DDDViewer struct {
 	schemaReader   SchemaReader
 	traceStore     trace.TraceStore
 	jobMgr         jobcore.JobManager
+	typeRegistry   *TypePrototypeRegistry
 	config         DDDViewerConfig
 	backendType    string
 	baseURL        string
@@ -77,6 +78,10 @@ func WithDDDViewerSchemaReader(r SchemaReader, backendType string) DDDViewerOpti
 
 func WithDDDViewerStatsCollector(sc *StatsCollector) DDDViewerOption {
 	return func(v *DDDViewer) { v.statsCollector = sc }
+}
+
+func WithDDDViewerTypeRegistry(tr *TypePrototypeRegistry) DDDViewerOption {
+	return func(v *DDDViewer) { v.typeRegistry = tr }
 }
 
 func NewDDDViewer(opts ...DDDViewerOption) *DDDViewer {
@@ -155,6 +160,10 @@ func (v *DDDViewer) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+p+"/ddd_commands", v.handleCommands)
 	mux.HandleFunc("GET "+p+"/ddd_queries", v.handleQueries)
 	mux.HandleFunc("GET "+p+"/ddd_events", v.handleEvents)
+	mux.HandleFunc("GET "+p+"/ddd_domains", v.handleDomains)
+	mux.HandleFunc("GET "+p+"/ddd_command_types", v.handleCommandTypes)
+	mux.HandleFunc("GET "+p+"/ddd_query_types", v.handleQueryTypes)
+	mux.HandleFunc("GET "+p+"/ddd_event_types", v.handleEventTypes)
 	mux.HandleFunc("GET "+p+"/ddd_stats", v.handleStats)
 	mux.HandleFunc("GET "+p+"/ddd_jobs", v.handleJobs)
 	mux.HandleFunc("GET "+p+"/ddd_traces", v.handleTraces)
@@ -171,6 +180,10 @@ func (v *DDDViewer) RegisterRoutes(mux *http.ServeMux) {
 	log.Printf("[DDD]   Commands:  %s/ddd_commands", base)
 	log.Printf("[DDD]   Queries:   %s/ddd_queries", base)
 	log.Printf("[DDD]   Events:    %s/ddd_events", base)
+	log.Printf("[DDD]   Cmd Types: %s/ddd_command_types", base)
+	log.Printf("[DDD]   Qry Types: %s/ddd_query_types", base)
+	log.Printf("[DDD]   Evt Types: %s/ddd_event_types", base)
+	log.Printf("[DDD]   Domains:   %s/ddd_domains", base)
 	log.Printf("[DDD]   Stats:     %s/ddd_stats", base)
 	if v.jobMgr != nil {
 		log.Printf("[DDD]   Jobs:      %s/ddd_jobs", base)
@@ -471,6 +484,157 @@ func (v *DDDViewer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, code, map[string]any{
 		"status": overall,
 		"checks": checks,
+	})
+}
+
+func (v *DDDViewer) handleCommandTypes(w http.ResponseWriter, r *http.Request) {
+	if v.typeRegistry == nil {
+		v.render(w, "ddd_unavailable", map[string]any{"Feature": "Command Types", "Prefix": v.config.Prefix})
+		return
+	}
+	commands := v.typeRegistry.ListByCategory("command")
+	count := v.typeRegistry.CountByCategory("command")
+	v.render(w, "ddd_command_types", map[string]any{
+		"Commands": commands,
+		"Count":    count,
+		"Prefix":   v.config.Prefix,
+	})
+}
+
+func (v *DDDViewer) handleQueryTypes(w http.ResponseWriter, r *http.Request) {
+	if v.typeRegistry == nil {
+		v.render(w, "ddd_unavailable", map[string]any{"Feature": "Query Types", "Prefix": v.config.Prefix})
+		return
+	}
+	queries := v.typeRegistry.ListByCategory("query")
+	count := v.typeRegistry.CountByCategory("query")
+	v.render(w, "ddd_query_types", map[string]any{
+		"Queries": queries,
+		"Count":   count,
+		"Prefix":  v.config.Prefix,
+	})
+}
+
+func (v *DDDViewer) handleEventTypes(w http.ResponseWriter, r *http.Request) {
+	if v.typeRegistry == nil {
+		v.render(w, "ddd_unavailable", map[string]any{"Feature": "Event Types", "Prefix": v.config.Prefix})
+		return
+	}
+	events := v.typeRegistry.ListByCategory("event")
+	count := v.typeRegistry.CountByCategory("event")
+	v.render(w, "ddd_event_types", map[string]any{
+		"Events": events,
+		"Count":  count,
+		"Prefix": v.config.Prefix,
+	})
+}
+
+func (v *DDDViewer) handleDomains(w http.ResponseWriter, r *http.Request) {
+	if v.typeRegistry == nil {
+		v.render(w, "ddd_unavailable", map[string]any{"Feature": "Domains", "Prefix": v.config.Prefix})
+		return
+	}
+
+	domains := v.typeRegistry.ListDomains()
+	selectedDomain := r.URL.Query().Get("domain")
+	if selectedDomain == "" && len(domains) > 0 {
+		selectedDomain = domains[0]
+	}
+
+	var domainInfo *DomainInfo
+	var stats DomainStats
+	var entries []DomainEntry
+
+	if selectedDomain != "" {
+		domainInfo = v.typeRegistry.GetDomainInfo(selectedDomain)
+
+		stats = DomainStats{}
+		if v.statsCollector != nil {
+			allStats := v.statsCollector.GetAllStats()
+			for _, s := range allStats {
+				sDomain := v.typeRegistry.GetTypeDomain(s.Name)
+				if sDomain != selectedDomain {
+					continue
+				}
+				switch s.Type {
+				case "command":
+					stats.CommandCount += int(s.Count)
+					stats.CommandErrors += int(s.ErrorCount)
+				case "query":
+					stats.QueryCount += int(s.Count)
+					stats.QueryErrors += int(s.ErrorCount)
+				case "event":
+					stats.EventCount += int(s.Count)
+					stats.EventErrors += int(s.ErrorCount)
+				}
+			}
+		}
+
+		if v.msgReader != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+			filter := MessageFilter{Limit: 50}
+
+			cmdEntries, _ := v.msgReader.QueryCommands(ctx, filter)
+			for _, e := range cmdEntries {
+				domain := v.typeRegistry.GetTypeDomain(e.CommandType)
+				if domain == selectedDomain {
+					entries = append(entries, DomainEntry{
+						Type: e.CommandType, Category: "command",
+						Status: "ok", Duration: e.Duration.String(),
+						CreatedAt: e.CreatedAt.Format("2006-01-02 15:04:05"),
+						Data: formatData(e.CommandData), Result: formatData(e.ResultData),
+					})
+					if e.Error != "" {
+						entries[len(entries)-1].Status = "error"
+						entries[len(entries)-1].Error = e.Error
+					}
+				}
+			}
+
+			qryEntries, _ := v.msgReader.QueryQueries(ctx, filter)
+			for _, e := range qryEntries {
+				domain := v.typeRegistry.GetTypeDomain(e.QueryType)
+				if domain == selectedDomain {
+					entries = append(entries, DomainEntry{
+						Type: e.QueryType, Category: "query",
+						Status: "ok", Duration: e.Duration.String(),
+						CreatedAt: e.CreatedAt.Format("2006-01-02 15:04:05"),
+						Data: formatData(e.QueryData), Result: formatData(e.ResultData),
+					})
+					if e.Error != "" {
+						entries[len(entries)-1].Status = "error"
+						entries[len(entries)-1].Error = e.Error
+					}
+				}
+			}
+
+			evtEntries, _ := v.msgReader.QueryEvents(ctx, filter)
+			for _, e := range evtEntries {
+				domain := v.typeRegistry.GetTypeDomain(e.EventType)
+				if domain == selectedDomain {
+					entries = append(entries, DomainEntry{
+						Type: e.EventType, Category: "event",
+						Status: "ok", Duration: e.Duration.String(),
+						CreatedAt: e.CreatedAt.Format("2006-01-02 15:04:05"),
+						Data: formatData(e.EventData),
+					})
+					if e.Error != "" {
+						entries[len(entries)-1].Status = "error"
+						entries[len(entries)-1].Error = e.Error
+					}
+				}
+			}
+		}
+	}
+
+	v.render(w, "ddd_domains", map[string]any{
+		"Domains":        domains,
+		"SelectedDomain": selectedDomain,
+		"Stats":          stats,
+		"DomainInfo":     domainInfo,
+		"Entries":        entries,
+		"Prefix":         v.config.Prefix,
 	})
 }
 
