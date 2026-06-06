@@ -2,6 +2,7 @@ package lint
 
 import (
 	"github.com/ddd-qce/core/lint/crossdomain"
+	"github.com/ddd-qce/core/lint/crossmodule"
 	"github.com/ddd-qce/core/lint/eventimmutable"
 	"github.com/ddd-qce/core/lint/implimport"
 	"github.com/ddd-qce/core/lint/infraimplement"
@@ -14,6 +15,7 @@ import (
 
 var AllAnalyzers = []*analysis.Analyzer{
 	crossdomain.Analyzer,
+	crossmodule.Analyzer,
 	publicleak.Analyzer,
 	implimport.Analyzer,
 	eventimmutable.Analyzer,

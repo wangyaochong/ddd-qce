@@ -13,6 +13,7 @@ const (
 
 type PkgInfo struct {
 	DDDPrefix  string // everything before "ddd/" in the path
+	ModuleName string // e.g., "code_evolve_agent", "myproject"
 	DomainName string // e.g., "order"
 	SubPkg     string // e.g., "command", "domain/model"
 	Kind       PackageKind
@@ -32,6 +33,7 @@ func ParsePkgPath(pkgPath string) *PkgInfo {
 	}
 
 	prefix := strings.Join(parts[:dddIdx], "/")
+	moduleName := parts[dddIdx-1]
 	domainName := parts[dddIdx+1]
 
 	var subPkg string
@@ -43,6 +45,7 @@ func ParsePkgPath(pkgPath string) *PkgInfo {
 
 	return &PkgInfo{
 		DDDPrefix:  prefix,
+		ModuleName: moduleName,
 		DomainName: domainName,
 		SubPkg:     subPkg,
 		Kind:       kind,
@@ -87,4 +90,13 @@ func SameDomain(pkgPath1, pkgPath2 string) bool {
 		return false
 	}
 	return info1.DDDPrefix == info2.DDDPrefix && info1.DomainName == info2.DomainName
+}
+
+func SameModule(pkgPath1, pkgPath2 string) bool {
+	info1 := ParsePkgPath(pkgPath1)
+	info2 := ParsePkgPath(pkgPath2)
+	if info1 == nil || info2 == nil {
+		return false
+	}
+	return info1.ModuleName == info2.ModuleName
 }
