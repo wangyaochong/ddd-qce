@@ -21,6 +21,39 @@ import (
 	"github.com/ddd-qce/core/trace"
 )
 
+type Pagination struct {
+	Page     int
+	PageSize int
+	Total    int
+	Pages    int
+	HasPrev  bool
+	HasNext  bool
+}
+
+func newPagination(page, pageSize, total int) Pagination {
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	if page <= 0 {
+		page = 1
+	}
+	pages := total / pageSize
+	if total%pageSize > 0 {
+		pages++
+	}
+	if pages == 0 {
+		pages = 1
+	}
+	return Pagination{
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+		Pages:    pages,
+		HasPrev:  page > 1,
+		HasNext:  page < pages,
+	}
+}
+
 type DDDViewer struct {
 	statsCollector *StatsCollector
 	msgStore       builtin.MessageStore
@@ -159,6 +192,8 @@ func NewDDDViewer(
 			}
 			return s
 		},
+		"add": func(a, b int) int { return a + b },
+		"sub": func(a, b int) int { return a - b },
 	}
 
 	tmpl := template.Must(template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html"))
@@ -313,16 +348,28 @@ func (v *DDDViewer) handleCommands(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	filter := v.parseMessageFilter(r)
-	entries, err := v.msgReader.QueryCommands(ctx, filter)
+	result, err := v.msgReader.QueryCommands(ctx, filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := 50
+	if ps := r.URL.Query().Get("pageSize"); ps != "" {
+		if n, err := strconv.Atoi(ps); err == nil && n > 0 && n <= 500 {
+			pageSize = n
+		}
+	}
+
 	v.render(w, "ddd_commands", map[string]any{
-		"Entries": entries,
-		"Filter":  filter,
-		"Prefix":  v.config.Prefix,
+		"Entries":    result.Items,
+		"Filter":     filter,
+		"Prefix":     v.config.Prefix,
+		"Pagination": newPagination(page, pageSize, result.Total),
 	})
 }
 
@@ -336,16 +383,28 @@ func (v *DDDViewer) handleQueries(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	filter := v.parseMessageFilter(r)
-	entries, err := v.msgReader.QueryQueries(ctx, filter)
+	result, err := v.msgReader.QueryQueries(ctx, filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := 50
+	if ps := r.URL.Query().Get("pageSize"); ps != "" {
+		if n, err := strconv.Atoi(ps); err == nil && n > 0 && n <= 500 {
+			pageSize = n
+		}
+	}
+
 	v.render(w, "ddd_queries", map[string]any{
-		"Entries": entries,
-		"Filter":  filter,
-		"Prefix":  v.config.Prefix,
+		"Entries":    result.Items,
+		"Filter":     filter,
+		"Prefix":     v.config.Prefix,
+		"Pagination": newPagination(page, pageSize, result.Total),
 	})
 }
 
@@ -359,16 +418,28 @@ func (v *DDDViewer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	filter := v.parseMessageFilter(r)
-	entries, err := v.msgReader.QueryEvents(ctx, filter)
+	result, err := v.msgReader.QueryEvents(ctx, filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := 50
+	if ps := r.URL.Query().Get("pageSize"); ps != "" {
+		if n, err := strconv.Atoi(ps); err == nil && n > 0 && n <= 500 {
+			pageSize = n
+		}
+	}
+
 	v.render(w, "ddd_events", map[string]any{
-		"Entries": entries,
-		"Filter":  filter,
-		"Prefix":  v.config.Prefix,
+		"Entries":    result.Items,
+		"Filter":     filter,
+		"Prefix":     v.config.Prefix,
+		"Pagination": newPagination(page, pageSize, result.Total),
 	})
 }
 
@@ -436,6 +507,30 @@ func (v *DDDViewer) handleTraces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pageSize := 50
+	if ps := r.URL.Query().Get("pageSize"); ps != "" {
+		if n, err := strconv.Atoi(ps); err == nil && n > 0 && n <= 500 {
+			pageSize = n
+		}
+	}
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 {
+			page = n
+		}
+	}
+
+	total := len(traceIDs)
+	offset := (page - 1) * pageSize
+	if offset > total {
+		offset = total
+	}
+	end := offset + pageSize
+	if end > total {
+		end = total
+	}
+	pagedIDs := traceIDs[offset:end]
+
 	type SpanView struct {
 		ID       string
 		TraceID  string
@@ -452,7 +547,7 @@ func (v *DDDViewer) handleTraces(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var traces []TraceView
-	for _, tid := range traceIDs {
+	for _, tid := range pagedIDs {
 		spans, err := v.traceStore.GetTrace(ctx, tid)
 		if err != nil {
 			continue
@@ -473,6 +568,7 @@ func (v *DDDViewer) handleTraces(w http.ResponseWriter, r *http.Request) {
 		"FilterStatus": filter.Status,
 		"FilterType":   filter.Type,
 		"Prefix":       v.config.Prefix,
+		"Pagination":   newPagination(page, pageSize, total),
 	})
 }
 
@@ -606,10 +702,23 @@ func (v *DDDViewer) handleDomains(w http.ResponseWriter, r *http.Request) {
 		if v.msgReader != nil {
 			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 			defer cancel()
-			filter := MessageFilter{Limit: 50}
 
-			cmdEntries, _ := v.msgReader.QueryCommands(ctx, filter)
-			for _, e := range cmdEntries {
+			pageSize := 50
+			if ps := r.URL.Query().Get("pageSize"); ps != "" {
+				if n, err := strconv.Atoi(ps); err == nil && n > 0 && n <= 500 {
+					pageSize = n
+				}
+			}
+			page := 1
+			if p := r.URL.Query().Get("page"); p != "" {
+				if n, err := strconv.Atoi(p); err == nil && n > 0 {
+					page = n
+				}
+			}
+			filter := MessageFilter{Limit: pageSize, Offset: (page - 1) * pageSize}
+
+			cmdResult, _ := v.msgReader.QueryCommands(ctx, filter)
+			for _, e := range cmdResult.Items {
 				domain := v.typeRegistry.GetTypeDomain(e.CommandType)
 				if domain == selectedDomain {
 					entries = append(entries, DomainEntry{
@@ -625,8 +734,8 @@ func (v *DDDViewer) handleDomains(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			qryEntries, _ := v.msgReader.QueryQueries(ctx, filter)
-			for _, e := range qryEntries {
+			qryResult, _ := v.msgReader.QueryQueries(ctx, filter)
+			for _, e := range qryResult.Items {
 				domain := v.typeRegistry.GetTypeDomain(e.QueryType)
 				if domain == selectedDomain {
 					entries = append(entries, DomainEntry{
@@ -642,8 +751,8 @@ func (v *DDDViewer) handleDomains(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			evtEntries, _ := v.msgReader.QueryEvents(ctx, filter)
-			for _, e := range evtEntries {
+			evtResult, _ := v.msgReader.QueryEvents(ctx, filter)
+			for _, e := range evtResult.Items {
 				domain := v.typeRegistry.GetTypeDomain(e.EventType)
 				if domain == selectedDomain {
 					entries = append(entries, DomainEntry{
@@ -658,6 +767,17 @@ func (v *DDDViewer) handleDomains(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
+
+			v.render(w, "ddd_domains", map[string]any{
+				"Domains":        domains,
+				"SelectedDomain": selectedDomain,
+				"Stats":          stats,
+				"DomainInfo":     domainInfo,
+				"Entries":        entries,
+				"Prefix":         v.config.Prefix,
+				"Pagination":     newPagination(page, pageSize, len(entries)),
+			})
+			return
 		}
 	}
 
@@ -672,18 +792,26 @@ func (v *DDDViewer) handleDomains(w http.ResponseWriter, r *http.Request) {
 }
 
 func (v *DDDViewer) parseMessageFilter(r *http.Request) MessageFilter {
-	limit := v.config.QueryLimit
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 {
-			limit = n
+	pageSize := 50
+	if ps := r.URL.Query().Get("pageSize"); ps != "" {
+		if n, err := strconv.Atoi(ps); err == nil && n > 0 && n <= 500 {
+			pageSize = n
 		}
 	}
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 {
+			page = n
+		}
+	}
+
 	filter := MessageFilter{
 		Type:        r.URL.Query().Get("type"),
 		TraceID:     r.URL.Query().Get("traceID"),
 		AggregateID: r.URL.Query().Get("aggregateID"),
 		Status:      r.URL.Query().Get("status"),
-		Limit:       limit,
+		Limit:       pageSize,
+		Offset:      (page - 1) * pageSize,
 	}
 	if since := r.URL.Query().Get("since"); since != "" {
 		if ts, err := strconv.ParseInt(since, 10, 64); err == nil {

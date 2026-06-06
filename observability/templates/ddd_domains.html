@@ -153,6 +153,23 @@
         </div>
         {{else}}<div class="card"><div class="empty">No executions for this domain</div></div>{{end}}
     </div>
+
+{{if .Pagination}}
+<div class="pagination">
+    {{if .Pagination.HasPrev}}
+    <a href="?domain={{.SelectedDomain}}&page={{sub .Pagination.Page 1}}&pageSize={{.Pagination.PageSize}}" class="btn btn-primary btn-sm">← Prev</a>
+    {{else}}
+    <span class="btn btn-primary btn-sm disabled">← Prev</span>
+    {{end}}
+    <span class="page-info">Page {{.Pagination.Page}} of {{.Pagination.Pages}} ({{.Pagination.Total}} total)</span>
+    {{if .Pagination.HasNext}}
+    <a href="?domain={{.SelectedDomain}}&page={{add .Pagination.Page 1}}&pageSize={{.Pagination.PageSize}}" class="btn btn-primary btn-sm">Next →</a>
+    {{else}}
+    <span class="btn btn-primary btn-sm disabled">Next →</span>
+    {{end}}
+</div>
+{{end}}
+
 </div>
 
 {{end}}

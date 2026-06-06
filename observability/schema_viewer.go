@@ -75,6 +75,8 @@ func NewSchemaViewer(opts ...SchemaViewerOption) *SchemaViewer {
 			}
 			return s
 		},
+		"add": func(a, b int) int { return a + b },
+		"sub": func(a, b int) int { return a - b },
 	}
 
 	tmpl := template.Must(template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html"))

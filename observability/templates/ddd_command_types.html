@@ -1,10 +1,6 @@
 {{define "ddd_command_types"}}{{template "ddd_header" .}}
 
-<h1>Command Types</h1>
-
-<div class="stats">
-    <div class="stat"><div class="number">{{.Count}}</div><div class="label">Commands</div></div>
-</div>
+<h1>Command Types <span class="count-badge">{{.Count}}</span></h1>
 
 {{if .Commands}}
 <div class="type-grid">

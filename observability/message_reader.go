@@ -7,6 +7,11 @@ import (
 	"github.com/ddd-qce/core/aspect/builtin"
 )
 
+type QueryResult[T any] struct {
+	Items []T
+	Total int
+}
+
 type MessageFilter struct {
 	Type        string    `json:"type,omitempty"`
 	TraceID     string    `json:"traceID,omitempty"`
@@ -18,9 +23,9 @@ type MessageFilter struct {
 }
 
 type MessageStoreReader interface {
-	QueryCommands(ctx context.Context, filter MessageFilter) ([]builtin.CommandEntry, error)
-	QueryQueries(ctx context.Context, filter MessageFilter) ([]builtin.QueryEntry, error)
-	QueryEvents(ctx context.Context, filter MessageFilter) ([]builtin.EventEntry, error)
+	QueryCommands(ctx context.Context, filter MessageFilter) (QueryResult[builtin.CommandEntry], error)
+	QueryQueries(ctx context.Context, filter MessageFilter) (QueryResult[builtin.QueryEntry], error)
+	QueryEvents(ctx context.Context, filter MessageFilter) (QueryResult[builtin.EventEntry], error)
 }
 
 type ObservableMessageStore struct {
@@ -64,55 +69,85 @@ func (s *ObservableMessageStore) RecordEventHandler(_ context.Context, _ *builti
 	return nil
 }
 
-func (s *ObservableMessageStore) QueryCommands(_ context.Context, filter MessageFilter) ([]builtin.CommandEntry, error) {
+func (s *ObservableMessageStore) QueryCommands(_ context.Context, filter MessageFilter) (QueryResult[builtin.CommandEntry], error) {
 	commands := s.inner.GetCommands()
 
-	var result []builtin.CommandEntry
+	var filtered []builtin.CommandEntry
 	for i := len(commands) - 1; i >= 0; i-- {
 		e := commands[i]
 		if !matchCommandFilter(e, filter) {
 			continue
 		}
-		result = append(result, e)
-		if filter.Limit > 0 && len(result) >= filter.Limit {
-			break
-		}
+		filtered = append(filtered, e)
 	}
-	return result, nil
+	total := len(filtered)
+
+	offset := filter.Offset
+	if offset > total {
+		offset = total
+	}
+	remaining := filtered[offset:]
+	limit := filter.Limit
+	if limit <= 0 || limit > len(remaining) {
+		limit = len(remaining)
+	}
+	items := remaining[:limit]
+
+	return QueryResult[builtin.CommandEntry]{Items: items, Total: total}, nil
 }
 
-func (s *ObservableMessageStore) QueryQueries(_ context.Context, filter MessageFilter) ([]builtin.QueryEntry, error) {
+func (s *ObservableMessageStore) QueryQueries(_ context.Context, filter MessageFilter) (QueryResult[builtin.QueryEntry], error) {
 	queries := s.inner.GetQueries()
 
-	var result []builtin.QueryEntry
+	var filtered []builtin.QueryEntry
 	for i := len(queries) - 1; i >= 0; i-- {
 		e := queries[i]
 		if !matchQueryFilter(e, filter) {
 			continue
 		}
-		result = append(result, e)
-		if filter.Limit > 0 && len(result) >= filter.Limit {
-			break
-		}
+		filtered = append(filtered, e)
 	}
-	return result, nil
+	total := len(filtered)
+
+	offset := filter.Offset
+	if offset > total {
+		offset = total
+	}
+	remaining := filtered[offset:]
+	limit := filter.Limit
+	if limit <= 0 || limit > len(remaining) {
+		limit = len(remaining)
+	}
+	items := remaining[:limit]
+
+	return QueryResult[builtin.QueryEntry]{Items: items, Total: total}, nil
 }
 
-func (s *ObservableMessageStore) QueryEvents(_ context.Context, filter MessageFilter) ([]builtin.EventEntry, error) {
+func (s *ObservableMessageStore) QueryEvents(_ context.Context, filter MessageFilter) (QueryResult[builtin.EventEntry], error) {
 	events := s.inner.GetEvents()
 
-	var result []builtin.EventEntry
+	var filtered []builtin.EventEntry
 	for i := len(events) - 1; i >= 0; i-- {
 		e := events[i]
 		if !matchEventFilter(e, filter) {
 			continue
 		}
-		result = append(result, e)
-		if filter.Limit > 0 && len(result) >= filter.Limit {
-			break
-		}
+		filtered = append(filtered, e)
 	}
-	return result, nil
+	total := len(filtered)
+
+	offset := filter.Offset
+	if offset > total {
+		offset = total
+	}
+	remaining := filtered[offset:]
+	limit := filter.Limit
+	if limit <= 0 || limit > len(remaining) {
+		limit = len(remaining)
+	}
+	items := remaining[:limit]
+
+	return QueryResult[builtin.EventEntry]{Items: items, Total: total}, nil
 }
 
 func matchStringFilter(entryType, traceID, err string, createdAt time.Time, f MessageFilter) bool {

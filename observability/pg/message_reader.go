@@ -21,32 +21,40 @@ func NewMessageStoreReader(db *sql.DB) *PgMessageStoreReader {
 	return &PgMessageStoreReader{db: db}
 }
 
-func (r *PgMessageStoreReader) QueryCommands(ctx context.Context, filter observability.MessageFilter) ([]builtin.CommandEntry, error) {
+func (r *PgMessageStoreReader) QueryCommands(ctx context.Context, filter observability.MessageFilter) (observability.QueryResult[builtin.CommandEntry], error) {
 	q := corepg.GetQuerier(ctx, r.db)
 
 	where, args := buildWhereClause([]wherePart{
 		{"command_type", filter.Type},
 		{"trace_id", filter.TraceID},
 	}, filter.Status, filter.Since)
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM ddd_command_log%s", where)
+	var total int
+	if err := q.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return observability.QueryResult[builtin.CommandEntry]{}, fmt.Errorf("count commands: %w", err)
+	}
+
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = 100
 	}
-	args = append(args, limit)
+	offset := filter.Offset
+	queryArgs := append(args, limit, offset)
 
 	query := fmt.Sprintf(
 		`SELECT trace_id, span_id, command_type, command_data, result_type, result_data, error, duration_ns, created_at
-		 FROM ddd_command_log%s ORDER BY created_at DESC LIMIT $%d`,
-		where, len(args),
+		 FROM ddd_command_log%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
+		where, len(queryArgs)-1, len(queryArgs),
 	)
 
-	rows, err := q.QueryContext(ctx, query, args...)
+	rows, err := q.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("query commands: %w", err)
+		return observability.QueryResult[builtin.CommandEntry]{}, fmt.Errorf("query commands: %w", err)
 	}
 	defer rows.Close()
 
-	var result []builtin.CommandEntry
+	var items []builtin.CommandEntry
 	for rows.Next() {
 		var e builtin.CommandEntry
 		var traceID, spanID, resultType sql.NullString
@@ -54,7 +62,7 @@ func (r *PgMessageStoreReader) QueryCommands(ctx context.Context, filter observa
 		var errMsg sql.NullString
 		var durationNs sql.NullInt64
 		if err := rows.Scan(&traceID, &spanID, &e.CommandType, &commandData, &resultType, &resultData, &errMsg, &durationNs, &e.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan command: %w", err)
+			return observability.QueryResult[builtin.CommandEntry]{}, fmt.Errorf("scan command: %w", err)
 		}
 		e.TraceID = traceID.String
 		e.SpanID = spanID.String
@@ -65,37 +73,48 @@ func (r *PgMessageStoreReader) QueryCommands(ctx context.Context, filter observa
 		if durationNs.Valid {
 			e.Duration = time.Duration(durationNs.Int64)
 		}
-		result = append(result, e)
+		items = append(items, e)
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return observability.QueryResult[builtin.CommandEntry]{}, err
+	}
+	return observability.QueryResult[builtin.CommandEntry]{Items: items, Total: total}, nil
 }
 
-func (r *PgMessageStoreReader) QueryQueries(ctx context.Context, filter observability.MessageFilter) ([]builtin.QueryEntry, error) {
+func (r *PgMessageStoreReader) QueryQueries(ctx context.Context, filter observability.MessageFilter) (observability.QueryResult[builtin.QueryEntry], error) {
 	q := corepg.GetQuerier(ctx, r.db)
 
 	where, args := buildWhereClause([]wherePart{
 		{"query_type", filter.Type},
 		{"trace_id", filter.TraceID},
 	}, filter.Status, filter.Since)
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM ddd_query_log%s", where)
+	var total int
+	if err := q.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return observability.QueryResult[builtin.QueryEntry]{}, fmt.Errorf("count queries: %w", err)
+	}
+
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = 100
 	}
-	args = append(args, limit)
+	offset := filter.Offset
+	queryArgs := append(args, limit, offset)
 
 	query := fmt.Sprintf(
 		`SELECT trace_id, span_id, query_type, query_data, result_type, result_data, error, duration_ns, created_at
-		 FROM ddd_query_log%s ORDER BY created_at DESC LIMIT $%d`,
-		where, len(args),
+		 FROM ddd_query_log%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
+		where, len(queryArgs)-1, len(queryArgs),
 	)
 
-	rows, err := q.QueryContext(ctx, query, args...)
+	rows, err := q.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("query queries: %w", err)
+		return observability.QueryResult[builtin.QueryEntry]{}, fmt.Errorf("query queries: %w", err)
 	}
 	defer rows.Close()
 
-	var result []builtin.QueryEntry
+	var items []builtin.QueryEntry
 	for rows.Next() {
 		var e builtin.QueryEntry
 		var traceID, spanID, resultType sql.NullString
@@ -104,7 +123,7 @@ func (r *PgMessageStoreReader) QueryQueries(ctx context.Context, filter observab
 		var errMsg sql.NullString
 		var durationNs sql.NullInt64
 		if err := rows.Scan(&traceID, &spanID, &e.QueryType, &queryData, &resultType, &resultData, &errMsg, &durationNs, &e.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan query: %w", err)
+			return observability.QueryResult[builtin.QueryEntry]{}, fmt.Errorf("scan query: %w", err)
 		}
 		e.TraceID = traceID.String
 		e.SpanID = spanID.String
@@ -115,12 +134,15 @@ func (r *PgMessageStoreReader) QueryQueries(ctx context.Context, filter observab
 		if durationNs.Valid {
 			e.Duration = time.Duration(durationNs.Int64)
 		}
-		result = append(result, e)
+		items = append(items, e)
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return observability.QueryResult[builtin.QueryEntry]{}, err
+	}
+	return observability.QueryResult[builtin.QueryEntry]{Items: items, Total: total}, nil
 }
 
-func (r *PgMessageStoreReader) QueryEvents(ctx context.Context, filter observability.MessageFilter) ([]builtin.EventEntry, error) {
+func (r *PgMessageStoreReader) QueryEvents(ctx context.Context, filter observability.MessageFilter) (observability.QueryResult[builtin.EventEntry], error) {
 	q := corepg.GetQuerier(ctx, r.db)
 
 	parts := []wherePart{
@@ -131,25 +153,33 @@ func (r *PgMessageStoreReader) QueryEvents(ctx context.Context, filter observabi
 		parts = append(parts, wherePart{"aggregate_id", filter.AggregateID})
 	}
 	where, args := buildWhereClause(parts, filter.Status, filter.Since)
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM ddd_event_log%s", where)
+	var total int
+	if err := q.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return observability.QueryResult[builtin.EventEntry]{}, fmt.Errorf("count events: %w", err)
+	}
+
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = 100
 	}
-	args = append(args, limit)
+	offset := filter.Offset
+	queryArgs := append(args, limit, offset)
 
 	query := fmt.Sprintf(
 		`SELECT trace_id, span_id, aggregate_id, event_type, event_data, handler_count, error, duration_ns, created_at
-		 FROM ddd_event_log%s ORDER BY created_at DESC LIMIT $%d`,
-		where, len(args),
+		 FROM ddd_event_log%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
+		where, len(queryArgs)-1, len(queryArgs),
 	)
 
-	rows, err := q.QueryContext(ctx, query, args...)
+	rows, err := q.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("query events: %w", err)
+		return observability.QueryResult[builtin.EventEntry]{}, fmt.Errorf("query events: %w", err)
 	}
 	defer rows.Close()
 
-	var result []builtin.EventEntry
+	var items []builtin.EventEntry
 	for rows.Next() {
 		var e builtin.EventEntry
 		var traceID, spanID, aggregateID sql.NullString
@@ -158,7 +188,7 @@ func (r *PgMessageStoreReader) QueryEvents(ctx context.Context, filter observabi
 		var errMsg sql.NullString
 		var durationNs sql.NullInt64
 		if err := rows.Scan(&traceID, &spanID, &aggregateID, &e.EventType, &eventData, &handlerCount, &errMsg, &durationNs, &e.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan event: %w", err)
+			return observability.QueryResult[builtin.EventEntry]{}, fmt.Errorf("scan event: %w", err)
 		}
 		e.TraceID = traceID.String
 		e.SpanID = spanID.String
@@ -171,9 +201,12 @@ func (r *PgMessageStoreReader) QueryEvents(ctx context.Context, filter observabi
 		if durationNs.Valid {
 			e.Duration = time.Duration(durationNs.Int64)
 		}
-		result = append(result, e)
+		items = append(items, e)
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return observability.QueryResult[builtin.EventEntry]{}, err
+	}
+	return observability.QueryResult[builtin.EventEntry]{Items: items, Total: total}, nil
 }
 
 type wherePart struct {

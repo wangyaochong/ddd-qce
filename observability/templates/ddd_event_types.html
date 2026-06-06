@@ -1,10 +1,6 @@
 {{define "ddd_event_types"}}{{template "ddd_header" .}}
 
-<h1>Event Types</h1>
-
-<div class="stats">
-    <div class="stat"><div class="number">{{.Count}}</div><div class="label">Events</div></div>
-</div>
+<h1>Event Types <span class="count-badge">{{.Count}}</span></h1>
 
 {{if .Events}}
 <div class="type-grid">

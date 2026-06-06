@@ -57,4 +57,20 @@
     {{else}}<div class="empty">No queries recorded yet.</div>{{end}}
 </div>
 
+{{if .Pagination}}
+<div class="pagination">
+    {{if .Pagination.HasPrev}}
+    <a href="?page={{sub .Pagination.Page 1}}&pageSize={{.Pagination.PageSize}}&type={{.Filter.Type}}&traceID={{.Filter.TraceID}}&status={{.Filter.Status}}" class="btn btn-primary btn-sm">← Prev</a>
+    {{else}}
+    <span class="btn btn-primary btn-sm disabled">← Prev</span>
+    {{end}}
+    <span class="page-info">Page {{.Pagination.Page}} of {{.Pagination.Pages}} ({{.Pagination.Total}} total)</span>
+    {{if .Pagination.HasNext}}
+    <a href="?page={{add .Pagination.Page 1}}&pageSize={{.Pagination.PageSize}}&type={{.Filter.Type}}&traceID={{.Filter.TraceID}}&status={{.Filter.Status}}" class="btn btn-primary btn-sm">Next →</a>
+    {{else}}
+    <span class="btn btn-primary btn-sm disabled">Next →</span>
+    {{end}}
+</div>
+{{end}}
+
 {{template "ddd_footer" .}}{{end}}

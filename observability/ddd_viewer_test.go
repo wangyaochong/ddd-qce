@@ -647,7 +647,7 @@ func TestDDDViewer_handleHealth_JobManagerError(t *testing.T) {
 func TestDDDViewer_parseMessageFilter(t *testing.T) {
 	v := newTestViewer()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?type=PlaceOrder&traceID=t1&aggregateID=A1&status=success&limit=10&since=1700000000", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?type=PlaceOrder&traceID=t1&aggregateID=A1&status=success&pageSize=10&since=1700000000", nil)
 	filter := v.parseMessageFilter(req)
 
 	if filter.Type != "PlaceOrder" {
@@ -673,22 +673,22 @@ func TestDDDViewer_parseMessageFilter(t *testing.T) {
 func TestDDDViewer_parseMessageFilter_InvalidLimit(t *testing.T) {
 	v := newTestViewer()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?limit=abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?pageSize=abc", nil)
 	filter := v.parseMessageFilter(req)
 
-	if filter.Limit != 100 {
-		t.Errorf("expected default limit 100, got %d", filter.Limit)
+	if filter.Limit != 50 {
+		t.Errorf("expected default limit 50, got %d", filter.Limit)
 	}
 }
 
 func TestDDDViewer_parseMessageFilter_NegativeLimit(t *testing.T) {
 	v := newTestViewer()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?limit=-5", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?pageSize=-5", nil)
 	filter := v.parseMessageFilter(req)
 
-	if filter.Limit != 100 {
-		t.Errorf("expected default limit 100 for negative, got %d", filter.Limit)
+	if filter.Limit != 50 {
+		t.Errorf("expected default limit 50 for negative, got %d", filter.Limit)
 	}
 }
 

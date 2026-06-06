@@ -330,12 +330,12 @@ func (d *Dashboard) handleCommands(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	entries, err := d.msgReader.QueryCommands(ctx, filter)
+	result, err := d.msgReader.QueryCommands(ctx, filter)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, entries)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (d *Dashboard) handleQueries(w http.ResponseWriter, r *http.Request) {
@@ -353,12 +353,12 @@ func (d *Dashboard) handleQueries(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	entries, err := d.msgReader.QueryQueries(ctx, filter)
+	result, err := d.msgReader.QueryQueries(ctx, filter)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, entries)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (d *Dashboard) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -376,12 +376,12 @@ func (d *Dashboard) handleEvents(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	entries, err := d.msgReader.QueryEvents(ctx, filter)
+	result, err := d.msgReader.QueryEvents(ctx, filter)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, entries)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (d *Dashboard) parseMessageFilter(r *http.Request) MessageFilter {

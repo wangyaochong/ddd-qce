@@ -44,4 +44,20 @@
 <div class="card"><div class="empty">No traces found. Try placing an order first!</div></div>
 {{end}}
 
+{{if .Pagination}}
+<div class="pagination">
+    {{if .Pagination.HasPrev}}
+    <a href="?page={{sub .Pagination.Page 1}}&pageSize={{.Pagination.PageSize}}&type={{.FilterType}}&status={{.FilterStatus}}" class="btn btn-primary btn-sm">← Prev</a>
+    {{else}}
+    <span class="btn btn-primary btn-sm disabled">← Prev</span>
+    {{end}}
+    <span class="page-info">Page {{.Pagination.Page}} of {{.Pagination.Pages}} ({{.Pagination.Total}} total)</span>
+    {{if .Pagination.HasNext}}
+    <a href="?page={{add .Pagination.Page 1}}&pageSize={{.Pagination.PageSize}}&type={{.FilterType}}&status={{.FilterStatus}}" class="btn btn-primary btn-sm">Next →</a>
+    {{else}}
+    <span class="btn btn-primary btn-sm disabled">Next →</span>
+    {{end}}
+</div>
+{{end}}
+
 {{template "ddd_footer" .}}{{end}}

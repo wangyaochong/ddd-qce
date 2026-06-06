@@ -279,10 +279,11 @@ func TestObservableMessageStore_Commands(t *testing.T) {
 		CommandType: "CancelOrder", TraceID: "t2", CreatedAt: now, Error: "not found", Duration: 50 * time.Millisecond,
 	})
 
-	entries, err := store.QueryCommands(context.Background(), MessageFilter{Type: "PlaceOrder"})
+	result, err := store.QueryCommands(context.Background(), MessageFilter{Type: "PlaceOrder"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	entries := result.Items
 	if len(entries) != 1 {
 		t.Fatalf("expected 1, got %d", len(entries))
 	}
@@ -290,12 +291,14 @@ func TestObservableMessageStore_Commands(t *testing.T) {
 		t.Errorf("expected PlaceOrder, got %s", entries[0].CommandType)
 	}
 
-	all, _ := store.QueryCommands(context.Background(), MessageFilter{})
+	allResult, _ := store.QueryCommands(context.Background(), MessageFilter{})
+	all := allResult.Items
 	if len(all) != 2 {
 		t.Errorf("expected 2, got %d", len(all))
 	}
 
-	errOnly, _ := store.QueryCommands(context.Background(), MessageFilter{Status: "error"})
+	errResult, _ := store.QueryCommands(context.Background(), MessageFilter{Status: "error"})
+	errOnly := errResult.Items
 	if len(errOnly) != 1 {
 		t.Errorf("expected 1 error, got %d", len(errOnly))
 	}
@@ -310,7 +313,8 @@ func TestObservableMessageStore_MaxSize(t *testing.T) {
 		})
 	}
 
-	entries, _ := store.QueryQueries(context.Background(), MessageFilter{})
+	entriesResult, _ := store.QueryQueries(context.Background(), MessageFilter{})
+	entries := entriesResult.Items
 	if len(entries) != 3 {
 		t.Fatalf("expected 3 (maxSize), got %d", len(entries))
 	}
@@ -329,7 +333,8 @@ func TestObservableMessageStore_Events(t *testing.T) {
 		EventType: "OrderCancelled", AggregateID: "A2", CreatedAt: time.Now(),
 	})
 
-	byAgg, _ := store.QueryEvents(context.Background(), MessageFilter{AggregateID: "A1"})
+	byAggResult, _ := store.QueryEvents(context.Background(), MessageFilter{AggregateID: "A1"})
+	byAgg := byAggResult.Items
 	if len(byAgg) != 1 {
 		t.Fatalf("expected 1, got %d", len(byAgg))
 	}
@@ -591,10 +596,11 @@ func TestObservableMessageStore_QueryCommands_TraceID(t *testing.T) {
 		CommandType: "CancelOrder", TraceID: "t2", CreatedAt: now,
 	})
 
-	entries, err := store.QueryCommands(context.Background(), MessageFilter{TraceID: "t1"})
+	entriesResult, err := store.QueryCommands(context.Background(), MessageFilter{TraceID: "t1"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	entries := entriesResult.Items
 	if len(entries) != 1 {
 		t.Fatalf("expected 1, got %d", len(entries))
 	}
@@ -614,7 +620,8 @@ func TestObservableMessageStore_QueryCommands_Since(t *testing.T) {
 		CommandType: "NewCmd", CreatedAt: recent,
 	})
 
-	entries, _ := store.QueryCommands(context.Background(), MessageFilter{Since: recent.Add(-1 * time.Hour)})
+	sinceResult, _ := store.QueryCommands(context.Background(), MessageFilter{Since: recent.Add(-1 * time.Hour)})
+	entries := sinceResult.Items
 	if len(entries) != 1 {
 		t.Fatalf("expected 1, got %d", len(entries))
 	}
@@ -636,28 +643,33 @@ func TestObservableMessageStore_QueryQueries_VariousFilters(t *testing.T) {
 		QueryType: "GetOrder", TraceID: "t3", CreatedAt: now.Add(-2 * time.Hour),
 	})
 
-	byType, _ := store.QueryQueries(context.Background(), MessageFilter{Type: "GetOrder"})
+	byTypeResult, _ := store.QueryQueries(context.Background(), MessageFilter{Type: "GetOrder"})
+	byType := byTypeResult.Items
 	if len(byType) != 2 {
 		t.Errorf("expected 2 for type filter, got %d", len(byType))
 	}
 
-	byTraceID, _ := store.QueryQueries(context.Background(), MessageFilter{TraceID: "t1"})
+	byTraceIDResult, _ := store.QueryQueries(context.Background(), MessageFilter{TraceID: "t1"})
+	byTraceID := byTraceIDResult.Items
 	if len(byTraceID) != 1 {
 		t.Errorf("expected 1 for TraceID filter, got %d", len(byTraceID))
 	}
 
-	byError, _ := store.QueryQueries(context.Background(), MessageFilter{Status: "error"})
+	byErrorResult, _ := store.QueryQueries(context.Background(), MessageFilter{Status: "error"})
+	byError := byErrorResult.Items
 	if len(byError) != 1 {
 		t.Errorf("expected 1 for error filter, got %d", len(byError))
 	}
 
-	bySuccess, _ := store.QueryQueries(context.Background(), MessageFilter{Status: "success"})
+	bySuccessResult, _ := store.QueryQueries(context.Background(), MessageFilter{Status: "success"})
+	bySuccess := bySuccessResult.Items
 	if len(bySuccess) != 2 {
 		t.Errorf("expected 2 for success filter, got %d", len(bySuccess))
 	}
 
 	since := now.Add(-1 * time.Hour)
-	bySince, _ := store.QueryQueries(context.Background(), MessageFilter{Since: since})
+	bySinceResult, _ := store.QueryQueries(context.Background(), MessageFilter{Since: since})
+	bySince := bySinceResult.Items
 	if len(bySince) != 2 {
 		t.Errorf("expected 2 for since filter, got %d", len(bySince))
 	}
@@ -673,7 +685,8 @@ func TestObservableMessageStore_QueryEvents_TraceID(t *testing.T) {
 		EventType: "OrderCancelled", TraceID: "t2", AggregateID: "A2", CreatedAt: now,
 	})
 
-	entries, _ := store.QueryEvents(context.Background(), MessageFilter{TraceID: "t1"})
+	entriesResult, _ := store.QueryEvents(context.Background(), MessageFilter{TraceID: "t1"})
+	entries := entriesResult.Items
 	if len(entries) != 1 {
 		t.Fatalf("expected 1, got %d", len(entries))
 	}
@@ -1052,7 +1065,8 @@ func TestMatchStringFilter_StatusSuccess(t *testing.T) {
 		CommandType: "CancelOrder", Error: "not found", CreatedAt: now, Duration: 30 * time.Millisecond,
 	})
 
-	success, _ := store.QueryCommands(context.Background(), MessageFilter{Status: "success"})
+	successResult, _ := store.QueryCommands(context.Background(), MessageFilter{Status: "success"})
+	success := successResult.Items
 	if len(success) != 1 {
 		t.Errorf("expected 1 success, got %d", len(success))
 	}
@@ -1265,10 +1279,10 @@ func TestDashboard_ParseMessageFilter_InvalidLimit(t *testing.T) {
 		t.Errorf("expected 200 with invalid limit, got %d", w.Code)
 	}
 
-	var entries []builtin.CommandEntry
-	json.NewDecoder(w.Body).Decode(&entries)
-	if len(entries) != 1 {
-		t.Errorf("expected 1 entry (default limit used), got %d", len(entries))
+	var result QueryResult[builtin.CommandEntry]
+	json.NewDecoder(w.Body).Decode(&result)
+	if len(result.Items) != 1 {
+		t.Errorf("expected 1 entry (default limit used), got %d", len(result.Items))
 	}
 }
 
@@ -1291,10 +1305,10 @@ func TestDashboard_ParseMessageFilter_InvalidSince(t *testing.T) {
 		t.Errorf("expected 200 with invalid since, got %d", w.Code)
 	}
 
-	var entries []builtin.CommandEntry
-	json.NewDecoder(w.Body).Decode(&entries)
-	if len(entries) != 1 {
-		t.Errorf("expected 1 entry (since ignored), got %d", len(entries))
+	var result2 QueryResult[builtin.CommandEntry]
+	json.NewDecoder(w.Body).Decode(&result2)
+	if len(result2.Items) != 1 {
+		t.Errorf("expected 1 entry (since ignored), got %d", len(result2.Items))
 	}
 }
 
