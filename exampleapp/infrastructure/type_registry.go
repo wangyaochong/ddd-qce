@@ -26,6 +26,8 @@ func RegisterAppTypes(registry *observability.TypePrototypeRegistry) {
 		inventorycommand.ReserveInventoryCommand{}, inventorycommand.ReserveInventoryResult{})
 	registry.RegisterFromSample("command", "ReleaseInventoryCommand",
 		inventorycommand.ReleaseInventoryCommand{}, inventorycommand.ReleaseInventoryResult{})
+	registry.RegisterFromSample("command", "ResetInventoryCommand",
+		inventorycommand.ResetInventoryCommand{}, inventorycommand.ResetInventoryResult{})
 
 	registry.RegisterFromSample("query", "GetOrderQuery",
 		orderquery.GetOrderQuery{}, orderquery.GetOrderResult{})
@@ -61,6 +63,7 @@ func RegisterAppTypesToProvider(provider *observability.ReflectionSampleProvider
 	provider.RegisterCommand("GenerateReportCommand", ordercommand.GenerateReportCommand{}, ordercommand.GenerateReportResult{})
 	provider.RegisterCommand("ReserveInventoryCommand", inventorycommand.ReserveInventoryCommand{}, inventorycommand.ReserveInventoryResult{})
 	provider.RegisterCommand("ReleaseInventoryCommand", inventorycommand.ReleaseInventoryCommand{}, inventorycommand.ReleaseInventoryResult{})
+	provider.RegisterCommand("ResetInventoryCommand", inventorycommand.ResetInventoryCommand{}, inventorycommand.ResetInventoryResult{})
 
 	provider.RegisterQuery("GetOrderQuery", orderquery.GetOrderQuery{}, orderquery.GetOrderResult{})
 	provider.RegisterQuery("ListOrdersQuery", orderquery.ListOrdersQuery{}, orderquery.ListOrdersResult{})

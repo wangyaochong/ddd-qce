@@ -26,3 +26,10 @@ type ReleaseInventoryCommand struct {
 type ReleaseInventoryResult struct {
 	Success bool
 }
+
+type ResetInventoryCommand struct {
+	command.BaseCommand
+	ProductID orderdomain.ProductID
+}
+
+type ResetInventoryResult struct{}

@@ -29,6 +29,9 @@ func WireInventory(
 	if err := cmdBus.RegisterHandler(inventorycommand.NewReleaseInventoryHandler(inventory, eventBus)); err != nil {
 		return fmt.Errorf("register ReleaseInventoryHandler: %w", err)
 	}
+	if err := cmdBus.RegisterHandler(inventorycommand.NewResetInventoryHandler()); err != nil {
+		return fmt.Errorf("register ResetInventoryHandler: %w", err)
+	}
 
 	if err := queryBus.RegisterHandler(inventoryquery.NewGetInventoryHandler(inventory)); err != nil {
 		return fmt.Errorf("register GetInventoryHandler: %w", err)

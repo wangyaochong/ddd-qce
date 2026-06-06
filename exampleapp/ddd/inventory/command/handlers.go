@@ -53,3 +53,13 @@ func (h *ReleaseInventoryHandler) Handle(ctx context.Context, cmd *ReleaseInvent
 
 	return &ReleaseInventoryResult{Success: true}, nil
 }
+
+type ResetInventoryHandler struct{}
+
+func NewResetInventoryHandler() *ResetInventoryHandler {
+	return &ResetInventoryHandler{}
+}
+
+func (h *ResetInventoryHandler) Handle(ctx context.Context, cmd *ResetInventoryCommand) (*ResetInventoryResult, error) {
+	return &ResetInventoryResult{}, nil
+}
