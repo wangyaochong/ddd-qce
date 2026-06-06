@@ -119,6 +119,10 @@ func TestE2E_DDDViewerPages(t *testing.T) {
 			{"/api/ddd/ddd_commands", "Commands"},
 			{"/api/ddd/ddd_queries", "Queries"},
 			{"/api/ddd/ddd_events", "Events"},
+			{"/api/ddd/ddd_domains", "Domains"},
+			{"/api/ddd/ddd_command_types", "Command Types"},
+			{"/api/ddd/ddd_query_types", "Query Types"},
+			{"/api/ddd/ddd_event_types", "Event Types"},
 			{"/api/ddd/ddd_stats", "Statistics"},
 			{"/api/ddd/ddd_jobs", "Jobs"},
 			{"/api/ddd/ddd_traces", "Traces"},
@@ -297,4 +301,36 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func TestE2E_DDDViewerTypePagesNotUnavailable(t *testing.T) {
+	runE2EForBothStores(t, func(t *testing.T, server *httptest.Server, _ *infrastructure.AppContext) {
+		typePages := []string{
+			"/api/ddd/ddd_domains",
+			"/api/ddd/ddd_command_types",
+			"/api/ddd/ddd_query_types",
+			"/api/ddd/ddd_event_types",
+		}
+		for _, path := range typePages {
+			code, body := getBody(t, server, path)
+			if code != http.StatusOK {
+				t.Errorf("GET %s: expected 200, got %d", path, code)
+			}
+			if strings.Contains(body, "not available") {
+				t.Errorf("GET %s: page shows 'not available' instead of content", path)
+			}
+		}
+
+		// Verify command_types page has actual type cards
+		_, body := getBody(t, server, "/api/ddd/ddd_command_types")
+		if !strings.Contains(body, "PlaceOrderCommand") {
+			t.Error("command_types page missing PlaceOrderCommand type card")
+		}
+
+		// Verify domains page has domain tabs
+		_, body = getBody(t, server, "/api/ddd/ddd_domains")
+		if !strings.Contains(body, "domain-tab") {
+			t.Error("domains page missing domain tabs")
+		}
+	})
 }

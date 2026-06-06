@@ -6,6 +6,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/ddd-qce/core/cqrs/command"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/query"
 )
 
 type FieldInfo struct {
@@ -288,7 +292,7 @@ func extractFields(t reflect.Type) []FieldInfo {
 		return nil
 	}
 
-	var fields []FieldInfo
+	fields := make([]FieldInfo, 0)
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if f.IsExported() {
@@ -342,6 +346,21 @@ func shortPackageName(pkgPath string) string {
 		return parts[len(parts)-1]
 	}
 	return pkgPath
+}
+
+// NewTypePrototypeRegistryFromBuses creates a TypePrototypeRegistry and populates it
+// by collecting registered types from the command, query, and event buses.
+// If provider is non-nil, struct field details are extracted via reflection;
+// otherwise only type names are registered (with empty fields).
+func NewTypePrototypeRegistryFromBuses(
+	cmdBus command.CommandBus,
+	queryBus query.QueryBus,
+	evtBus cqrsevent.EventBus,
+	provider BusTypeSampleProvider,
+) *TypePrototypeRegistry {
+	registry := NewTypePrototypeRegistry()
+	CollectFromBuses(cmdBus, queryBus, evtBus, registry, provider)
+	return registry
 }
 
 func splitPkgPath(pkgPath string) []string {

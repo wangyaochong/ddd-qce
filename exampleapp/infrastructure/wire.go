@@ -186,7 +186,7 @@ func WireAppWithStore(cfg *Config, store *StoreComponents, recoveryEnabled bool)
 			dddViewerOpts = append(dddViewerOpts, observability.WithDDDViewerMessageReader(ms))
 		}
 	}
-	dddViewer = observability.NewDDDViewer(dddViewerOpts...)
+	dddViewer = observability.NewDDDViewer(cmdBus, queryBus, eventBus, NewAppTypeProvider(), dddViewerOpts...)
 
 	return &AppContext{
 		Chain:            chain,

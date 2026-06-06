@@ -129,6 +129,17 @@ func (p *ReflectionSampleProvider) GetEventSample(typeName string) event.Event {
 	return nil
 }
 
+// ExportEventSamples returns all registered event samples as EventSample slices.
+// This is useful for passing to WithDDDViewerExtraEvents when events have no
+// bus subscribers and cannot be auto-discovered by CollectFromBuses.
+func (p *ReflectionSampleProvider) ExportEventSamples() []EventSample {
+	out := make([]EventSample, 0, len(p.eventSamples))
+	for name, sample := range p.eventSamples {
+		out = append(out, EventSample{Name: name, Sample: sample})
+	}
+	return out
+}
+
 func RegisterTypesFromReflect(
 	registry *TypePrototypeRegistry,
 	commandTypes map[string]reflect.Type,

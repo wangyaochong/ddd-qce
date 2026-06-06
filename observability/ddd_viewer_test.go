@@ -11,12 +11,30 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect/builtin"
+	commandmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	eventmemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	querymemory "github.com/ddd-qce/core/cqrs/impl/memory"
+	domainevent "github.com/ddd-qce/core/domain/event"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )
 
+// testBusHelper provides nil implementations of buses and provider for tests
+type testBusHelper struct{}
+
+func (testBusHelper) GetCommandSample(name string) (any, any) { return nil, nil }
+func (testBusHelper) GetQuerySample(name string) (any, any) { return nil, nil }
+func (testBusHelper) GetEventSample(name string) domainevent.Event { return nil }
+
+func newTestViewer(opts ...DDDViewerOption) *DDDViewer {
+	cmdBus := commandmemory.NewCommandBus()
+	queryBus := querymemory.NewQueryBus()
+	eventBus := eventmemory.NewEventBus()
+	return NewDDDViewer(cmdBus, queryBus, eventBus, testBusHelper{}, opts...)
+}
+
 func TestDDDViewer_OverviewPage(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -34,7 +52,7 @@ func TestDDDViewer_OverviewPage(t *testing.T) {
 }
 
 func TestDDDViewer_CommandsPage(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -48,7 +66,7 @@ func TestDDDViewer_CommandsPage(t *testing.T) {
 }
 
 func TestDDDViewer_QueriesPage(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -62,7 +80,7 @@ func TestDDDViewer_QueriesPage(t *testing.T) {
 }
 
 func TestDDDViewer_EventsPage(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -76,7 +94,7 @@ func TestDDDViewer_EventsPage(t *testing.T) {
 }
 
 func TestDDDViewer_StatsPage(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	v.StatsCollector().RecordDuration("Command/PlaceOrder", 100*time.Millisecond)
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
@@ -95,7 +113,7 @@ func TestDDDViewer_StatsPage(t *testing.T) {
 }
 
 func TestDDDViewer_HealthEndpoint(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -109,7 +127,7 @@ func TestDDDViewer_HealthEndpoint(t *testing.T) {
 }
 
 func TestDDDViewer_Aspects(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	aspects := v.Aspects()
 	if len(aspects) != 2 {
 		t.Fatalf("expected 2 aspects, got %d", len(aspects))
@@ -117,7 +135,7 @@ func TestDDDViewer_Aspects(t *testing.T) {
 }
 
 func TestDDDViewer_CommandsWithData(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	store := v.MessageStore()
 	if store == nil {
 		t.Fatal("expected message store to be set")
@@ -147,7 +165,7 @@ func TestDDDViewer_CommandsWithData(t *testing.T) {
 }
 
 func TestDDDViewer_EventsWithData(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	store := v.MessageStore()
 
 	store.RecordEvent(context.Background(), &builtin.EventEntry{
@@ -172,7 +190,7 @@ func TestDDDViewer_EventsWithData(t *testing.T) {
 }
 
 func TestDDDViewer_SchemaPages(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -192,7 +210,7 @@ func TestDDDViewer_SchemaPages(t *testing.T) {
 }
 
 func TestDDDViewer_CustomPrefix(t *testing.T) {
-	v := NewDDDViewer(WithDDDViewerPrefix("/debug/ddd"))
+	v := newTestViewer(WithDDDViewerPrefix("/debug/ddd"))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -207,14 +225,14 @@ func TestDDDViewer_CustomPrefix(t *testing.T) {
 
 func TestDDDViewer_WithStatsCollector(t *testing.T) {
 	sc := NewStatsCollector()
-	v := NewDDDViewer(WithDDDViewerStatsCollector(sc))
+	v := newTestViewer(WithDDDViewerStatsCollector(sc))
 	if v.StatsCollector() != sc {
 		t.Error("expected shared stats collector")
 	}
 }
 
 func TestDDDViewer_NewDDDViewer(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	if v == nil {
 		t.Fatal("expected non-nil viewer")
 	}
@@ -239,14 +257,14 @@ func TestDDDViewer_NewDDDViewer(t *testing.T) {
 }
 
 func TestDDDViewer_WithDDDViewerPgDB(t *testing.T) {
-	v := NewDDDViewer(WithDDDViewerPgDB(nil))
+	v := newTestViewer(WithDDDViewerPgDB(nil))
 	if v.backendType != "PostgreSQL" {
 		t.Errorf("expected PostgreSQL, got %s", v.backendType)
 	}
 }
 
 func TestDDDViewer_WithDDDViewerBaseURL(t *testing.T) {
-	v := NewDDDViewer(WithDDDViewerBaseURL("http://example.com"))
+	v := newTestViewer(WithDDDViewerBaseURL("http://example.com"))
 	if v.baseURL != "http://example.com" {
 		t.Errorf("expected http://example.com, got %s", v.baseURL)
 	}
@@ -254,7 +272,7 @@ func TestDDDViewer_WithDDDViewerBaseURL(t *testing.T) {
 
 func TestDDDViewer_WithDDDViewerTraceStore(t *testing.T) {
 	ts := trace.NewInMemoryTraceStore()
-	v := NewDDDViewer(WithDDDViewerTraceStore(ts))
+	v := newTestViewer(WithDDDViewerTraceStore(ts))
 	if v.traceStore == nil {
 		t.Error("expected traceStore to be set")
 	}
@@ -262,7 +280,7 @@ func TestDDDViewer_WithDDDViewerTraceStore(t *testing.T) {
 
 func TestDDDViewer_WithDDDViewerJobManager(t *testing.T) {
 	jm := &mockJobManager{}
-	v := NewDDDViewer(WithDDDViewerJobManager(jm))
+	v := newTestViewer(WithDDDViewerJobManager(jm))
 	if v.jobMgr == nil {
 		t.Error("expected jobMgr to be set")
 	}
@@ -270,7 +288,7 @@ func TestDDDViewer_WithDDDViewerJobManager(t *testing.T) {
 
 func TestDDDViewer_WithDDDViewerMessageStore(t *testing.T) {
 	store := NewObservableMessageStore()
-	v := NewDDDViewer(WithDDDViewerMessageStore(store))
+	v := newTestViewer(WithDDDViewerMessageStore(store))
 	if v.msgStore == nil {
 		t.Error("expected msgStore to be set")
 	}
@@ -278,7 +296,7 @@ func TestDDDViewer_WithDDDViewerMessageStore(t *testing.T) {
 
 func TestDDDViewer_WithDDDViewerMessageReader(t *testing.T) {
 	store := NewObservableMessageStore()
-	v := NewDDDViewer(WithDDDViewerMessageReader(store))
+	v := newTestViewer(WithDDDViewerMessageReader(store))
 	if v.msgReader == nil {
 		t.Error("expected msgReader to be set")
 	}
@@ -286,7 +304,7 @@ func TestDDDViewer_WithDDDViewerMessageReader(t *testing.T) {
 
 func TestDDDViewer_WithDDDViewerSchemaReader(t *testing.T) {
 	r := NewInMemorySchemaReader()
-	v := NewDDDViewer(WithDDDViewerSchemaReader(r, "PostgreSQL"))
+	v := newTestViewer(WithDDDViewerSchemaReader(r, "PostgreSQL"))
 	if v.schemaReader == nil {
 		t.Error("expected schemaReader to be set")
 	}
@@ -296,7 +314,7 @@ func TestDDDViewer_WithDDDViewerSchemaReader(t *testing.T) {
 }
 
 func TestDDDViewer_WithDDDViewerPrefix(t *testing.T) {
-	v := NewDDDViewer(WithDDDViewerPrefix("/debug/ddd"))
+	v := newTestViewer(WithDDDViewerPrefix("/debug/ddd"))
 	if v.config.Prefix != "/debug/ddd" {
 		t.Errorf("expected /debug/ddd, got %s", v.config.Prefix)
 	}
@@ -304,7 +322,7 @@ func TestDDDViewer_WithDDDViewerPrefix(t *testing.T) {
 
 func TestDDDViewer_StatsCollectorGetter(t *testing.T) {
 	sc := NewStatsCollector()
-	v := NewDDDViewer(WithDDDViewerStatsCollector(sc))
+	v := newTestViewer(WithDDDViewerStatsCollector(sc))
 	if v.StatsCollector() != sc {
 		t.Error("expected StatsCollector to return same instance")
 	}
@@ -312,14 +330,14 @@ func TestDDDViewer_StatsCollectorGetter(t *testing.T) {
 
 func TestDDDViewer_MessageStoreGetter(t *testing.T) {
 	store := NewObservableMessageStore()
-	v := NewDDDViewer(WithDDDViewerMessageStore(store))
+	v := newTestViewer(WithDDDViewerMessageStore(store))
 	if v.MessageStore() != store {
 		t.Error("expected MessageStore to return same instance")
 	}
 }
 
 func TestDDDViewer_Aspects_WithMessageStore(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	aspects := v.Aspects()
 	if len(aspects) != 2 {
 		t.Fatalf("expected 2 aspects, got %d", len(aspects))
@@ -331,7 +349,7 @@ func TestDDDViewer_handleOverviewWithStats(t *testing.T) {
 	sc.RecordDuration("Command/PlaceOrder", 100*time.Millisecond)
 	sc.RecordDuration("Query/GetOrder", 50*time.Millisecond)
 	sc.RecordDuration("Event/OrderPlaced", 25*time.Millisecond)
-	v := NewDDDViewer(WithDDDViewerStatsCollector(sc))
+	v := newTestViewer(WithDDDViewerStatsCollector(sc))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -345,7 +363,7 @@ func TestDDDViewer_handleOverviewWithStats(t *testing.T) {
 }
 
 func TestDDDViewer_handleSchemaTableList(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -363,7 +381,7 @@ func TestDDDViewer_handleSchemaTableList(t *testing.T) {
 }
 
 func TestDDDViewer_handleSchemaTableDetail(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -381,7 +399,7 @@ func TestDDDViewer_handleSchemaTableDetail(t *testing.T) {
 }
 
 func TestDDDViewer_handleSchemaTableDetail_NotFound(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -395,7 +413,7 @@ func TestDDDViewer_handleSchemaTableDetail_NotFound(t *testing.T) {
 }
 
 func TestDDDViewer_handleSchemaTableDetail_NonDDD(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -409,7 +427,7 @@ func TestDDDViewer_handleSchemaTableDetail_NonDDD(t *testing.T) {
 }
 
 func TestDDDViewer_handleQueriesWithData(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	store := v.MessageStore()
 	store.RecordQuery(context.Background(), &builtin.QueryEntry{
 		QueryType: "GetOrder", TraceID: "t1", CreatedAt: time.Now(), Duration: 50 * time.Millisecond,
@@ -434,7 +452,7 @@ func TestDDDViewer_handleJobs(t *testing.T) {
 	jm := &mockJobManager{jobs: []*jobcore.Job{
 		jobcore.NewJob("j1", "cmd1"),
 	}}
-	v := NewDDDViewer(WithDDDViewerJobManager(jm))
+	v := newTestViewer(WithDDDViewerJobManager(jm))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -452,7 +470,7 @@ func TestDDDViewer_handleJobs(t *testing.T) {
 }
 
 func TestDDDViewer_handleJobs_NoManager(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	v.jobMgr = nil
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
@@ -468,7 +486,7 @@ func TestDDDViewer_handleJobs_NoManager(t *testing.T) {
 
 func TestDDDViewer_handleJobs_ListError(t *testing.T) {
 	jm := &mockJobManager{err: fmt.Errorf("db error")}
-	v := NewDDDViewer(WithDDDViewerJobManager(jm))
+	v := newTestViewer(WithDDDViewerJobManager(jm))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -486,7 +504,7 @@ func TestDDDViewer_handleTraces(t *testing.T) {
 	ts.RecordSpan(context.Background(), &trace.Span{
 		ID: "s1", TraceID: "t1", Type: "command", Name: "PlaceOrder", Status: "success", StartedAt: time.Now(),
 	})
-	v := NewDDDViewer(WithDDDViewerTraceStore(ts))
+	v := newTestViewer(WithDDDViewerTraceStore(ts))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -504,7 +522,7 @@ func TestDDDViewer_handleTraces(t *testing.T) {
 }
 
 func TestDDDViewer_handleTraces_NoStore(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	v.traceStore = nil
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
@@ -519,7 +537,7 @@ func TestDDDViewer_handleTraces_NoStore(t *testing.T) {
 }
 
 func TestDDDViewer_handleTraces_ListError(t *testing.T) {
-	v := NewDDDViewer(WithDDDViewerTraceStore(&errTraceStore{}))
+	v := newTestViewer(WithDDDViewerTraceStore(&errTraceStore{}))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -537,7 +555,7 @@ func TestDDDViewer_handleTraces_WithTypeFilter(t *testing.T) {
 	ts.RecordSpan(context.Background(), &trace.Span{
 		ID: "s1", TraceID: "t1", Type: "command", Name: "PlaceOrder", Status: "success", StartedAt: time.Now(),
 	})
-	v := NewDDDViewer(WithDDDViewerTraceStore(ts))
+	v := newTestViewer(WithDDDViewerTraceStore(ts))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -552,7 +570,7 @@ func TestDDDViewer_handleTraces_WithTypeFilter(t *testing.T) {
 
 func TestDDDViewer_handleHealth_WithTraceStore(t *testing.T) {
 	ts := trace.NewInMemoryTraceStore()
-	v := NewDDDViewer(WithDDDViewerTraceStore(ts))
+	v := newTestViewer(WithDDDViewerTraceStore(ts))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -573,7 +591,7 @@ func TestDDDViewer_handleHealth_WithTraceStore(t *testing.T) {
 
 func TestDDDViewer_handleHealth_WithJobManager(t *testing.T) {
 	jm := &mockJobManager{jobs: []*jobcore.Job{}}
-	v := NewDDDViewer(WithDDDViewerJobManager(jm))
+	v := newTestViewer(WithDDDViewerJobManager(jm))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -593,7 +611,7 @@ func TestDDDViewer_handleHealth_WithJobManager(t *testing.T) {
 }
 
 func TestDDDViewer_handleHealth_Degraded(t *testing.T) {
-	v := NewDDDViewer(WithDDDViewerTraceStore(&errTraceStore{}))
+	v := newTestViewer(WithDDDViewerTraceStore(&errTraceStore{}))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -613,7 +631,7 @@ func TestDDDViewer_handleHealth_Degraded(t *testing.T) {
 
 func TestDDDViewer_handleHealth_JobManagerError(t *testing.T) {
 	jm := &mockJobManager{err: fmt.Errorf("db down")}
-	v := NewDDDViewer(WithDDDViewerJobManager(jm))
+	v := newTestViewer(WithDDDViewerJobManager(jm))
 	mux := http.NewServeMux()
 	v.RegisterRoutes(mux)
 
@@ -627,7 +645,7 @@ func TestDDDViewer_handleHealth_JobManagerError(t *testing.T) {
 }
 
 func TestDDDViewer_parseMessageFilter(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?type=PlaceOrder&traceID=t1&aggregateID=A1&status=success&limit=10&since=1700000000", nil)
 	filter := v.parseMessageFilter(req)
@@ -653,7 +671,7 @@ func TestDDDViewer_parseMessageFilter(t *testing.T) {
 }
 
 func TestDDDViewer_parseMessageFilter_InvalidLimit(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?limit=abc", nil)
 	filter := v.parseMessageFilter(req)
@@ -664,7 +682,7 @@ func TestDDDViewer_parseMessageFilter_InvalidLimit(t *testing.T) {
 }
 
 func TestDDDViewer_parseMessageFilter_NegativeLimit(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?limit=-5", nil)
 	filter := v.parseMessageFilter(req)
@@ -675,7 +693,7 @@ func TestDDDViewer_parseMessageFilter_NegativeLimit(t *testing.T) {
 }
 
 func TestDDDViewer_parseMessageFilter_InvalidSince(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ddd/ddd_commands?since=notanumber", nil)
 	filter := v.parseMessageFilter(req)
@@ -712,7 +730,7 @@ func TestFormatData(t *testing.T) {
 }
 
 func TestDDDViewer_CommandsPageReadableJSON(t *testing.T) {
-	v := NewDDDViewer()
+	v := newTestViewer()
 	store := v.MessageStore()
 
 	store.RecordCommand(context.Background(), &builtin.CommandEntry{

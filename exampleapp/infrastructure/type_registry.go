@@ -49,3 +49,34 @@ func RegisterAppTypes(registry *observability.TypePrototypeRegistry) {
 	registry.RegisterFromSample("event", "InventoryReleasedEvent",
 		inventoryevent.InventoryReleasedEvent{}, nil)
 }
+
+// RegisterAppTypesToProvider populates a BusTypeSampleProvider with all
+// exampleapp command/query/event type samples. This enables the DDDViewer
+// to auto-discover types from the buses with full field detail via reflection.
+func RegisterAppTypesToProvider(provider *observability.ReflectionSampleProvider) {
+	provider.RegisterCommand("PlaceOrderCommand", ordercommand.PlaceOrderCommand{}, ordercommand.PlaceOrderResult{})
+	provider.RegisterCommand("ConfirmPaymentCommand", ordercommand.ConfirmPaymentCommand{}, ordercommand.ConfirmPaymentResult{})
+	provider.RegisterCommand("ShipOrderCommand", ordercommand.ShipOrderCommand{}, ordercommand.ShipOrderResult{})
+	provider.RegisterCommand("CancelOrderCommand", ordercommand.CancelOrderCommand{}, ordercommand.CancelOrderResult{})
+	provider.RegisterCommand("GenerateReportCommand", ordercommand.GenerateReportCommand{}, ordercommand.GenerateReportResult{})
+	provider.RegisterCommand("ReserveInventoryCommand", inventorycommand.ReserveInventoryCommand{}, inventorycommand.ReserveInventoryResult{})
+	provider.RegisterCommand("ReleaseInventoryCommand", inventorycommand.ReleaseInventoryCommand{}, inventorycommand.ReleaseInventoryResult{})
+
+	provider.RegisterQuery("GetOrderQuery", orderquery.GetOrderQuery{}, orderquery.GetOrderResult{})
+	provider.RegisterQuery("ListOrdersQuery", orderquery.ListOrdersQuery{}, orderquery.ListOrdersResult{})
+	provider.RegisterQuery("GetInventoryQuery", inventoryquery.GetInventoryQuery{}, inventoryquery.GetInventoryResult{})
+
+	provider.RegisterEvent("OrderPlacedEvent", orderevent.OrderPlacedEvent{})
+	provider.RegisterEvent("PaymentConfirmedEvent", orderevent.PaymentConfirmedEvent{})
+	provider.RegisterEvent("OrderShippedEvent", orderevent.OrderShippedEvent{})
+	provider.RegisterEvent("OrderCancelledEvent", orderevent.OrderCancelledEvent{})
+	provider.RegisterEvent("InventoryReservedEvent", inventoryevent.InventoryReservedEvent{})
+	provider.RegisterEvent("InventoryReleasedEvent", inventoryevent.InventoryReleasedEvent{})
+}
+
+// NewAppTypeProvider convenience constructor. Returns a configured BusTypeSampleProvider.
+func NewAppTypeProvider() *observability.ReflectionSampleProvider {
+	p := observability.NewReflectionSampleProvider()
+	RegisterAppTypesToProvider(p)
+	return p
+}

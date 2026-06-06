@@ -14,6 +14,9 @@ import (
 	"time"
 
 	"github.com/ddd-qce/core/aspect/builtin"
+	"github.com/ddd-qce/core/cqrs/command"
+	cqrsevent "github.com/ddd-qce/core/cqrs/event"
+	"github.com/ddd-qce/core/cqrs/query"
 	jobcore "github.com/ddd-qce/core/job/core"
 	"github.com/ddd-qce/core/trace"
 )
@@ -80,16 +83,46 @@ func WithDDDViewerStatsCollector(sc *StatsCollector) DDDViewerOption {
 	return func(v *DDDViewer) { v.statsCollector = sc }
 }
 
-func WithDDDViewerTypeRegistry(tr *TypePrototypeRegistry) DDDViewerOption {
-	return func(v *DDDViewer) { v.typeRegistry = tr }
+// EventSample describes an event type by name and a sample instance.
+// The sample is used to extract field metadata and infer the domain via reflection.
+type EventSample struct {
+	Name   string
+	Sample any
 }
 
-func NewDDDViewer(opts ...DDDViewerOption) *DDDViewer {
+// WithDDDViewerExtraEvents registers additional event types that have no bus
+// subscribers (fire-and-forget) and therefore cannot be auto-discovered by
+// CollectFromBuses. Each EventSample provides a name and a struct sample
+// for reflection-based field extraction and domain inference.
+func WithDDDViewerExtraEvents(events []EventSample) DDDViewerOption {
+	return func(v *DDDViewer) {
+		for _, e := range events {
+			v.typeRegistry.RegisterFromSample("event", e.Name, e.Sample, nil)
+		}
+	}
+}
+
+// NewDDDViewer creates a DDDViewer with the given buses and sample provider as
+// mandatory parameters. This ensures the TypePrototypeRegistry is always populated,
+// preventing DDD Viewer pages from silently showing "not available".
+//
+// The provider supplies struct samples for reflection-based field extraction.
+// Pass nil to register type names only (without field details).
+// Use WithDDDViewerExtraEvents to register fire-and-forget events that have
+// no bus subscribers.
+func NewDDDViewer(
+	cmdBus command.CommandBus,
+	queryBus query.QueryBus,
+	evtBus cqrsevent.EventBus,
+	provider BusTypeSampleProvider,
+	opts ...DDDViewerOption,
+) *DDDViewer {
 	cfg := DDDViewerConfig{
 		Prefix:     "/api/ddd",
 		QueryLimit: 100,
 	}
 	v := &DDDViewer{
+		typeRegistry:   NewTypePrototypeRegistryFromBuses(cmdBus, queryBus, evtBus, provider),
 		config:         cfg,
 		backendType:    "Memory",
 		statsCollector: NewStatsCollector(),
