@@ -13,7 +13,7 @@ const (
 
 type PkgInfo struct {
 	DDDPrefix  string // everything before "ddd/" in the path
-	ModuleName string // e.g., "code_evolve_agent", "myproject"
+	ModuleName string // e.g., "order_service", "billing"
 	DomainName string // e.g., "order"
 	SubPkg     string // e.g., "command", "domain/model"
 	Kind       PackageKind

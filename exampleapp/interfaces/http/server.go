@@ -46,7 +46,7 @@ func NewServer(app *infrastructure.AppContext) *http.Server {
 	app.DDDViewer.RegisterRoutes(mux)
 
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":8555",
 		Handler: mux,
 	}
 

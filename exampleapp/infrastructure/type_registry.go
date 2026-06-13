@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"github.com/ddd-qce/core/observability"
+	"github.com/ddd-qce/core/relationship"
 	inventorycommand "github.com/ddd-qce/exampleapp/ddd/inventory/command"
 	inventoryevent "github.com/ddd-qce/exampleapp/ddd/inventory/event"
 	inventoryquery "github.com/ddd-qce/exampleapp/ddd/inventory/query"
@@ -82,4 +83,17 @@ func NewAppTypeProvider() *observability.ReflectionSampleProvider {
 	p := observability.NewReflectionSampleProvider()
 	RegisterAppTypesToProvider(p)
 	return p
+}
+
+// RegisterHandlerEmits records which events each handler publishes.
+// This captures the "emits" relationship that cannot be auto-detected
+// from bus registration (e.g., aggregate-root event sourcing where
+// events are published via repository.Save, not directly by the handler).
+func RegisterHandlerEmits(reg *relationship.RelationshipRegistry) {
+	reg.RecordHandlerEmits("PlaceOrderHandler", "OrderPlacedEvent")
+	reg.RecordHandlerEmits("ConfirmPaymentHandler", "PaymentConfirmedEvent")
+	reg.RecordHandlerEmits("ShipOrderHandler", "OrderShippedEvent")
+	reg.RecordHandlerEmits("CancelOrderHandler", "OrderCancelledEvent")
+	reg.RecordHandlerEmits("ReserveInventoryHandler", "InventoryReservedEvent")
+	reg.RecordHandlerEmits("ReleaseInventoryHandler", "InventoryReleasedEvent")
 }

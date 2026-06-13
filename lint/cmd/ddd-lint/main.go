@@ -14,6 +14,8 @@ import (
 	"github.com/ddd-qce/core/lint/crossdomain"
 	"github.com/ddd-qce/core/lint/crossmodule"
 	"github.com/ddd-qce/core/lint/eventimmutable"
+	"github.com/ddd-qce/core/lint/eventpublish"
+	"github.com/ddd-qce/core/lint/fieldaccess"
 	"github.com/ddd-qce/core/lint/implimport"
 	"github.com/ddd-qce/core/lint/infraimplement"
 	"github.com/ddd-qce/core/lint/publicleak"
@@ -28,6 +30,8 @@ var analyzers = []*analysis.Analyzer{
 	publicleak.Analyzer,
 	implimport.Analyzer,
 	eventimmutable.Analyzer,
+	eventpublish.Analyzer,
+	fieldaccess.Analyzer,
 	wirecomplexity.Analyzer,
 	wireimport.Analyzer,
 	wirelogic.Analyzer,

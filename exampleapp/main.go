@@ -26,6 +26,6 @@ func main() {
 		}
 	}()
 
-	log.Println("DDD-QCE E-Commerce starting on http://localhost:8080")
+	log.Println("DDD-QCE E-Commerce starting on http://localhost:8555")
 	appCtx.WaitForSignal(30 * time.Second)
 }

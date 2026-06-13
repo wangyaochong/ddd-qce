@@ -24,6 +24,7 @@ import (
 	jobmemory "github.com/ddd-qce/core/job/memory"
 	"github.com/ddd-qce/core/observability"
 	observabilitypg "github.com/ddd-qce/core/observability/pg"
+	"github.com/ddd-qce/core/relationship"
 	inventorydomain "github.com/ddd-qce/exampleapp/ddd/inventory/domain"
 	inventorywire "github.com/ddd-qce/exampleapp/ddd/inventory/wire"
 	orderrepo "github.com/ddd-qce/exampleapp/ddd/order/repository"
@@ -145,14 +146,20 @@ func WireAppWithStore(cfg *Config, store *StoreComponents, recoveryEnabled bool)
 	queryBus := querymemory.NewQueryBus(querymemory.WithQueryBusAspectChain(chain))
 	eventBus := eventmemory.NewEventBus(eventmemory.WithEventBusAspectChain(chain))
 
+	relRegistry := relationship.NewRegistry()
+	RegisterHandlerEmits(relRegistry)
+	wrappedCmdBus := relationship.WrapCommandBus(cmdBus, relRegistry)
+	wrappedQueryBus := relationship.WrapQueryBus(queryBus, relRegistry)
+	wrappedEventBus := relationship.WrapEventBus(eventBus, relRegistry)
+
 	inventory := inventorydomain.NewInventory()
 	orderRepo := store.OrderRepo
 	eventStore := store.EventStore
 
-	if err := orderwire.WireOrder(chain, cmdBus, queryBus, eventBus, orderRepo); err != nil {
+	if err := orderwire.WireOrder(chain, wrappedCmdBus, wrappedQueryBus, wrappedEventBus, orderRepo); err != nil {
 		return nil, err
 	}
-	if err := inventorywire.WireInventory(chain, cmdBus, queryBus, eventBus, inventory); err != nil {
+	if err := inventorywire.WireInventory(chain, wrappedCmdBus, wrappedQueryBus, wrappedEventBus, inventory); err != nil {
 		return nil, err
 	}
 
@@ -173,7 +180,8 @@ func WireAppWithStore(cfg *Config, store *StoreComponents, recoveryEnabled bool)
 		observability.WithDDDViewerStatsCollector(statsCollector),
 		observability.WithDDDViewerTraceStore(backend.TraceStore),
 		observability.WithDDDViewerJobManager(jobManager),
-		observability.WithDDDViewerBaseURL("http://localhost:8080"),
+		observability.WithDDDViewerBaseURL("http://localhost:8555"),
+		observability.WithDDDViewerRelationshipRegistry(relRegistry),
 	}
 	if store.DB != nil {
 		dddViewerOpts = append(dddViewerOpts,
@@ -186,13 +194,13 @@ func WireAppWithStore(cfg *Config, store *StoreComponents, recoveryEnabled bool)
 			dddViewerOpts = append(dddViewerOpts, observability.WithDDDViewerMessageReader(ms))
 		}
 	}
-	dddViewer = observability.NewDDDViewer(cmdBus, queryBus, eventBus, NewAppTypeProvider(), dddViewerOpts...)
+	dddViewer = observability.NewDDDViewer(wrappedCmdBus, wrappedQueryBus, wrappedEventBus, NewAppTypeProvider(), dddViewerOpts...)
 
 	return &AppContext{
 		Chain:            chain,
-		CmdBus:           cmdBus,
-		QueryBus:         queryBus,
-		EventBus:         eventBus,
+		CmdBus:           wrappedCmdBus,
+		QueryBus:         wrappedQueryBus,
+		EventBus:         wrappedEventBus,
 		Backend:          backend,
 		JobManager:       jobManager,
 		DDDViewer:        dddViewer,

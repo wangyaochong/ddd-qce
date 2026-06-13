@@ -107,7 +107,11 @@ func (r *TypePrototypeRegistry) RegisterFromTypeWithDomain(cat, domain, name str
 	resultFields := extractFields(resultType)
 	resultName := ""
 	if resultType != nil {
-		resultName = resultType.Name()
+		if resultType.Name() != "" {
+			resultName = resultType.Name()
+		} else {
+			resultName = resultType.String()
+		}
 	}
 	r.RegisterWithDomain(cat, domain, name, fields, resultName, resultFields)
 }
@@ -287,6 +291,12 @@ func extractFields(t reflect.Type) []FieldInfo {
 	}
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
+	}
+	if t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
+		t = t.Elem()
+		if t.Kind() == reflect.Ptr {
+			t = t.Elem()
+		}
 	}
 	if t.Kind() != reflect.Struct {
 		return nil

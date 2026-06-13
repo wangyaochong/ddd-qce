@@ -1,0 +1,571 @@
+{{define "ddd_graph"}}{{template "ddd_header" .}}
+<style>
+    .graph-container { position: relative; height: calc(100vh - 48px); display: flex; }
+    .graph-sidebar { width: 220px; min-width: 220px; background: #fff; border-right: 1px solid #e0e0e0; padding: 1rem; overflow-y: auto; z-index: 10; }
+    .graph-sidebar h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: #1a1a2e; }
+    .graph-sidebar label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; padding: 0.2rem 0; cursor: pointer; }
+    .graph-sidebar input[type="checkbox"] { cursor: pointer; }
+    .graph-sidebar hr { border: none; border-top: 1px solid #eee; margin: 0.6rem 0; }
+    .sidebar-section { margin-bottom: 0.4rem; }
+    .sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+    .sidebar-header h3 { font-size: 0.9rem; margin-bottom: 0; color: #1a1a2e; }
+    .toggle-link { font-size: 0.75rem; color: #1565c0; cursor: pointer; text-decoration: none; white-space: nowrap; }
+    .toggle-link:hover { text-decoration: underline; }
+    .mode-btns { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+    .mode-btn { flex: 1; padding: 0.4rem; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.8rem; text-align: center; transition: all 0.15s; }
+    .mode-btn.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+    .mode-btn:hover:not(.active) { background: #f0f0f0; }
+    .graph-main { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+    .graph-toolbar { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.8rem; background: #fff; border-bottom: 1px solid #e0e0e0; flex-shrink: 0; }
+    .graph-toolbar .toolbar-btn { padding: 0.3rem 0.6rem; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem; transition: all 0.15s; }
+    .graph-toolbar .toolbar-btn:hover { background: #f0f0f0; }
+    .graph-toolbar .toolbar-btn.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+    .graph-toolbar .spacer { flex: 1; }
+    .graph-canvas { flex: 1; background: #fafbfc; position: relative; overflow: hidden; }
+    .graph-canvas svg { width: 100%; height: 100%; display: block; }
+    .graph-legend { display: flex; gap: 1.5rem; padding: 0.5rem 1rem; background: #fff; border-top: 1px solid #e0e0e0; font-size: 0.85rem; flex-wrap: wrap; flex-shrink: 0; }
+    .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+    .legend-shape { width: 20px; height: 14px; display: inline-block; }
+    .graph-tooltip { position: absolute; background: #1a1a2e; color: #fff; padding: 0.5rem 0.8rem; border-radius: 4px; font-size: 0.8rem; pointer-events: none; z-index: 100; display: none; white-space: nowrap; }
+    .copy-toast { position: absolute; background: #1a1a2e; color: #fff; padding: 0.5rem 0.9rem; border-radius: 6px; font-size: 0.8rem; pointer-events: none; z-index: 110; display: none; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+    .copy-toast .toast-name { font-weight: 600; margin-bottom: 0.15rem; }
+    .copy-toast .toast-hint { font-size: 0.7rem; color: rgba(255,255,255,0.55); }
+    .graph-container.fullscreen-mode { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; height: 100vh !important; }
+    .graph-container.fullscreen-mode .graph-sidebar { display: none; }
+    .graph-container.window-mode { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; z-index: 999; height: calc(100vh - 48px) !important; }
+</style>
+<div class="graph-container" id="graph-container">
+    <div class="graph-sidebar">
+        <h3>Mode</h3>
+        <div class="mode-btns">
+            <button class="mode-btn{{if eq .Mode "static"}} active{{end}}" data-mode="static">Static</button>
+            <button class="mode-btn{{if eq .Mode "summary"}} active{{end}}" data-mode="summary">Summary</button>
+        </div>
+        <hr>
+        <div class="sidebar-header">
+            <h3>Domains</h3>
+            <a class="toggle-link" data-target="domain-filter">Select All</a>
+        </div>
+        {{range .Domains}}
+        <label><input type="checkbox" class="domain-filter" value="{{.}}" checked> {{.}}</label>
+        {{end}}
+        <hr>
+        <div class="sidebar-header">
+            <h3>Node Types</h3>
+            <a class="toggle-link" data-target="type-filter">Select All</a>
+        </div>
+        <label><input type="checkbox" class="type-filter" value="command" checked> Command (rect)</label>
+        <label><input type="checkbox" class="type-filter" value="query" checked> Query (parallelogram)</label>
+        <label><input type="checkbox" class="type-filter" value="event" checked> Event (circle)</label>
+        <label><input type="checkbox" class="type-filter" value="handler" checked> Handler (pentagon)</label>
+        <hr>
+        <h3>Legend</h3>
+        <div style="font-size:0.8rem; color:#666;">
+            <div style="margin:0.2rem 0;"><span style="color:#2e7d32;">&#8594;</span> handles</div>
+            <div style="margin:0.2rem 0;"><span style="color:#e65100;">&#8594; (dashed)</span> emits</div>
+            <div style="margin:0.2rem 0;"><span style="color:#1565c0;">&#8594;</span> subscribes</div>
+        </div>
+        <hr>
+        <h3>Interactions</h3>
+        <div style="font-size:0.8rem; color:#666;">
+            <div style="margin:0.2rem 0;">Click node &#8594; copy name</div>
+            <div style="margin:0.2rem 0;">Shift+Click &#8594; view details</div>
+        </div>
+    </div>
+    <div class="graph-main">
+        <div class="graph-toolbar">
+            <button class="toolbar-btn" id="btn-window" title="Fill browser window">&#9638; Window</button>
+            <button class="toolbar-btn" id="btn-fullscreen" title="True fullscreen">&#9974; Fullscreen</button>
+            <div class="spacer"></div>
+            <button class="toolbar-btn" id="btn-reset-zoom" title="Reset zoom">&#8634; Reset</button>
+        </div>
+        <div class="graph-canvas">
+            <div id="graph-tooltip" class="graph-tooltip"></div>
+            <div id="copy-toast" class="copy-toast"></div>
+            <svg id="graph-svg"></svg>
+        </div>
+        <div class="graph-legend">
+            <div class="legend-item"><svg class="legend-shape" viewBox="0 0 20 14"><rect x="1" y="1" width="18" height="12" rx="1" fill="#2e7d32" opacity="0.7"/></svg> Command</div>
+            <div class="legend-item"><svg class="legend-shape" viewBox="0 0 20 14"><polygon points="4,1 20,1 16,13 0,13" fill="#7b1fa2" opacity="0.7"/></svg> Query</div>
+            <div class="legend-item"><svg class="legend-shape" viewBox="0 0 20 14"><circle cx="10" cy="7" r="6" fill="#1565c0" opacity="0.7"/></svg> Event</div>
+            <div class="legend-item"><svg class="legend-shape" viewBox="0 0 20 14"><polygon points="10,1 19,5.5 16,13.5 4,13.5 1,5.5" fill="#e65100" opacity="0.7"/></svg> Handler</div>
+        </div>
+    </div>
+</div>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script>
+(function() {
+    var graphData = {{.Graph | jsonJS}};
+    var prefix = "{{.Prefix}}";
+    var currentMode = "{{.Mode}}";
+    var currentZoom = null;
+    var container = document.getElementById('graph-container');
+
+    var domainColors = {};
+    var colorPalette = ["#2e7d32","#1565c0","#7b1fa2","#e65100","#c62828","#00838f","#4527a0","#ef6c00"];
+    (graphData.domains || []).forEach(function(d, i) {
+        domainColors[d] = colorPalette[i % colorPalette.length];
+    });
+
+    var typeColors = {
+        command: "#2e7d32",
+        query: "#7b1fa2",
+        event: "#1565c0",
+        handler: "#e65100"
+    };
+
+    function getDomainColor(node) {
+        if (node.domain && domainColors[node.domain]) return domainColors[node.domain];
+        return typeColors[node.type] || "#666";
+    }
+
+function drawShape(group, node) {
+        switch(node.type) {
+            case "command":
+                group.append("rect")
+                    .attr("x", -22).attr("y", -14)
+                    .attr("width", 44).attr("height", 28).attr("rx", 4);
+                break;
+            case "query":
+                group.append("polygon")
+                    .attr("points", "-18,-14 22,-14 18,14 -22,14");
+                break;
+            case "event":
+                group.append("circle").attr("r", 16);
+                break;
+            case "handler":
+                group.append("polygon")
+                    .attr("points", "0,-18 18,-6 11,16 -11,16 -18,-6");
+                break;
+        }
+    }
+
+    function render(data) {
+        var svg = d3.select("#graph-svg");
+        svg.selectAll("*").remove();
+
+        var canvasEl = svg.node().parentElement;
+        var width = canvasEl.clientWidth || 900;
+        var height = canvasEl.clientHeight || 600;
+
+        var g = svg.append("g");
+
+        currentZoom = d3.zoom()
+            .scaleExtent([0.2, 4])
+            .on("zoom", function(event) { g.attr("transform", event.transform); });
+        svg.call(currentZoom);
+
+        var defs = svg.append("defs");
+        defs.append("marker")
+            .attr("id", "arrow-handles")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 30).attr("refY", 0)
+            .attr("markerWidth", 6).attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#2e7d32");
+        defs.append("marker")
+            .attr("id", "arrow-emits")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 30).attr("refY", 0)
+            .attr("markerWidth", 6).attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#e65100");
+        defs.append("marker")
+            .attr("id", "arrow-subscribes")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 30).attr("refY", 0)
+            .attr("markerWidth", 6).attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#1565c0");
+
+        var nodes = (data.nodes || []).map(function(n) { return Object.assign({}, n); });
+        var links = (data.edges || []).map(function(l) { return Object.assign({}, l); });
+
+        if (nodes.length === 0) {
+            svg.append("text")
+                .attr("x", width/2).attr("y", height/2)
+                .attr("text-anchor", "middle").attr("fill", "#999")
+                .text("No graph data available");
+            return;
+        }
+
+        // Dagre layout - minimizes edge crossings, groups by domain
+        var domains = {};
+        nodes.forEach(function(n) {
+            if (!n.domain) return;
+            if (!domains[n.domain]) domains[n.domain] = [];
+            domains[n.domain].push(n);
+        });
+        var domainList = Object.keys(domains).sort();
+
+        var dagreGraph = new dagre.graphlib.Graph();
+        dagreGraph.setGraph({
+            rankdir: "LR",
+            nodesep: 60,
+            ranksep: 180,
+            marginx: 50,
+            marginy: 50,
+            align: "UL"
+        });
+        dagreGraph.setDefaultEdgeLabel(function() { return {}; });
+
+        // Add nodes grouped by domain to keep them close
+        var domainOffset = 0;
+        domainList.forEach(function(domain) {
+            var domainNodes = domains[domain];
+            // Sort by type within domain: command/query → handler → event
+            var typeOrder = {command: 0, query: 0, handler: 1, event: 2};
+            domainNodes.sort(function(a, b) { return typeOrder[a.type] - typeOrder[b.type]; });
+
+            domainNodes.forEach(function(n) {
+                var labelW = Math.max(100, n.id.length * 8 + 20);
+                dagreGraph.setNode(n.id, {
+                    width: labelW,
+                    height: 60,
+                    rank: typeOrder[n.type],
+                    domainIndex: domainOffset
+                });
+            });
+            domainOffset++;
+        });
+
+        links.forEach(function(l) {
+            dagreGraph.setEdge(l.source, l.target);
+        });
+
+        dagre.layout(dagreGraph);
+
+        var posMap = {};
+        dagreGraph.nodes().forEach(function(id) {
+            var nodeData = dagreGraph.node(id);
+            posMap[id] = { x: nodeData.x, y: nodeData.y };
+        });
+
+        nodes.forEach(function(n) {
+            if (posMap[n.id]) {
+                n.x = posMap[n.id].x;
+                n.y = posMap[n.id].y;
+            }
+        });
+
+        var edgeColor = {handles: "#2e7d32", emits: "#e65100", subscribes: "#1565c0"};
+        var edgeMarker = {handles: "url(#arrow-handles)", emits: "url(#arrow-emits)", subscribes: "url(#arrow-subscribes)"};
+        var edgeDash = {handles: null, emits: "6,3", subscribes: null};
+
+        // Draw edges as paths with dagre points for proper routing
+        var linkGroup = g.append("g");
+        links.forEach(function(l) {
+            var edge = dagreGraph.edge(l.source, l.target);
+            var pts = edge.points || [];
+            if (pts.length < 2) {
+                var src = posMap[l.source];
+                var tgt = posMap[l.target];
+                if (src && tgt) pts = [src, tgt];
+            }
+            if (pts.length < 2) return;
+
+            var line = d3.line().x(function(d) { return d.x; }).y(function(d) { return d.y; }).curve(d3.curveBasis);
+            linkGroup.append("path")
+                .attr("d", line(pts))
+                .attr("fill", "none")
+                .attr("stroke", edgeColor[l.type] || "#999")
+                .attr("stroke-width", 2)
+                .attr("stroke-dasharray", edgeDash[l.type] || null)
+                .attr("marker-end", edgeMarker[l.type] || "")
+                .attr("opacity", 0.7);
+
+            var midIdx = Math.floor(pts.length / 2);
+            linkGroup.append("text")
+                .attr("x", pts[midIdx].x)
+                .attr("y", pts[midIdx].y - 8)
+                .attr("text-anchor", "middle")
+                .attr("font-size", "10px")
+                .attr("fill", edgeColor[l.type] || "#999")
+                .text(l.type);
+        });
+
+        var node = g.append("g")
+            .selectAll("g")
+            .data(nodes)
+            .join("g")
+            .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; })
+            .attr("cursor", "grab")
+            .call(d3.drag()
+                .on("start", function(event, d) {
+                    d._dragStartX = d.x; d._dragStartY = d.y;
+                })
+                .on("drag", function(event, d) {
+                    d.x = d._dragStartX + event.x - event.subject.x;
+                    d.y = d._dragStartY + event.y - event.subject.y;
+                    d3.select(this).attr("transform", "translate(" + d.x + "," + d.y + ")");
+                })
+            );
+
+        node.each(function(d) {
+            var el = d3.select(this);
+            drawShape(el, d);
+            el.select("rect, circle, polygon")
+                .attr("fill", getDomainColor(d))
+                .attr("fill-opacity", 0.88)
+                .attr("stroke", "#333")
+                .attr("stroke-width", 2.5);
+        });
+
+        node.append("text")
+            .attr("y", 28)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "11px")
+            .attr("font-weight", "600")
+            .attr("font-family", "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif")
+            .attr("fill", "#222")
+            .attr("pointer-events", "none")
+            .text(function(d) { return d.id; });
+
+        node.append("title").text(function(d) { return d.id + " (" + d.type + ")" + (d.domain ? " [" + d.domain + "]" : ""); });
+
+        var tooltip = document.getElementById("graph-tooltip");
+        var copyToast = document.getElementById("copy-toast");
+        var toastTimer = null;
+
+        function showToast(name, x, y) {
+            clearTimeout(toastTimer);
+            copyToast.innerHTML = '<div class="toast-name">Copied: ' + name + '</div><div class="toast-hint">Shift+Click to view details</div>';
+            var rect = svg.node().parentElement.getBoundingClientRect();
+            copyToast.style.left = (x - rect.left + 10) + "px";
+            copyToast.style.top = (y - rect.top - 30) + "px";
+            copyToast.style.display = "block";
+            toastTimer = setTimeout(function() { copyToast.style.display = "none"; }, 1500);
+        }
+
+        node.on("click", function(event, d) {
+            if (event.shiftKey) {
+                var url = null;
+                switch(d.type) {
+                    case "command": url = prefix + "/ddd_command_types"; break;
+                    case "query": url = prefix + "/ddd_query_types"; break;
+                    case "event": url = prefix + "/ddd_event_types"; break;
+                    case "handler": url = prefix + "/ddd_stats"; break;
+                }
+                if (url) window.open(url, "_blank");
+            } else {
+                navigator.clipboard.writeText(d.id).then(function() {
+                    showToast(d.id, event.clientX, event.clientY);
+                });
+            }
+        }).on("mouseover", function(event, d) {
+            tooltip.style.display = "block";
+            tooltip.innerHTML = d.id + " (" + d.type + ")" + (d.domain ? " [" + d.domain + "]" : "") + '<br><span style="font-size:0.7rem;color:rgba(255,255,255,0.5)">Click to copy \u00b7 Shift+Click for details</span>';
+        }).on("mousemove", function(event) {
+            var rect = svg.node().parentElement.getBoundingClientRect();
+            tooltip.style.left = (event.clientX - rect.left + 10) + "px";
+            tooltip.style.top = (event.clientY - rect.top - 30) + "px";
+        }).on("mouseout", function() {
+            tooltip.style.display = "none";
+        });
+
+        // Auto-fit to viewport
+        setTimeout(function() {
+            // Draw domain group boxes
+            var nodePos = {};
+            nodes.forEach(function(n) { nodePos[n.id] = n; });
+            domainList.forEach(function(domain) {
+                var domainNodes = domains[domain];
+                var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                domainNodes.forEach(function(n) {
+                    if (n.x !== undefined) {
+                        var w = Math.max(100, n.id.length * 8 + 20) / 2 + 10;
+                        minX = Math.min(minX, n.x - w);
+                        maxX = Math.max(maxX, n.x + w);
+                        minY = Math.min(minY, n.y - 30);
+                        maxY = Math.max(maxY, n.y + 45);
+                    }
+                });
+                if (minX < Infinity) {
+                    var gBox = g.insert("rect", ":first-child")
+                        .attr("x", minX - 15).attr("y", minY - 25)
+                        .attr("width", maxX - minX + 30).attr("height", maxY - minY + 40)
+                        .attr("rx", 8).attr("ry", 8)
+                        .attr("fill", domainColors[domain] || "#eee")
+                        .attr("fill-opacity", 0.06)
+                        .attr("stroke", domainColors[domain] || "#ccc")
+                        .attr("stroke-width", 1.5)
+                        .attr("stroke-dasharray", "8,4")
+                        .attr("stroke-opacity", 0.4);
+                    g.insert("text", ":first-child")
+                        .attr("x", minX - 5).attr("y", minY - 8)
+                        .attr("font-size", "12px")
+                        .attr("font-weight", "700")
+                        .attr("fill", domainColors[domain] || "#999")
+                        .attr("fill-opacity", 0.6)
+                        .text(domain);
+                }
+            });
+
+            var bounds = g.node().getBBox();
+            if (bounds.width > 0 && bounds.height > 0) {
+                var scaleX = (width - 40) / bounds.width;
+                var scaleY = (height - 40) / bounds.height;
+                var scale = Math.min(scaleX, scaleY, 1.5);
+                var tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
+                var ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
+                svg.call(currentZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+            }
+        }, 100);
+    }
+
+    function applyFilters() {
+        var domains = [];
+        document.querySelectorAll(".domain-filter:checked").forEach(function(cb) { domains.push(cb.value); });
+        var types = [];
+        document.querySelectorAll(".type-filter:checked").forEach(function(cb) { types.push(cb.value); });
+
+        var filtered = {
+            nodes: graphData.nodes.filter(function(n) {
+                return domains.indexOf(n.domain) !== -1 && types.indexOf(n.type) !== -1;
+            }),
+            edges: graphData.edges.filter(function(e) {
+                var src = graphData.nodes.find(function(n) { return n.id === e.source; });
+                var tgt = graphData.nodes.find(function(n) { return n.id === e.target; });
+                return src && tgt && domains.indexOf(src.domain) !== -1 && domains.indexOf(tgt.domain) !== -1
+                    && types.indexOf(src.type) !== -1 && types.indexOf(tgt.type) !== -1;
+            }),
+            domains: graphData.domains
+        };
+        render(filtered);
+    }
+
+    function loadGraph(mode) {
+        currentMode = mode;
+        document.querySelectorAll(".mode-btn").forEach(function(btn) {
+            btn.classList.toggle("active", btn.getAttribute("data-mode") === mode);
+        });
+        var params = new URLSearchParams();
+        params.set("json", "1");
+        params.set("mode", mode);
+        fetch(prefix + "/ddd_graph?" + params.toString())
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                graphData = data;
+                applyFilters();
+            })
+            .catch(function(err) {
+                console.error("Failed to load graph:", err);
+            });
+    }
+
+    // Mode buttons
+    document.querySelectorAll(".mode-btn").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            loadGraph(btn.getAttribute("data-mode"));
+        });
+    });
+
+    // Filter checkboxes
+    document.querySelectorAll(".domain-filter, .type-filter").forEach(function(cb) {
+        cb.addEventListener("change", function() {
+            updateToggleLink(cb.classList.contains('domain-filter') ? 'domain-filter' : 'type-filter');
+            applyFilters();
+        });
+    });
+
+    // Toggle all links
+    function updateToggleLink(targetClass) {
+        var link = document.querySelector('.toggle-link[data-target="' + targetClass + '"]');
+        if (!link) return;
+        var checkboxes = document.querySelectorAll('.' + targetClass);
+        var allChecked = Array.prototype.every.call(checkboxes, function(cb) { return cb.checked; });
+        link.textContent = allChecked ? 'Deselect All' : 'Select All';
+    }
+
+    document.querySelectorAll('.toggle-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            var targetClass = this.getAttribute('data-target');
+            var checkboxes = document.querySelectorAll('.' + targetClass);
+            var allChecked = Array.prototype.every.call(checkboxes, function(cb) { return cb.checked; });
+            checkboxes.forEach(function(cb) { cb.checked = !allChecked; });
+            updateToggleLink(targetClass);
+            applyFilters();
+        });
+    });
+
+    // Initialize toggle link text
+    updateToggleLink('domain-filter');
+    updateToggleLink('type-filter');
+
+    // Reset zoom
+    document.getElementById("btn-reset-zoom").addEventListener("click", function() {
+        var svg = d3.select("#graph-svg");
+        if (currentZoom) {
+            svg.call(currentZoom.transform, d3.zoomIdentity);
+        }
+    });
+
+    // Window mode - fill browser below nav
+    var displayMode = "normal";
+    document.getElementById("btn-window").addEventListener("click", function() {
+        var btn = this;
+        if (displayMode === "window") {
+            container.classList.remove("window-mode");
+            displayMode = "normal";
+            btn.classList.remove("active");
+        } else {
+            container.classList.remove("fullscreen-mode");
+            container.classList.add("window-mode");
+            displayMode = "window";
+            document.getElementById("btn-fullscreen").classList.remove("active");
+            btn.classList.add("active");
+        }
+        setTimeout(function() { applyFilters(); }, 50);
+    });
+
+    // Fullscreen mode - browser Fullscreen API
+    document.getElementById("btn-fullscreen").addEventListener("click", function() {
+        var btn = this;
+        if (displayMode === "fullscreen") {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            }
+            container.classList.remove("fullscreen-mode");
+            displayMode = "normal";
+            btn.classList.remove("active");
+        } else {
+            container.classList.remove("window-mode");
+            container.classList.add("fullscreen-mode");
+            displayMode = "fullscreen";
+            document.getElementById("btn-window").classList.remove("active");
+            btn.classList.add("active");
+            if (container.requestFullscreen) {
+                container.requestFullscreen().catch(function() {});
+            }
+        }
+        setTimeout(function() { applyFilters(); }, 50);
+    });
+
+    document.addEventListener("fullscreenchange", function() {
+        if (!document.fullscreenElement && displayMode === "fullscreen") {
+            container.classList.remove("fullscreen-mode");
+            displayMode = "normal";
+            document.getElementById("btn-fullscreen").classList.remove("active");
+            setTimeout(function() { applyFilters(); }, 50);
+        }
+    });
+
+    // Default to window mode
+    container.classList.add("window-mode");
+    displayMode = "window";
+    document.getElementById("btn-window").classList.add("active");
+
+    // Delay initial render to let layout settle
+    setTimeout(function() { render(graphData); }, 50);
+
+    // Resize handling
+    var resizeTimer;
+    window.addEventListener("resize", function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() { applyFilters(); }, 100);
+    });
+})();
+</script>
+{{template "ddd_footer" .}}{{end}}

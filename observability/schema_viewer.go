@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -77,6 +78,14 @@ func NewSchemaViewer(opts ...SchemaViewerOption) *SchemaViewer {
 		},
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
+		"jsonMarshal": func(v any) string {
+			b, _ := json.Marshal(v)
+			return string(b)
+		},
+		"jsonJS": func(v any) template.JS {
+			b, _ := json.Marshal(v)
+			return template.JS(b)
+		},
 	}
 
 	tmpl := template.Must(template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html"))

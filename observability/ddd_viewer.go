@@ -18,6 +18,7 @@ import (
 	cqrsevent "github.com/ddd-qce/core/cqrs/event"
 	"github.com/ddd-qce/core/cqrs/query"
 	jobcore "github.com/ddd-qce/core/job/core"
+	"github.com/ddd-qce/core/relationship"
 	"github.com/ddd-qce/core/trace"
 )
 
@@ -62,6 +63,7 @@ type DDDViewer struct {
 	traceStore     trace.TraceStore
 	jobMgr         jobcore.JobManager
 	typeRegistry   *TypePrototypeRegistry
+	relRegistry    *relationship.RelationshipRegistry
 	config         DDDViewerConfig
 	backendType    string
 	baseURL        string
@@ -114,6 +116,10 @@ func WithDDDViewerSchemaReader(r SchemaReader, backendType string) DDDViewerOpti
 
 func WithDDDViewerStatsCollector(sc *StatsCollector) DDDViewerOption {
 	return func(v *DDDViewer) { v.statsCollector = sc }
+}
+
+func WithDDDViewerRelationshipRegistry(reg *relationship.RelationshipRegistry) DDDViewerOption {
+	return func(v *DDDViewer) { v.relRegistry = reg }
 }
 
 // EventSample describes an event type by name and a sample instance.
@@ -194,6 +200,14 @@ func NewDDDViewer(
 		},
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
+		"jsonMarshal": func(v any) string {
+			b, _ := json.Marshal(v)
+			return string(b)
+		},
+		"jsonJS": func(v any) template.JS {
+			b, _ := json.Marshal(v)
+			return template.JS(b)
+		},
 	}
 
 	tmpl := template.Must(template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html"))
@@ -236,6 +250,7 @@ func (v *DDDViewer) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+p+"/ddd_jobs", v.handleJobs)
 	mux.HandleFunc("GET "+p+"/ddd_traces", v.handleTraces)
 	mux.HandleFunc("GET "+p+"/ddd_health", v.handleHealth)
+	mux.HandleFunc("GET "+p+"/ddd_graph", v.handleGraph)
 
 	tables, _ := v.schemaReader.ListTables(context.Background())
 	base := v.baseURL + p
@@ -252,6 +267,7 @@ func (v *DDDViewer) RegisterRoutes(mux *http.ServeMux) {
 	log.Printf("[DDD]   Qry Types: %s/ddd_query_types", base)
 	log.Printf("[DDD]   Evt Types: %s/ddd_event_types", base)
 	log.Printf("[DDD]   Domains:   %s/ddd_domains", base)
+	log.Printf("[DDD]   Graph:     %s/ddd_graph", base)
 	log.Printf("[DDD]   Stats:     %s/ddd_stats", base)
 	if v.jobMgr != nil {
 		log.Printf("[DDD]   Jobs:      %s/ddd_jobs", base)
@@ -614,6 +630,159 @@ func (v *DDDViewer) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status": overall,
 		"checks": checks,
 	})
+}
+
+func (v *DDDViewer) handleGraph(w http.ResponseWriter, r *http.Request) {
+	if v.relRegistry == nil {
+		v.render(w, "ddd_unavailable", map[string]any{"Feature": "Graph", "Prefix": v.config.Prefix})
+		return
+	}
+
+	if r.URL.Query().Get("json") == "1" || strings.Contains(r.Header.Get("Accept"), "application/json") {
+		v.handleGraphJSON(w, r)
+		return
+	}
+
+	mode := r.URL.Query().Get("mode")
+	if mode == "" {
+		mode = "static"
+	}
+	domainFilter := r.URL.Query().Get("domain")
+	typeFilter := r.URL.Query().Get("type")
+
+	graph := v.relRegistry.BuildGraph(domainFilter, typeFilter)
+
+	domains := graph.Domains
+	if len(domains) == 0 {
+		domains = v.relRegistry.BuildGraph("", "").Domains
+	}
+
+	v.render(w, "ddd_graph", map[string]any{
+		"Graph":        graph,
+		"Mode":         mode,
+		"DomainFilter": domainFilter,
+		"TypeFilter":   typeFilter,
+		"Domains":      domains,
+		"Prefix":       v.config.Prefix,
+	})
+}
+
+func (v *DDDViewer) handleGraphJSON(w http.ResponseWriter, r *http.Request) {
+	mode := r.URL.Query().Get("mode")
+	domainFilter := r.URL.Query().Get("domain")
+	typeFilter := r.URL.Query().Get("type")
+	traceID := r.URL.Query().Get("traceId")
+
+	switch mode {
+	case "runtime":
+		if v.traceStore == nil || traceID == "" {
+			writeJSON(w, http.StatusOK, &relationship.Graph{Nodes: nil, Edges: nil})
+			return
+		}
+		graph := v.buildRuntimeGraph(traceID)
+		writeJSON(w, http.StatusOK, graph)
+	case "summary":
+		graph := v.buildSummaryGraph(domainFilter, typeFilter)
+		writeJSON(w, http.StatusOK, graph)
+	default:
+		graph := v.relRegistry.BuildGraph(domainFilter, typeFilter)
+		writeJSON(w, http.StatusOK, graph)
+	}
+}
+
+func (v *DDDViewer) buildRuntimeGraph(traceID string) *relationship.Graph {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	spans, err := v.traceStore.GetTrace(ctx, traceID)
+	if err != nil {
+		return &relationship.Graph{}
+	}
+
+	nodesMap := make(map[string]relationship.Node)
+	var edges []relationship.Edge
+
+	for _, s := range spans {
+		nodeType := string(s.Type)
+		nodeID := s.Name
+		domain := ""
+		if v.typeRegistry != nil {
+			domain = v.typeRegistry.GetTypeDomain(s.Name)
+		}
+		nodesMap[nodeID] = relationship.Node{ID: nodeID, Type: nodeType, Domain: domain}
+
+		if s.ParentID != "" {
+			for _, ps := range spans {
+				if ps.ID == s.ParentID {
+					edgeType := "emits"
+					if ps.Type == "command" || ps.Type == "query" {
+						edgeType = "handles"
+					}
+					edges = append(edges, relationship.Edge{Source: ps.Name, Target: nodeID, Type: edgeType})
+					break
+				}
+			}
+		}
+	}
+
+	var nodes []relationship.Node
+	for _, n := range nodesMap {
+		nodes = append(nodes, n)
+	}
+
+	return &relationship.Graph{Nodes: nodes, Edges: edges}
+}
+
+func (v *DDDViewer) buildSummaryGraph(domainFilter, typeFilter string) *relationship.Graph {
+	graph := v.relRegistry.BuildGraph(domainFilter, typeFilter)
+
+	if v.traceStore == nil {
+		return graph
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	traceIDs, err := v.traceStore.ListTraces(ctx, trace.TraceFilter{})
+	if err != nil {
+		return graph
+	}
+
+	emitsMap := make(map[string]map[string]bool)
+
+	for _, tid := range traceIDs {
+		spans, err := v.traceStore.GetTrace(ctx, tid)
+		if err != nil {
+			continue
+		}
+		for _, s := range spans {
+			if s.ParentID == "" {
+				continue
+			}
+			for _, ps := range spans {
+				if ps.ID == s.ParentID {
+					handlerName := ps.Name + "Handler"
+					if _, ok := emitsMap[handlerName]; !ok {
+						emitsMap[handlerName] = make(map[string]bool)
+					}
+					emitsMap[handlerName][s.Name] = true
+					break
+				}
+			}
+		}
+	}
+
+	for handler, events := range emitsMap {
+		for evt := range events {
+			graph.Edges = append(graph.Edges, relationship.Edge{
+				Source: handler,
+				Target: evt,
+				Type:   "emits",
+			})
+		}
+	}
+
+	return graph
 }
 
 func (v *DDDViewer) handleCommandTypes(w http.ResponseWriter, r *http.Request) {

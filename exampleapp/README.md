@@ -19,7 +19,7 @@ cd exampleapp
 go run main.go
 ```
 
-Starts a web server on http://localhost:8080 with an order management UI.
+Starts a web server on http://localhost:8555 with an order management UI.
 
 ## Supported Backends
 
