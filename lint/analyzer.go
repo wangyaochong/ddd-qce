@@ -1,6 +1,7 @@
 package lint
 
 import (
+	"github.com/ddd-qce/core/lint/agentcreate"
 	"github.com/ddd-qce/core/lint/crossdomain"
 	"github.com/ddd-qce/core/lint/crossmodule"
 	"github.com/ddd-qce/core/lint/eventimmutable"
@@ -17,6 +18,7 @@ import (
 )
 
 var AllAnalyzers = []*analysis.Analyzer{
+	agentcreate.Analyzer,
 	crossdomain.Analyzer,
 	crossmodule.Analyzer,
 	publicleak.Analyzer,
